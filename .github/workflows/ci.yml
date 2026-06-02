@@ -1,0 +1,41 @@
+name: StepStitch CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  sdk:
+    name: SDK (type-check + redaction-proof tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+      - name: Install (runs prepare/build)
+        run: npm ci
+      - name: Type-check
+        run: npm run type-check
+      - name: Unit + redaction-proof suite
+        run: npm test
+
+  service:
+    name: Service (compiler + router)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install service with test extras
+        run: pip install ./service[test]
+      - name: Run service tests
+        run: pytest service/tests -q
