@@ -29,10 +29,12 @@
     "test:watch": "vitest",
     "stamp": "node scripts/stamp-build.mjs",
     "sbom": "node scripts/generate-sbom.mjs",
-    "release": "npm run build && npm run stamp && npm run sbom"
+    "release": "npm run build && npm run stamp && npm run sbom",
+    "test:e2e-proof": "node scripts/prove-repro-executes.mjs"
   },
   "dependencies": {},
   "devDependencies": {
+    "@playwright/test": "^1.58.0",
     "jsdom": "^24.1.0",
     "typescript": "^5.4.0",
     "vitest": "^2.1.0"
