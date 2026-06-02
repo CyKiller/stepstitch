@@ -9,6 +9,7 @@ Operator reads = admin only, and every read emits an audit event.
 """
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import uuid
@@ -18,6 +19,8 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from .retention import purge_expired_traces
+
 logger = logging.getLogger("stepstitch")
 
 # Injected callable signatures.
@@ -25,6 +28,8 @@ ExecuteFn = Callable[..., Awaitable[None]]
 FetchOneFn = Callable[..., Awaitable[Optional[Any]]]
 FetchAllFn = Callable[..., Awaitable[List[Any]]]
 AuditFn = Callable[[str, str, Dict[str, Any]], Awaitable[None]]
+# Org-wide kill switch. Returns truthy when capture is allowed. May be sync or async.
+CaptureEnabledFn = Callable[[], Any]
 
 
 class FootstepSchema(BaseModel):
@@ -66,12 +71,18 @@ def create_stepstitch_router(
     generate_playwright_test: Callable[..., str],
     base_url: str = "http://localhost:3000",
     retention_days: int = 30,
+    capture_enabled: Optional[CaptureEnabledFn] = None,
 ) -> APIRouter:
     """Build the StepStitch router with host-injected auth + DB.
 
     ``get_user_id`` / ``require_admin`` are FastAPI dependency callables. ``execute`` /
     ``fetchone`` / ``fetchall`` are async DB functions using ``?`` placeholders.
     ``generate_playwright_test`` is the deterministic compiler.
+
+    ``capture_enabled`` is the org-wide **kill switch** (Reg S-P incident-response, see
+    INCIDENT-RESPONSE.md). When supplied and it returns falsy, ingestion is refused
+    with 503 — the first action in an IR runbook, halting capture tenant-wide without a
+    redeploy. Reads/deletes/purge stay available so operators can still respond.
     """
     router = APIRouter(prefix="/stepstitch/v1", tags=["StepStitch"])
 
@@ -82,11 +93,25 @@ def create_stepstitch_router(
             except Exception:  # never let audit failure mask the request
                 logger.exception("stepstitch audit failed action=%s", action)
 
+    async def _capture_allowed() -> bool:
+        if capture_enabled is None:
+            return True
+        try:
+            result = capture_enabled()
+            if inspect.isawaitable(result):
+                result = await result
+            return bool(result)
+        except Exception:  # a broken flag must fail safe → capture OFF
+            logger.exception("stepstitch capture_enabled check failed; refusing capture")
+            return False
+
     @router.post("/session")
     async def save_session_trace(
         payload: IngestTracePayload,
         user_id: str = Depends(get_user_id),
     ) -> Dict[str, Any]:
+        if not await _capture_allowed():
+            raise HTTPException(status_code=503, detail="StepStitch capture is disabled")
         trace_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
         expires = now + timedelta(days=retention_days)
@@ -197,5 +222,16 @@ def create_stepstitch_router(
         await _audit("stepstitch.delete_by_user", _actor_id(admin),
                      {"target_user_id": target_user_id})
         return {"status": "ok", "deleted_user_id": target_user_id}
+
+    @router.post("/maintenance/purge-expired")
+    async def purge_expired(
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        # Split-retention cleanup: purge trace BODIES past their window. The audit
+        # record of this purge is retained on the separate 5-year clock.
+        deleted = await purge_expired_traces(execute=execute, fetchone=fetchone)
+        await _audit("stepstitch.retention_purge", _actor_id(admin),
+                     {"deleted": deleted})
+        return {"status": "ok", "deleted": deleted}
 
     return router
