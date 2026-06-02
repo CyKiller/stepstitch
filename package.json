@@ -29,7 +29,7 @@
     "test:watch": "vitest",
     "stamp": "node scripts/stamp-build.mjs",
     "sbom": "node scripts/generate-sbom.mjs",
-    "release": "npm run stamp && npm run build && npm run sbom"
+    "release": "npm run build && npm run stamp && npm run sbom"
   },
   "dependencies": {},
   "devDependencies": {
