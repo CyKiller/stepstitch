@@ -16,11 +16,16 @@ class FakeDB:
         q = query.strip().upper()
         if q.startswith("INSERT"):
             self.rows[params[0]] = {"footsteps": params[5], "user_id": params[3]}
+        elif q.startswith("DELETE") and "RETENTION_EXPIRES_AT" in q:
+            # purge path: simulate all rows being expired
+            self.rows = {}
         elif q.startswith("DELETE"):
             uid = params[0]
             self.rows = {k: v for k, v in self.rows.items() if v["user_id"] != uid}
 
     async def fetchone(self, query, params=()):
+        if query.strip().upper().startswith("SELECT COUNT"):
+            return (len(self.rows),)
         row = self.rows.get(params[0])
         if not row:
             return None
@@ -30,7 +35,7 @@ class FakeDB:
         return []
 
 
-def _build():
+def _build(capture_enabled=None):
     db = FakeDB()
 
     async def audit(action, actor, detail):
@@ -45,6 +50,7 @@ def _build():
         audit=audit,
         generate_playwright_test=generate_playwright_test,
         base_url="https://app.example.test",
+        capture_enabled=capture_enabled,
     )
     app = FastAPI()
     app.include_router(router, prefix="/api")
@@ -97,3 +103,52 @@ def test_delete_by_user_audited():
     assert r.status_code == 200
     assert any(a[0] == "stepstitch.delete_by_user" for a in db.audits)
     assert db.rows == {}
+
+
+def _post_trace(client):
+    return client.post("/api/stepstitch/v1/session", json={
+        "footsteps": [{"timestamp": "t", "type": "navigation", "route": "/", "label": "[masked]"}],
+    })
+
+
+def test_kill_switch_refuses_capture_with_503():
+    # capture_enabled returns False → org-wide kill switch engaged
+    app, db = _build(capture_enabled=lambda: False)
+    client = TestClient(app)
+    r = _post_trace(client)
+    assert r.status_code == 503
+    assert db.rows == {}
+
+
+def test_kill_switch_async_flag_allows_when_true():
+    async def flag():
+        return True
+
+    app, db = _build(capture_enabled=flag)
+    client = TestClient(app)
+    r = _post_trace(client)
+    assert r.status_code == 200
+    assert len(db.rows) == 1
+
+
+def test_kill_switch_fails_safe_when_flag_raises():
+    def boom():
+        raise RuntimeError("config backend down")
+
+    app, db = _build(capture_enabled=boom)
+    client = TestClient(app)
+    r = _post_trace(client)
+    assert r.status_code == 503
+    assert db.rows == {}
+
+
+def test_purge_expired_endpoint_admin_audited():
+    app, db = _build()
+    client = TestClient(app)
+    _post_trace(client)
+    assert len(db.rows) == 1
+    r = client.post("/api/stepstitch/v1/maintenance/purge-expired")
+    assert r.status_code == 200
+    assert r.json()["deleted"] == 1
+    assert db.rows == {}
+    assert any(a[0] == "stepstitch.retention_purge" for a in db.audits)

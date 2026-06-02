@@ -6,6 +6,7 @@
  * masks all text by default, and tears down cleanly via `destroy()`.
  */
 
+import { BUILD_HASH } from "./buildinfo"
 import {
   buildSelector,
   isBlockedMedia,
@@ -20,7 +21,7 @@ import type {
   UserFootstep,
 } from "./types"
 
-export const SDK_VERSION = "0.1.0"
+export const SDK_VERSION = "0.2.0"
 
 const DEFAULT_MAX_FOOTSTEPS = 50
 const DEFAULT_UNMASK_ATTR = "data-stepstitch-unmask"
@@ -255,6 +256,7 @@ export class StepStitchTracker {
       consent_version: this.consent.consentVersion ?? null,
       metadata: {
         sdk_version: SDK_VERSION,
+        sdk_build: BUILD_HASH,
         viewport: `${this.win?.innerWidth ?? 0}x${this.win?.innerHeight ?? 0}`,
         user_agent: this.win?.navigator?.userAgent ?? "",
       },

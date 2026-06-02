@@ -1,6 +1,6 @@
 {
   "name": "@stepstitch/tracker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "StepStitch — privacy-by-default user-footsteps SDK that compiles sessions into deterministic Playwright reproduction scripts. Zero runtime dependencies.",
   "license": "UNLICENSED",
   "private": true,
@@ -17,7 +17,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "sbom.cdx.json"
   ],
   "sideEffects": false,
   "scripts": {
@@ -25,7 +26,10 @@
     "prepare": "tsc -p tsconfig.build.json",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "stamp": "node scripts/stamp-build.mjs",
+    "sbom": "node scripts/generate-sbom.mjs",
+    "release": "npm run stamp && npm run build && npm run sbom"
   },
   "dependencies": {},
   "devDependencies": {
