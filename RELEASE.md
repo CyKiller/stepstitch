@@ -30,6 +30,7 @@ npm run release            # = stamp-build (git short SHA → BUILD_HASH) + tsc 
 # 3. Verify gates are green:
 npm run type-check
 npm test                   # unit + redaction-proof (the compliance-proving suite)
+npm run test:e2e-proof     # compiles a trace and runs the output in Chromium (§7)
 (cd service && PYTHONPATH=. pytest tests -q)
 
 # 4. Compute the Subresource Integrity hash for the published ESM bundle:
