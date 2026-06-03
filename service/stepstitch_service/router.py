@@ -19,6 +19,12 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from .integrations import (
+    SalesforceAdapter,
+    ServiceNowAdapter,
+    build_trace_summary,
+    export_preview,
+)
 from .replayability import score_trace
 from .retention import purge_expired_traces
 from .scrubber import FINANCIAL_SERVICES_ENTERPRISE, ScrubPolicy, ScrubRejection, scrub_trace_payload
@@ -251,6 +257,65 @@ def create_stepstitch_router(
             "trace_id": trace_id,
             "replayability": score_trace(_loads(row[0])),
         }
+
+    # --- Copilot-safe surface (read-only / draft; no delete, no SoR writes) ----
+
+    @router.get("/session/{trace_id}/summary")
+    async def get_summary(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        row = await fetchone(
+            "SELECT footsteps, project_id FROM stepstitch_traces WHERE id = ?",
+            (trace_id,),
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        await _audit("stepstitch.summary", _actor_id(admin), {"trace_id": trace_id})
+        summary = build_trace_summary(trace_id, _loads(row[0]), project_id=row[1])
+        return {"status": "ok", "summary": summary.as_dict()}
+
+    @router.get("/session/{trace_id}/privacy-posture")
+    async def get_privacy_posture(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        row = await fetchone(
+            "SELECT trace_metadata FROM stepstitch_traces WHERE id = ?",
+            (trace_id,),
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        await _audit("stepstitch.privacy_posture", _actor_id(admin), {"trace_id": trace_id})
+        meta = _loads(row[0]) or {}
+        scrub = meta.get("_scrub") if isinstance(meta, dict) else None
+        return {
+            "status": "ok",
+            "trace_id": trace_id,
+            "policy": scrub_policy.name,
+            "scrub": scrub,
+            "never_captured": [
+                "screenshots", "video", "input values", "raw URLs", "page text",
+                "request/response bodies", "console messages", "network headers",
+            ],
+        }
+
+    @router.post("/session/{trace_id}/export-preview")
+    async def post_export_preview(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        # Draft-only: builds ServiceNow + Salesforce drafts. Sends nothing.
+        row = await fetchone(
+            "SELECT footsteps, project_id FROM stepstitch_traces WHERE id = ?",
+            (trace_id,),
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        await _audit("stepstitch.export_preview", _actor_id(admin), {"trace_id": trace_id})
+        summary = build_trace_summary(trace_id, _loads(row[0]), project_id=row[1])
+        drafts = export_preview(summary, [ServiceNowAdapter(), SalesforceAdapter()])
+        return {"status": "ok", "trace_id": trace_id, "drafts": drafts}
 
     @router.get("/session/{trace_id}/playwright")
     async def get_compiled_repro(

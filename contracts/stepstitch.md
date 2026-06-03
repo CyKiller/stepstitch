@@ -134,6 +134,17 @@ Rules (frozen):
   `StepStitchTraceId__c`, `RouteTemplate__c`, `ReplayabilityScore__c`,
   `ReplayabilityGrade__c`, `PrivacyStatus__c`, `PlaywrightReproLink__c=internal-link-only`.
 
+## Copilot-safe surface
+
+`copilot/openapi-v2.json` exposes **only** read-only/draft operations to a Microsoft
+Copilot Studio agent: `ListRecentTraces`, `GetTraceSummary`, `GetReplayabilityScore`,
+`GetPrivacyPosture`, `GeneratePlaywrightRepro`, `CreateExportPreview`. It deliberately
+omits delete, retention/purge, kill-switch, the raw `GET /session/{id}` (carries
+`explanation`), and any direct system-of-record write. `copilot/action-policy.md` and
+`copilot/system-prompt.md` bound agent behavior. Guarded by
+`test_copilot_surface.py::test_openapi_exposes_no_destructive_operation` and
+`::test_openapi_paths_are_real_routes` (every advertised path must map to a live route).
+
 ### Operator & maintenance surface (admin only, audited)
 
 | Method + path | Purpose | Audit action |
@@ -141,6 +152,9 @@ Rules (frozen):
 | `GET /sessions` | list traces | `stepstitch.list` |
 | `GET /session/{id}` | read one trace (includes `replayability`) | `stepstitch.read` |
 | `GET /session/{id}/replayability` | reproducibility score only | `stepstitch.replayability` |
+| `GET /session/{id}/summary` | sanitized, structure-derived summary (Copilot-safe) | `stepstitch.summary` |
+| `GET /session/{id}/privacy-posture` | per-trace scrub report + never-captured list | `stepstitch.privacy_posture` |
+| `POST /session/{id}/export-preview` | build ServiceNow + Salesforce drafts (sends nothing) | `stepstitch.export_preview` |
 | `GET /session/{id}/playwright` | compile repro | `stepstitch.compile` |
 | `DELETE /session/by-user/{id}` | right-to-delete bodies | `stepstitch.delete_by_user` |
 | `POST /maintenance/purge-expired` | split-retention body purge | `stepstitch.retention_purge` |
