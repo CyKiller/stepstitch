@@ -1,0 +1,70 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "StepStitch Copilot Tools (read-only / draft)",
+    "version": "2.0.0",
+    "description": "Safe, audited StepStitch operations for a Microsoft Copilot Studio custom agent. Every operation returns already-scrubbed data or builds a draft; none deletes data, changes retention, toggles the kill switch, exports raw trace JSON, or writes to a system of record. See action-policy.md."
+  },
+  "servers": [
+    { "url": "{baseUrl}/api/stepstitch/v1", "variables": { "baseUrl": { "default": "https://stepstitch.internal" } } }
+  ],
+  "security": [ { "bearerAuth": [] } ],
+  "paths": {
+    "/sessions": {
+      "get": {
+        "operationId": "ListRecentTraces",
+        "summary": "List recent traces (admin, audited).",
+        "parameters": [
+          { "name": "project_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 200 } }
+        ],
+        "responses": { "200": { "description": "Trace list" } }
+      }
+    },
+    "/session/{trace_id}/summary": {
+      "get": {
+        "operationId": "GetTraceSummary",
+        "summary": "Sanitized, structure-derived summary (no NPI).",
+        "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Sanitized summary" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/session/{trace_id}/replayability": {
+      "get": {
+        "operationId": "GetReplayabilityScore",
+        "summary": "Reproducibility score, grade, and warnings.",
+        "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Replayability" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/session/{trace_id}/privacy-posture": {
+      "get": {
+        "operationId": "GetPrivacyPosture",
+        "summary": "Per-trace scrub report and never-captured list.",
+        "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Privacy posture" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/session/{trace_id}/playwright": {
+      "get": {
+        "operationId": "GeneratePlaywrightRepro",
+        "summary": "Deterministic Playwright reproduction code (text only; never run against production).",
+        "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Playwright code" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/session/{trace_id}/export-preview": {
+      "post": {
+        "operationId": "CreateExportPreview",
+        "summary": "Build sanitized ServiceNow + Salesforce DRAFTS (sends nothing).",
+        "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Draft previews" }, "404": { "description": "Not found" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer" }
+    }
+  }
+}
