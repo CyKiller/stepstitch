@@ -98,10 +98,31 @@ producer field that bypasses it.
 | Method + path | Purpose | Audit action |
 |---|---|---|
 | `GET /sessions` | list traces | `stepstitch.list` |
-| `GET /session/{id}` | read one trace | `stepstitch.read` |
+| `GET /session/{id}` | read one trace (includes `replayability`) | `stepstitch.read` |
+| `GET /session/{id}/replayability` | reproducibility score only | `stepstitch.replayability` |
 | `GET /session/{id}/playwright` | compile repro | `stepstitch.compile` |
 | `DELETE /session/by-user/{id}` | right-to-delete bodies | `stepstitch.delete_by_user` |
 | `POST /maintenance/purge-expired` | split-retention body purge | `stepstitch.retention_purge` |
+
+### Replayability
+
+`GET /session/{id}` and `GET /session/{id}/replayability` carry a deterministic
+reproducibility score computed purely from the structural footsteps (no extra capture,
+no NPI), proven in `service/tests/test_replayability.py`:
+
+```jsonc
+{
+  "score": 0.86,          // 0..1, clamped
+  "grade": "A",           // A≥0.85, B≥0.70, C≥0.55, D≥0.40, else F
+  "warnings": [ { "code": "unstable_selector", "detail": "...", "step_index": 1 } ],
+  "signals": { "steps": 3, "interactive": 1, "stable_selectors": 1 }
+}
+```
+
+Scoring signals: selector stability (`data-testid` > `#id` > structural path > none),
+presence of a terminal action (click/api_error/exception), templated-route fixture
+needs, and trace volume. The compiler (`generate_playwright_test`) emits the score and
+warnings as a header comment block in the generated repro.
 
 ### Org-wide kill switch
 
