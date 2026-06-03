@@ -19,6 +19,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from .replayability import score_trace
 from .retention import purge_expired_traces
 from .scrubber import FINANCIAL_SERVICES_ENTERPRISE, ScrubPolicy, ScrubRejection, scrub_trace_payload
 
@@ -222,13 +223,33 @@ def create_stepstitch_router(
         if not row:
             raise HTTPException(status_code=404, detail="Trace not found")
         await _audit("stepstitch.read", _actor_id(admin), {"trace_id": trace_id})
+        footsteps = _loads(row[0])
         return {
             "status": "ok",
             "trace_id": trace_id,
-            "footsteps": _loads(row[0]),
+            "footsteps": footsteps,
             "explanation": row[1],
             "user_id": row[2],
             "project_id": row[3],
+            "replayability": score_trace(footsteps),
+        }
+
+    @router.get("/session/{trace_id}/replayability")
+    async def get_replayability(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        row = await fetchone(
+            "SELECT footsteps FROM stepstitch_traces WHERE id = ?",
+            (trace_id,),
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        await _audit("stepstitch.replayability", _actor_id(admin), {"trace_id": trace_id})
+        return {
+            "status": "ok",
+            "trace_id": trace_id,
+            "replayability": score_trace(_loads(row[0])),
         }
 
     @router.get("/session/{trace_id}/playwright")
