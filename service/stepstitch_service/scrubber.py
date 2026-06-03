@@ -105,10 +105,32 @@ def redact_text(text: Optional[str]) -> Tuple[Optional[str], List[str]]:
 # Structural, NPI-free metadata the server is willing to store. Anything else is
 # dropped (strict allowlist) — values are still PII-scrubbed before storage.
 _DEFAULT_METADATA_ALLOWLIST = frozenset(
-    {"sdk_version", "sdk_build", "viewport", "user_agent", "consent_version", "locale"}
+    {
+        "sdk_version",
+        "sdk_build",
+        "viewport",
+        "user_agent",
+        "consent_version",
+        "locale",
+        "release",
+        "environment",
+        "sentry_release",
+        "sentry_environment",
+    }
 )
 # Footstep metadata is even narrower: only structural diagnostics.
-_DEFAULT_FOOTSTEP_METADATA_ALLOWLIST = frozenset({"status", "error_type", "method"})
+_DEFAULT_FOOTSTEP_METADATA_ALLOWLIST = frozenset(
+    {
+        "status",
+        "error_type",
+        "method",
+        "endpoint",
+        "source_path",
+        "line",
+        "column",
+        "interacted",
+    }
+)
 # Keys whose mere presence is a leak signal — raw bodies, headers, console, cookies.
 _DEFAULT_FORBIDDEN_KEYS = frozenset(
     {
@@ -132,6 +154,13 @@ _DEFAULT_FORBIDDEN_KEYS = frozenset(
         "dom",
         "dom_text",
         "html",
+        "message",
+        "messages",
+        "stack",
+        "stacktrace",
+        "log",
+        "logs",
+        "console_log",
     }
 )
 
@@ -188,6 +217,12 @@ def _scrub_metadata(
             scrubbed.append(field_path)
             continue
         if isinstance(value, str):
+            if key in {"endpoint", "source_path"}:
+                templated = route_template(value)
+                if templated != value:
+                    scrubbed.append(field_path)
+                clean[key] = templated[: policy.max_text_len]
+                continue
             redacted, kinds = redact_text(value)
             if redacted is not None and len(redacted) > policy.max_text_len:
                 redacted = redacted[: policy.max_text_len]

@@ -1,8 +1,9 @@
 # StepStitch Copilot action policy
 
-**Architecture:** StepStitch is the core; the agent reaches supporting systems
-(ServiceNow, Salesforce) through Microsoft's **native connectors**, fed by StepStitch's
-sanitized draft. StepStitch itself never creates records in a system of record.
+**Architecture:** StepStitch is the core troubleshooting evidence layer; the agent
+reaches supporting systems (ServiceNow, Salesforce, Genesys workflows) through
+Microsoft's **native connectors** or governed Power Platform flows, fed by StepStitch's
+sanitized drafts. StepStitch itself never creates records in a system of record.
 
 This policy bounds what a Microsoft Copilot Studio custom agent may do with StepStitch.
 It is enforced two ways: (1) the agent is only given the tools in `openapi-v2.json`, and
@@ -16,8 +17,10 @@ It is enforced two ways: (1) the agent is only given the tools in `openapi-v2.js
 | `GetTraceSummary` | `GET /session/{id}/summary` | structure-derived; no NPI |
 | `GetReplayabilityScore` | `GET /session/{id}/replayability` | derived score only |
 | `GetPrivacyPosture` | `GET /session/{id}/privacy-posture` | scrub report + never-captured list |
+| `GetDiagnosticSummary` | `GET /session/{id}/diagnostic-summary` | sanitized frontend/API diagnostics only |
 | `GeneratePlaywrightRepro` | `GET /session/{id}/playwright` | returns code text; never executed here |
 | `CreateExportPreview` | `POST /session/{id}/export-preview` | builds drafts; sends nothing |
+| `CreateFinancialServicesExportPreview` | `POST /session/{id}/financial-services-export-preview` | builds Salesforce, ServiceNow, Genesys drafts; sends nothing |
 
 ## Forbidden — never expose these as Copilot tools
 
@@ -26,11 +29,13 @@ It is enforced two ways: (1) the agent is only given the tools in `openapi-v2.js
 - Toggling the org-wide kill switch
 - Exporting raw trace JSON or the full `GET /session/{id}` (carries `explanation`)
 - Reading unmasked page text or input values (the product never stores these)
+- Reading or exposing raw frontend logs, raw error messages, stack traces, headers,
+  cookies, request/response bodies, screenshots, or full URLs
 - Running Playwright against production
-- **A StepStitch tool** writing to ServiceNow / Salesforce. StepStitch is preview/draft
-  only. Record creation happens through the agent's **native** ServiceNow/Salesforce
-  connector — a governed, human-approved step, mapped from the StepStitch draft per
-  `connector-field-map.md`, and constrained by a Power Platform DLP policy.
+- **A StepStitch tool** writing to ServiceNow, Salesforce, or Genesys. StepStitch is
+  preview/draft only. Record creation or queue handoff happens through native
+  connectors/governed flows as a human-approved step, mapped from the StepStitch draft
+  per `connector-field-map.md`, and constrained by a Power Platform DLP policy.
 
 ## Operating rules for the agent
 
@@ -38,4 +43,5 @@ It is enforced two ways: (1) the agent is only given the tools in `openapi-v2.js
 2. Always surface the privacy posture ("no SSNs, input values, page text, screenshots,
    raw URLs were captured") alongside any summary.
 3. If a tool returns 404/403, report it plainly; do not retry destructive alternatives.
-4. Keep the tool set tight (≤ ~25 per Microsoft's guidance); these six are sufficient.
+4. Keep the tool set tight; these eight read/draft tools are sufficient for the
+   financial-services support pack.

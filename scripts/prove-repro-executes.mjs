@@ -54,14 +54,20 @@ writeFileSync(
 `,
 )
 
-// 2. Run the real compiler. Import the module directly (not via the package __init__,
-// which pulls in the FastAPI router) — this also proves the compiler is pure stdlib.
+// 2. Run the real compiler. Load it as a package submodule without executing
+// stepstitch_service.__init__ (which imports the optional FastAPI router).
 const compilerDir = join(servicePath, "stepstitch_service")
 const pyCode = [
-  "import json, sys",
-  `sys.path.insert(0, ${JSON.stringify(compilerDir)})`,
-  "from compiler import generate_playwright_test",
-  "sys.stdout.write(generate_playwright_test('trace-proof', json.loads(sys.argv[1]), sys.argv[2]))",
+  "import importlib.util, json, pathlib, sys, types",
+  `pkg_dir = pathlib.Path(${JSON.stringify(compilerDir)})`,
+  "pkg = types.ModuleType('stepstitch_service')",
+  "pkg.__path__ = [str(pkg_dir)]",
+  "sys.modules['stepstitch_service'] = pkg",
+  "spec = importlib.util.spec_from_file_location('stepstitch_service.compiler', pkg_dir / 'compiler.py')",
+  "mod = importlib.util.module_from_spec(spec)",
+  "sys.modules['stepstitch_service.compiler'] = mod",
+  "spec.loader.exec_module(mod)",
+  "sys.stdout.write(mod.generate_playwright_test('trace-proof', json.loads(sys.argv[1]), sys.argv[2]))",
 ].join("\n")
 
 const generated = execFileSync(
@@ -83,10 +89,10 @@ export default defineConfig({
   timeout: 30000,
   use: { headless: true },
   webServer: {
-    command: ${JSON.stringify(`${python} -m http.server ${PORT} --directory ${fixtureDir}`)},
-    url: ${JSON.stringify(baseUrl)},
+    command: ${JSON.stringify(`${python} -m http.server ${PORT} --bind 127.0.0.1 --directory ${fixtureDir}`)},
+    url: ${JSON.stringify(`${baseUrl}/index.html`)},
     reuseExistingServer: false,
-    timeout: 30000,
+    timeout: 60000,
   },
 })
 `,

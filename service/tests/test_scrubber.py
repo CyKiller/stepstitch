@@ -92,7 +92,18 @@ def _hostile_payload():
                 "route": "https://portal.bank.com/accounts/8675309?ssn=123456789",
                 "target": "#submit",
                 "label": "Balance: 9876543210",
-                "metadata": {"status": 500, "response_body": "SECRETBODY9999"},
+                "metadata": {
+                    "status": 500,
+                    "method": "POST",
+                    "endpoint": "https://portal.bank.com/api/accounts/8675309?ssn=1",
+                    "error_type": "TypeError",
+                    "source_path": "https://portal.bank.com/static/app-123456.js?token=abc",
+                    "line": 42,
+                    "column": 9,
+                    "message": "raw user message SSN 123-45-6789",
+                    "stack": "stack with SECRETSTACK",
+                    "response_body": "SECRETBODY9999",
+                },
             }
         ],
         "metadata": {
@@ -123,7 +134,15 @@ def test_scrub_templates_route_and_drops_forbidden_footstep_meta():
     assert "8675309" not in step["route"]
     # response_body is forbidden → dropped; status (allowlisted) survives.
     assert "response_body" not in step["metadata"]
+    assert "message" not in step["metadata"]
+    assert "stack" not in step["metadata"]
     assert step["metadata"]["status"] == 500
+    assert step["metadata"]["method"] == "POST"
+    assert step["metadata"]["endpoint"] == "/api/accounts/:id"
+    assert step["metadata"]["source_path"] == "/static/:id"
+    assert step["metadata"]["error_type"] == "TypeError"
+    assert step["metadata"]["line"] == 42
+    assert step["metadata"]["column"] == 9
     # unmasked label carried a long number → redacted.
     assert "9876543210" not in step["label"]
 
@@ -238,6 +257,7 @@ def test_router_never_stores_npi_from_hostile_post():
         "8675309",
         "9876543210",
         "SECRETBODY9999",
+        "SECRETSTACK",
         "SECRETCOOKIE",
         "session=SECRETCOOKIE",
     ):

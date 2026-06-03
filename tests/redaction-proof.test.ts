@@ -133,4 +133,18 @@ describe("redaction-proof gate", () => {
     expect(result.traceId).toBe("t_1")
     expect(leaks(capturedBody)).toEqual([])
   })
+
+  it("does not capture raw frontend logs, messages, stacks, or URLs", () => {
+    const t = new StepStitchTracker({ doc, win })
+    t.grantConsent("v1")
+    t.recordApiError(500, `https://portal.example.test/api/accounts/8675309?ssn=${NPI.ssn}`)
+    t.recordFrontendException(`TypeError ${NPI.ssn}`, "/static/app-8675309.js", 8, 2)
+
+    const serialized = JSON.stringify(t.getTrace())
+    expect(leaks(serialized)).toEqual([])
+    expect(serialized).not.toContain("message")
+    expect(serialized).not.toContain("stack")
+    expect(serialized).not.toContain("ssn=")
+    expect(serialized).not.toContain("8675309")
+  })
 })

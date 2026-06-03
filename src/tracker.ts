@@ -21,7 +21,7 @@ import type {
   UserFootstep,
 } from "./types"
 
-export const SDK_VERSION = "0.3.0"
+export const SDK_VERSION = "0.4.0"
 
 const DEFAULT_MAX_FOOTSTEPS = 50
 const DEFAULT_UNMASK_ATTR = "data-stepstitch-unmask"
@@ -193,14 +193,15 @@ export class StepStitchTracker {
 
   private handleError(event: ErrorEvent): void {
     if (!this.canCapture()) return
-    // Capture structure only — NOT event.message, which can interpolate NPI.
+    // Capture structure only — NOT event.message or stack, which can interpolate NPI.
     const err = event.error as { name?: string } | undefined
     this.push({
       ...this.base("exception"),
       metadata: {
-        name: err?.name ?? "Error",
-        filename: routeTemplate(safePath(event.filename)),
-        lineno: event.lineno ?? 0,
+        error_type: err?.name ?? "Error",
+        source_path: routeTemplate(safePath(event.filename)),
+        line: event.lineno ?? 0,
+        column: event.colno ?? 0,
       },
     })
   }
@@ -216,11 +217,32 @@ export class StepStitchTracker {
    * from its own client. Only status + route template are stored, never URLs with
    * query strings or response bodies.
    */
-  recordApiError(status: number, urlOrPath: string): void {
+  recordApiError(status: number, urlOrPath: string, method = "GET"): void {
     if (!this.canCapture()) return
     this.push({
       ...this.base("api_error"),
-      metadata: { status, endpoint: routeTemplate(safePath(urlOrPath)) },
+      metadata: {
+        status,
+        method: method.toUpperCase().slice(0, 12),
+        endpoint: routeTemplate(safePath(urlOrPath)),
+      },
+    })
+  }
+
+  /**
+   * Host-reported frontend exception. This is for framework error boundaries that
+   * already know the exception class/type; do not pass raw messages or stack traces.
+   */
+  recordFrontendException(errorType: string, sourcePath = "/", line = 0, column = 0): void {
+    if (!this.canCapture()) return
+    this.push({
+      ...this.base("exception"),
+      metadata: {
+        error_type: safeToken(errorType),
+        source_path: routeTemplate(safePath(sourcePath)),
+        line,
+        column,
+      },
     })
   }
 
@@ -281,4 +303,9 @@ function safePath(value: string | undefined): string {
   } catch {
     return value.split("?")[0] ?? value
   }
+}
+
+/** Keep diagnostic type labels structural; drop whitespace-heavy/free-text values. */
+function safeToken(value: string): string {
+  return value.replace(/[^a-zA-Z_.:]/g, "").slice(0, 80) || "Error"
 }

@@ -4,8 +4,18 @@ All notable changes to StepStitch are recorded here. Versions are repo-wide tags
 SDK (`@stepstitch/tracker`) and the backend (`stepstitch_service`) are versioned in
 lockstep per `RELEASE.md`.
 
-## Unreleased
+## v0.4.0 — Financial-services support pack
 
+- **Financial-services support pack.** Added sanitized ServiceNow, Salesforce, and
+  Genesys draft previews for Copilot/Power Platform workflows. StepStitch still sends
+  nothing and holds no system-of-record credentials.
+- **Sanitized frontend diagnostics.** The SDK and backend now preserve useful API/error
+  structure (status, method, endpoint template, exception type, source path, line,
+  build/release metadata) while raw logs, messages, stacks, bodies, headers, cookies,
+  screenshots, page text, input values, and full URLs remain forbidden.
+- **Copilot tool expansion.** Added `GetDiagnosticSummary` and
+  `CreateFinancialServicesExportPreview` to the read/draft-only OpenAPI pack, with docs
+  and policy updates for generic regulated support operations.
 - **Golden-path acceptance test** (`service/tests/test_golden_path.py`) — one hostile
   report flows through the whole product (ingest+scrub → list → read → summary →
   privacy-posture → export-preview → compile) as the executable definition of done.
@@ -13,8 +23,9 @@ lockstep per `RELEASE.md`.
   and names the exact (credential/decision) unblockers for the remaining gated work.
 - **Architecture: StepStitch core, integrations via Copilot.** Documented the chosen
   topology — StepStitch exposes sanitized reads + a flat draft; a Copilot Studio agent
-  reaches ServiceNow/Salesforce through Microsoft's **native connectors** (StepStitch
-  builds no outbound CRM send layer, by design). New `copilot/SETUP.md` (agent blueprint)
+  reaches ServiceNow/Salesforce/Genesys workflows through Microsoft's **native
+  connectors** and governed Power Platform flows (StepStitch builds no outbound send
+  layer, by design). New `copilot/SETUP.md` (agent blueprint)
   and `copilot/connector-field-map.md` (draft → native-connector field maps); refined
   `system-prompt.md` / `action-policy.md` to make the native-connector create explicit.
 

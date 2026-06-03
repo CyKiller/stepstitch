@@ -14,6 +14,7 @@ from .base import (
     build_trace_summary,
     export_preview,
 )
+from .genesys import GenesysAdapter, build_genesys_context_draft
 from .salesforce import SalesforceAdapter, build_case_draft
 from .servicenow import ServiceNowAdapter, build_incident_draft
 
@@ -27,4 +28,6 @@ __all__ = [
     "build_incident_draft",
     "SalesforceAdapter",
     "build_case_draft",
+    "GenesysAdapter",
+    "build_genesys_context_draft",
 ]
