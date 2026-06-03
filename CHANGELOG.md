@@ -6,6 +6,10 @@ lockstep per `RELEASE.md`.
 
 ## v0.4.0 — Financial-services support pack
 
+- **Positioning sharpened: issue-to-repro infrastructure, not session replay.** README +
+  npm description now lead with privacy-safe debugging evidence and reproducibility
+  (scrubbed timeline → diagnostics → replayability → Playwright repro), explicitly
+  distinct from the crowded session-replay/observability category.
 - **Financial-services support pack.** Added sanitized ServiceNow, Salesforce, and
   Genesys draft previews for Copilot/Power Platform workflows. StepStitch still sends
   nothing and holds no system-of-record credentials.
