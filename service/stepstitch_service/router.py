@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from .retention import purge_expired_traces
+from .scrubber import FINANCIAL_SERVICES_ENTERPRISE, ScrubPolicy, ScrubRejection, scrub_trace_payload
 
 logger = logging.getLogger("stepstitch")
 
@@ -72,6 +73,7 @@ def create_stepstitch_router(
     base_url: str = "http://localhost:3000",
     retention_days: int = 30,
     capture_enabled: Optional[CaptureEnabledFn] = None,
+    scrub_policy: ScrubPolicy = FINANCIAL_SERVICES_ENTERPRISE,
 ) -> APIRouter:
     """Build the StepStitch router with host-injected auth + DB.
 
@@ -83,6 +85,11 @@ def create_stepstitch_router(
     INCIDENT-RESPONSE.md). When supplied and it returns falsy, ingestion is refused
     with 503 — the first action in an IR runbook, halting capture tenant-wide without a
     redeploy. Reads/deletes/purge stay available so operators can still respond.
+
+    ``scrub_policy`` is the server-side **trust boundary** (see scrubber.py). Every
+    payload is scrubbed before storage, independent of the SDK, so a hand-rolled or
+    hostile POST cannot persist NPI (SSNs, account numbers, raw URLs, request/response
+    bodies, unexpected metadata). The default is the strict financial-services posture.
     """
     router = APIRouter(prefix="/stepstitch/v1", tags=["StepStitch"])
 
@@ -112,10 +119,37 @@ def create_stepstitch_router(
     ) -> Dict[str, Any]:
         if not await _capture_allowed():
             raise HTTPException(status_code=503, detail="StepStitch capture is disabled")
+
+        # Server-side trust boundary: scrub BEFORE anything touches storage. The SDK
+        # redacts in the browser, but the server never trusts the client.
+        raw = {
+            "explanation": payload.explanation,
+            "footsteps": [f.model_dump() for f in payload.footsteps],
+            "metadata": dict(payload.metadata),
+        }
+        try:
+            scrubbed, scrub_report = scrub_trace_payload(raw, scrub_policy)
+        except ScrubRejection as exc:
+            await _audit("stepstitch.scrub_reject", str(user_id),
+                         {"fields": exc.fields, "policy": scrub_policy.name})
+            raise HTTPException(
+                status_code=422,
+                detail={"error": "payload rejected by scrub policy", "fields": exc.fields},
+            ) from exc
+
+        if scrub_report["scrub_status"] != "clean":
+            logger.info(
+                "stepstitch scrubbed fields=%s policy=%s",
+                scrub_report["scrubbed_fields"], scrub_report["policy"],
+            )
+
         trace_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
         expires = now + timedelta(days=retention_days)
-        footsteps = [f.model_dump() for f in payload.footsteps]
+        # Persist the scrub report alongside structural metadata so an operator (and a
+        # compliance reviewer) can see exactly what the server stripped at ingestion.
+        stored_metadata = dict(scrubbed["metadata"])
+        stored_metadata["_scrub"] = scrub_report
         await execute(
             "INSERT INTO stepstitch_traces (id, app_id, project_id, user_id, "
             "explanation, footsteps, trace_metadata, consent_version, "
@@ -126,16 +160,17 @@ def create_stepstitch_router(
                 payload.app_id,
                 payload.project_id,
                 str(user_id),
-                payload.explanation,
-                json.dumps(footsteps),
-                json.dumps(payload.metadata),
+                scrubbed["explanation"],
+                json.dumps(scrubbed["footsteps"]),
+                json.dumps(stored_metadata),
                 payload.consent_version,
                 expires,
                 now,
             ),
         )
-        logger.info("stepstitch trace stored id=%s user=%s", trace_id, user_id)
-        return {"status": "ok", "trace_id": trace_id}
+        logger.info("stepstitch trace stored id=%s user=%s scrub=%s",
+                    trace_id, user_id, scrub_report["scrub_status"])
+        return {"status": "ok", "trace_id": trace_id, "scrub": scrub_report}
 
     @router.get("/sessions")
     async def list_sessions(

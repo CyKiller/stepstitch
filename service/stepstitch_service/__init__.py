@@ -2,9 +2,19 @@
 from .compiler import generate_playwright_test
 from .retention import purge_expired_traces
 from .router import create_stepstitch_router
+from .scrubber import (
+    FINANCIAL_SERVICES_ENTERPRISE,
+    ScrubPolicy,
+    ScrubRejection,
+    scrub_trace_payload,
+)
 
 __all__ = [
     "generate_playwright_test",
     "create_stepstitch_router",
     "purge_expired_traces",
+    "scrub_trace_payload",
+    "ScrubPolicy",
+    "ScrubRejection",
+    "FINANCIAL_SERVICES_ENTERPRISE",
 ]
