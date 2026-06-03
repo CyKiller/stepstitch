@@ -11,6 +11,12 @@ lockstep per `RELEASE.md`.
   privacy-posture → export-preview → compile) as the executable definition of done.
 - **Completion ledger** (`docs/STATUS.md`) — maps every plan item to status + proof,
   and names the exact (credential/decision) unblockers for the remaining gated work.
+- **Architecture: StepStitch core, integrations via Copilot.** Documented the chosen
+  topology — StepStitch exposes sanitized reads + a flat draft; a Copilot Studio agent
+  reaches ServiceNow/Salesforce through Microsoft's **native connectors** (StepStitch
+  builds no outbound CRM send layer, by design). New `copilot/SETUP.md` (agent blueprint)
+  and `copilot/connector-field-map.md` (draft → native-connector field maps); refined
+  `system-prompt.md` / `action-policy.md` to make the native-connector create explicit.
 
 ## v0.3.0 — Enterprise evidence layer
 

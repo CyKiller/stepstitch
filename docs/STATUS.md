@@ -31,11 +31,25 @@ test is `service/tests/test_golden_path.py`.
 
 Gates: **76 service + 18 SDK tests green; ruff clean; type-check clean.**
 
+## Architecture decision: StepStitch core, integrations via Copilot
+
+**Chosen model:** StepStitch is the core privacy engine. The "supporting areas"
+(ServiceNow, Salesforce, …) are reached through a **Microsoft Copilot Studio** agent
+using Microsoft's **native connectors** — *not* through StepStitch-built HTTP adapters.
+StepStitch exposes sanitized reads + a flat, connector-ready **draft** (`export-preview`);
+the agent's native connector performs the governed, human-approved create.
+
+Consequence: **StepStitch does not build or maintain an outbound CRM send layer** — by
+design. That removes the previously-listed "build send transport" item entirely. The
+enablement is documentation + Copilot configuration, now shipped in `copilot/`:
+`SETUP.md`, `connector-field-map.md`, `openapi-v2.json`, `system-prompt.md`,
+`action-policy.md`.
+
 ## Remaining — gated (not engineering)
 
 | Item | Why it's not "done" | Exact unblocker | Owner |
 |---|---|---|---|
-| **Live ServiceNow / Salesforce / Copilot send** | Drafts are built + tested; the outbound API call needs a real tenant + auth to verify against. Building an untested HTTP layer on assumptions would violate "no unproven paths." | Provide a sandbox tenant + credentials → implement an injected `Transport` (off by default, governed) and add a live smoke. | **You** (credentials + governance sign-off) |
+| **Stand up the Copilot agent** | The blueprint + connector field map are shipped; building the agent is a Power Platform configuration task in the customer tenant. | Follow `copilot/SETUP.md` in Copilot Studio: import the connector, attach native ServiceNow/Salesforce connectors, apply DLP + approval. | **You** (tenant config) |
 | **OSS split** (public core vs. private adapters) | A packaging/licensing decision, not code. | Decide public scope → I add the package boundary + `docker compose` + import-linter rule. | **You** (decision) |
 | **Additional SDK framework packages** (react/vue/angular) | Deliberately deferred — premature breadth with no consumer. The current SDK + Marvox reference is the only proven need. | A real consumer asks for one. | **Pull-driven** |
 

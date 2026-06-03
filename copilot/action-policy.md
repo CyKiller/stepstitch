@@ -1,5 +1,9 @@
 # StepStitch Copilot action policy
 
+**Architecture:** StepStitch is the core; the agent reaches supporting systems
+(ServiceNow, Salesforce) through Microsoft's **native connectors**, fed by StepStitch's
+sanitized draft. StepStitch itself never creates records in a system of record.
+
 This policy bounds what a Microsoft Copilot Studio custom agent may do with StepStitch.
 It is enforced two ways: (1) the agent is only given the tools in `openapi-v2.json`, and
 (2) the StepStitch service audits every operator action regardless of caller.
@@ -23,8 +27,10 @@ It is enforced two ways: (1) the agent is only given the tools in `openapi-v2.js
 - Exporting raw trace JSON or the full `GET /session/{id}` (carries `explanation`)
 - Reading unmasked page text or input values (the product never stores these)
 - Running Playwright against production
-- Writing directly to ServiceNow / Salesforce (preview/draft only; direct create is a
-  governed, human-approved action outside the agent)
+- **A StepStitch tool** writing to ServiceNow / Salesforce. StepStitch is preview/draft
+  only. Record creation happens through the agent's **native** ServiceNow/Salesforce
+  connector — a governed, human-approved step, mapped from the StepStitch draft per
+  `connector-field-map.md`, and constrained by a Power Platform DLP policy.
 
 ## Operating rules for the agent
 
