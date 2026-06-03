@@ -110,6 +110,30 @@ weaken the allowlist/forbidden sets. Default = `financial-services-enterprise`.
 
 A host wires it via `create_stepstitch_router(scrub_policy=load_profile("..."))`.
 
+## Outbound integrations (sanitized, flat, DRAFT-only)
+
+Adapters (`service/stepstitch_service/integrations/`) export a trace to a system of
+record. They consume **only** a `TraceSummary` — a flat, structure-derived projection
+(trace id, route template, headline, replayability score/grade, privacy status, failing
+status, exception type). They never see the raw footsteps, the free-text explanation, or
+the user id, so a system of record cannot receive NPI. Proven in
+`service/tests/test_integrations.py`.
+
+Rules (frozen):
+
+- **Draft-only.** Adapters build a payload; they do not call a vendor API in this layer.
+  Direct create stays behind an explicit host-side governance flag.
+- **Flat scalars only.** `assert_flat` rejects nested objects (Salesforce/ServiceNow
+  connectors reject nested complex objects) and any `FORBIDDEN_DRAFT_KEYS`
+  (`footsteps`, `explanation_raw`, `user_id`, `request_body`, `response_body`, `target`,
+  `selectors`, `raw_url`).
+- **ServiceNow** → Incident draft: `short_description`, `description` (sanitized summary
+  only), `category/subcategory/impact/urgency`, `correlation_id = stepstitch:<trace_id>`,
+  `work_notes` (replayability + "repro available internally").
+- **Salesforce** → Case draft: `Subject`, `Origin=StepStitch`, `Status`, `Priority`,
+  `StepStitchTraceId__c`, `RouteTemplate__c`, `ReplayabilityScore__c`,
+  `ReplayabilityGrade__c`, `PrivacyStatus__c`, `PlaywrightReproLink__c=internal-link-only`.
+
 ### Operator & maintenance surface (admin only, audited)
 
 | Method + path | Purpose | Audit action |
