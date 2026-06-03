@@ -32,22 +32,28 @@ support-to-engineering evidence:
 - **Replayability score** — every trace carries a deterministic 0–1 score + grade +
   warnings, so support knows whether engineering can actually reproduce it. The compiled
   Playwright repro leads with that header.
+- **Sanitized frontend diagnostics** — API failures and frontend exceptions can carry
+  useful structure (status, method, endpoint template, exception type, source path, line,
+  build/release metadata) while raw logs, raw messages, stacks, headers, cookies, bodies,
+  screenshots, page text, input values, and full URLs remain out of the trace.
 - **Deployment profiles** — `financial-services-enterprise` (default), `healthcare-strict`
   (free text dropped, forbidden keys reject 422), `internal-enterprise`,
   `open-source-default`. A profile may only *tighten* the NPI boundary.
-- **Draft-only integrations** — flat, sanitized ServiceNow incident / Salesforce case
-  drafts built from a structure-derived `TraceSummary` (never raw footsteps, the
-  explanation, or the user id). Direct system-of-record writes stay behind host governance.
+- **Financial-services support pack** — flat, sanitized ServiceNow incident, Salesforce
+  case, and Genesys support-context drafts built from a structure-derived `TraceSummary`
+  (never raw footsteps, the explanation, or the user id). Direct system-of-record writes
+  stay behind host governance.
 - **Copilot-safe surface** — read-only/draft endpoints + an OpenAPI tool pack
   (`copilot/`) for a Microsoft Copilot Studio agent. Exposes no delete, retention,
   kill-switch, raw-read, or direct write. **StepStitch is the core; supporting systems
-  (ServiceNow, Salesforce) are reached through the agent's _native_ Copilot connectors**,
-  fed by StepStitch's sanitized flat draft — StepStitch holds no CRM credentials and
-  builds no outbound CRM send layer. See `copilot/SETUP.md`.
+  (ServiceNow, Salesforce, Genesys workflows) are reached through the agent's _native_
+  Copilot connectors or governed Power Platform flows**, fed by StepStitch's sanitized
+  flat drafts — StepStitch holds no system-of-record credentials and builds no outbound
+  CRM/contact-center send layer. See `copilot/SETUP.md`.
 - **Compliance evidence** — `COMPLIANCE-EVIDENCE.md` is generated from the live scrub
   policy (`npm run evidence`); a drift guard keeps it equal to the code.
 
-Each is proven in `service/tests/` (76 tests). See `contracts/stepstitch.md` for the
+Each is proven in `service/tests/` (80 tests). See `contracts/stepstitch.md` for the
 frozen contracts and `COMPLIANCE-EVIDENCE.md` for the reviewer packet.
 
 ## Usage
@@ -64,7 +70,10 @@ const tracker = new StepStitchTracker({
 tracker.grantConsent("v1")
 
 // from your own API client (the SDK does NOT patch fetch):
-if (!res.ok) tracker.recordApiError(res.status, res.url)
+if (!res.ok) tracker.recordApiError(res.status, res.url, "POST")
+
+// from your own frontend error boundary (no raw messages or stacks):
+tracker.recordFrontendException("ChunkLoadError", "/static/app-abc123.js", 41, 2)
 
 // from a "Report Bug" control:
 const { traceId } = await tracker.submitTrace("Pay button did nothing", projectId)

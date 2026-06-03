@@ -87,7 +87,12 @@ def test_golden_path_end_to_end():
             {"timestamp": "t", "type": "click", "route": "/accounts/8675309/checkout",
              "target": '[data-testid="pay"]', "label": "[masked]"},
             {"timestamp": "t", "type": "api_error", "route": "/accounts/8675309/checkout",
-             "label": "[masked]", "metadata": {"status": 500, "response_body": "SECRET"}},
+             "label": "[masked]", "metadata": {
+                 "status": 500,
+                 "endpoint": "https://app.example.test/api/accounts/8675309?ssn=1",
+                 "response_body": "SECRET",
+                 "message": "raw message with email me@bank.com",
+             }},
         ],
         "consent_version": "v1",
         "metadata": {"sdk_version": "0.3.0", "cookies": "session=SECRET"},
@@ -114,7 +119,14 @@ def test_golden_path_end_to_end():
     summary = client.get(f"{_PFX}/session/{tid}/summary").json()["summary"]
     assert summary["route"] == "/accounts/:id/checkout"
     assert summary["failing_status"] == 500
+    assert summary["diagnostic_endpoint"] == "/api/accounts/:id"
     assert "8675309" not in json.dumps(summary)
+
+    # 4b. DIAGNOSTIC SUMMARY is Copilot-safe and explains what never leaves.
+    diagnostic = client.get(f"{_PFX}/session/{tid}/diagnostic-summary").json()["diagnostic"]
+    assert diagnostic["summary"]["diagnostic_type"] == "api_error"
+    assert "raw error messages" in diagnostic["never_included"]
+    assert "me@bank.com" not in json.dumps(diagnostic)
 
     # 5. PRIVACY POSTURE reports the scrub + never-captured list.
     posture = client.get(f"{_PFX}/session/{tid}/privacy-posture").json()
@@ -123,9 +135,15 @@ def test_golden_path_end_to_end():
 
     # 6. EXPORT PREVIEW builds sanitized drafts (sends nothing).
     drafts = client.post(f"{_PFX}/session/{tid}/export-preview").json()["drafts"]
-    assert set(drafts) == {"servicenow", "salesforce"}
+    assert set(drafts) == {"servicenow", "salesforce", "genesys"}
     assert drafts["servicenow"]["correlation_id"] == f"stepstitch:{tid}"
+    assert drafts["genesys"]["trace_correlation_id"] == f"stepstitch:{tid}"
     assert "123-45-6789" not in json.dumps(drafts)
+
+    fs_preview = client.post(
+        f"{_PFX}/session/{tid}/financial-services-export-preview"
+    ).json()
+    assert fs_preview["target_pack"] == "financial-services-support"
 
     # 7. PLAYWRIGHT compiles to runnable code with the replayability header.
     code = client.get(f"{_PFX}/session/{tid}/playwright").json()["playwright_code"]
@@ -134,6 +152,7 @@ def test_golden_path_end_to_end():
 
     # Every operator action was audited.
     for action in ("stepstitch.list", "stepstitch.read", "stepstitch.summary",
-                   "stepstitch.privacy_posture", "stepstitch.export_preview",
-                   "stepstitch.compile"):
+                   "stepstitch.diagnostic_summary", "stepstitch.privacy_posture",
+                   "stepstitch.export_preview",
+                   "stepstitch.financial_services_export_preview", "stepstitch.compile"):
         assert action in db.audits

@@ -47,6 +47,8 @@ class TraceSummary:
     step_count: int
     failing_status: Optional[int] = None
     exception_type: Optional[str] = None
+    diagnostic_type: Optional[str] = None
+    diagnostic_endpoint: Optional[str] = None
     project_id: Optional[str] = None
 
     def as_dict(self) -> Dict[str, Any]:
@@ -60,6 +62,8 @@ class TraceSummary:
             "step_count": self.step_count,
             "failing_status": self.failing_status,
             "exception_type": self.exception_type,
+            "diagnostic_type": self.diagnostic_type,
+            "diagnostic_endpoint": self.diagnostic_endpoint,
             "project_id": self.project_id,
         }
 
@@ -92,6 +96,8 @@ def build_trace_summary(
 
     failing_status: Optional[int] = None
     exception_type: Optional[str] = None
+    diagnostic_type: Optional[str] = None
+    diagnostic_endpoint: Optional[str] = None
     for step in footsteps:
         meta = step.get("metadata") or {}
         stype = str(step.get("type", "")).lower()
@@ -100,11 +106,16 @@ def build_trace_summary(
                 failing_status = int(meta["status"])
             except (TypeError, ValueError):
                 failing_status = None
+            endpoint = meta.get("endpoint")
+            if isinstance(endpoint, str):
+                diagnostic_endpoint = endpoint[:120]
+            diagnostic_type = "api_error"
         elif stype == "exception":
             # error_type is an allowlisted, structural footstep-metadata key.
             et = meta.get("error_type") or meta.get("name")
             if isinstance(et, str):
                 exception_type = et[:60]
+            diagnostic_type = "exception"
 
     if failing_status is not None:
         headline = f"User-reported issue: HTTP {failing_status} on {route}"
@@ -123,6 +134,8 @@ def build_trace_summary(
         step_count=replay["signals"]["steps"],
         failing_status=failing_status,
         exception_type=exception_type,
+        diagnostic_type=diagnostic_type,
+        diagnostic_endpoint=diagnostic_endpoint,
         project_id=project_id,
     )
 

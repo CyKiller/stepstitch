@@ -2,10 +2,12 @@
 import pytest
 
 from stepstitch_service.integrations import (
+    GenesysAdapter,
     SalesforceAdapter,
     ServiceNowAdapter,
     assert_flat,
     build_case_draft,
+    build_genesys_context_draft,
     build_incident_draft,
     build_trace_summary,
     export_preview,
@@ -20,7 +22,8 @@ def _footsteps():
         {"timestamp": "t", "type": "click", "route": "/accounts/:id/distributions",
          "target": '[data-testid="submit"]', "label": "[masked]"},
         {"timestamp": "t", "type": "api_error", "route": "/accounts/:id/distributions",
-         "label": "[masked]", "metadata": {"status": 500}},
+         "label": "[masked]", "metadata": {
+             "status": 500, "endpoint": "/api/accounts/:id/distributions"}},
     ]
 
 
@@ -29,6 +32,8 @@ def test_summary_is_flat_and_derived_from_structure_only():
     assert s.trace_id == "trace_123"
     assert s.route == "/accounts/:id/distributions"
     assert s.failing_status == 500
+    assert s.diagnostic_type == "api_error"
+    assert s.diagnostic_endpoint == "/api/accounts/:id/distributions"
     assert "500" in s.headline
     assert s.privacy_status == "Scrubbed / No NPI"
     # summary dict is flat
@@ -56,9 +61,22 @@ def test_salesforce_draft_flat_high_priority_on_500():
     assert_flat(draft)
 
 
+def test_genesys_context_draft_flat_and_queue_oriented():
+    s = build_trace_summary("trace_123", _footsteps())
+    draft = build_genesys_context_draft(s)
+    assert draft["origin"] == "StepStitch"
+    assert draft["trace_correlation_id"] == "stepstitch:trace_123"
+    assert draft["diagnostic_type"] == "api_error"
+    assert draft["diagnostic_endpoint"] == "/api/accounts/:id/distributions"
+    assert draft["suggested_queue"] == "digital-platform-escalation"
+    assert draft["playwright_repro"] == "internal-link-only"
+    assert_flat(draft)
+
+
 def test_drafts_never_carry_raw_trace_internals():
     s = build_trace_summary("trace_123", _footsteps())
-    for draft in (build_incident_draft(s), build_case_draft(s)):
+    for draft in (build_incident_draft(s), build_case_draft(s),
+                  build_genesys_context_draft(s)):
         keys = set(draft.keys())
         for forbidden in ("footsteps", "explanation", "user_id", "target", "raw_url"):
             assert forbidden not in keys
@@ -77,12 +95,13 @@ def test_assert_flat_rejects_forbidden_key():
         assert_flat({"footsteps": "anything"})
 
 
-def test_export_preview_builds_both():
+def test_export_preview_builds_financial_services_pack():
     s = build_trace_summary("trace_123", _footsteps())
-    preview = export_preview(s, [ServiceNowAdapter(), SalesforceAdapter()])
-    assert set(preview.keys()) == {"servicenow", "salesforce"}
+    preview = export_preview(s, [ServiceNowAdapter(), SalesforceAdapter(), GenesysAdapter()])
+    assert set(preview.keys()) == {"servicenow", "salesforce", "genesys"}
     assert preview["servicenow"]["correlation_id"] == "stepstitch:trace_123"
     assert preview["salesforce"]["StepStitchTraceId__c"] == "trace_123"
+    assert preview["genesys"]["trace_correlation_id"] == "stepstitch:trace_123"
 
 
 def test_summary_handles_navigation_only_trace():
