@@ -4,6 +4,14 @@ All notable changes to StepStitch are recorded here. Versions are repo-wide tags
 SDK (`@stepstitch/tracker`) and the backend (`stepstitch_service`) are versioned in
 lockstep per `RELEASE.md`.
 
+## Unreleased
+
+- **Golden-path acceptance test** (`service/tests/test_golden_path.py`) — one hostile
+  report flows through the whole product (ingest+scrub → list → read → summary →
+  privacy-posture → export-preview → compile) as the executable definition of done.
+- **Completion ledger** (`docs/STATUS.md`) — maps every plan item to status + proof,
+  and names the exact (credential/decision) unblockers for the remaining gated work.
+
 ## v0.3.0 — Enterprise evidence layer
 
 **Intent.** v0.1–v0.2 proved the *privacy* half: structural-only capture, consent, the
