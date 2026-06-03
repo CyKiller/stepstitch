@@ -1,0 +1,27 @@
+{
+  "name": "open-source-default",
+  "description": "Sensible privacy-first default for the OSS distribution. Free text PII-scrubbed; forbidden keys dropped.",
+  "scrub": {
+    "free_text": "scrub",
+    "max_text_len": 280,
+    "reject_on_forbidden": false
+  },
+  "posture": {
+    "screenshots": false,
+    "video": false,
+    "dom_text": false,
+    "input_values": false,
+    "raw_urls": false,
+    "request_bodies": false,
+    "response_bodies": false,
+    "console_messages": false,
+    "network_headers": false,
+    "consent_required": true,
+    "respect_gpc": true,
+    "respect_dnt": true,
+    "admin_reads_audited": true,
+    "right_to_delete": true,
+    "retention_enabled": true,
+    "kill_switch": true
+  }
+}

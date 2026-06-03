@@ -93,6 +93,23 @@ This is the compliance proof: a reviewer can see exactly what the server strippe
 ingestion, per trace. The scrubber is the canonical NPI boundary — do not store any raw
 producer field that bypasses it.
 
+#### Deployment profiles
+
+A **profile** is a named posture that selects the `ScrubPolicy` (see
+`service/stepstitch_service/profiles.py`; canonical Python definitions, with matching
+`profiles/*.json` artifacts guarded against drift by `test_profiles.py`). A profile may
+only *tighten* the boundary (free-text scrub→disabled, drop→reject) — it can never
+weaken the allowlist/forbidden sets. Default = `financial-services-enterprise`.
+
+| Profile | free_text | reject_on_forbidden |
+|---|---|---|
+| `financial-services-enterprise` (default) | scrub | drop |
+| `healthcare-strict` | disabled | reject (422) |
+| `internal-enterprise` | scrub (longer notes) | drop |
+| `open-source-default` | scrub | drop |
+
+A host wires it via `create_stepstitch_router(scrub_policy=load_profile("..."))`.
+
 ### Operator & maintenance surface (admin only, audited)
 
 | Method + path | Purpose | Audit action |
