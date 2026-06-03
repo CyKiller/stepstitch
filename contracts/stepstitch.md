@@ -58,6 +58,41 @@ Redaction rules (enforced in `src/redaction.ts`, proven in
 - **`metadata.sdk_build`** carries the SDK's stamped build hash (§5b) for incident
   forensics — it ties a stored trace to an exact, reproducible build.
 
+### Server-side scrubber (the trust boundary)
+
+The SDK redacts in the browser (`src/redaction.ts`), but **the server never trusts the
+client**. A hand-rolled `curl`, a buggy integration, or a compromised page can POST
+anything, so every ingestion runs through `scrub_trace_payload(payload, policy)`
+(`service/stepstitch_service/scrubber.py`) **before** any value reaches storage. This is
+defense-in-depth and is enforced independently of the SDK. Proven in
+`service/tests/test_scrubber.py`.
+
+The scrubber, under the default **`financial-services-enterprise`** policy:
+
+- **Free text (`explanation`, unmasked labels, allowed metadata strings):** redacts
+  SSNs, card/account numbers (13–19 digits), phone numbers, emails, DOB-like dates,
+  long numeric identifiers, and raw URLs — replaced with `[redacted:<kind>]`. Capped to
+  `max_text_len`. A policy may set `free_text: "disabled"` to drop `explanation` whole.
+- **Routes:** re-templated server-side (scheme/host/query/hash stripped, ID-like
+  segments → `:id`) so a leaked raw URL cannot persist. Idempotent on a clean template.
+- **Metadata:** strict **allowlist** (top-level: `sdk_version`, `sdk_build`, `viewport`,
+  `user_agent`, `consent_version`, `locale`; footstep: `status`, `error_type`,
+  `method`). Anything else is dropped; surviving string values are still PII-scrubbed.
+- **Forbidden keys** (raw `request_body`/`response_body`, `console`, `headers`,
+  `cookies`, `screenshots`, `dom`, `url`, `query_string`, …) are dropped as a leak
+  signal. With `reject_on_forbidden: true` their presence makes the POST a **422**
+  instead, and `stepstitch.scrub_reject` is audited.
+
+The ingestion **response** and the stored `trace_metadata._scrub` both carry the report:
+
+```jsonc
+{ "scrub_status": "clean" | "scrubbed", "scrubbed_fields": ["explanation", "metadata.cookies"], "policy": "financial-services-enterprise" }
+```
+
+This is the compliance proof: a reviewer can see exactly what the server stripped at
+ingestion, per trace. The scrubber is the canonical NPI boundary — do not store any raw
+producer field that bypasses it.
+
 ### Operator & maintenance surface (admin only, audited)
 
 | Method + path | Purpose | Audit action |
