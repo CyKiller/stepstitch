@@ -1,5 +1,6 @@
 """StepStitch backend service package (host-agnostic)."""
 from .compiler import generate_playwright_test
+from .compliance import build_evidence
 from .profiles import (
     DEFAULT_PROFILE,
     available_profiles,
@@ -29,4 +30,5 @@ __all__ = [
     "policy_from_profile",
     "available_profiles",
     "DEFAULT_PROFILE",
+    "build_evidence",
 ]

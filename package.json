@@ -29,6 +29,7 @@
     "test:watch": "vitest",
     "stamp": "node scripts/stamp-build.mjs",
     "sbom": "node scripts/generate-sbom.mjs",
+    "evidence": "PYTHONPATH=service python3 scripts/generate_compliance_evidence.py",
     "release": "npm run build && npm run stamp && npm run sbom",
     "test:e2e-proof": "node scripts/prove-repro-executes.mjs"
   },
