@@ -16,7 +16,12 @@ text, input values, or raw URLs unless explicitly opted in.
   "route": "/accounts/:id",                 // route TEMPLATE, never a raw URL
   "target": "[data-testid=\"pay\"]",        // stable structural selector (optional)
   "label": "[masked]",                       // MASKED unless source is data-stepstitch-unmask
-  "metadata": { "status": 500 }              // structural, NPI-free only (optional)
+  "metadata": {
+    "status": 500,
+    "method": "POST",
+    "endpoint": "/api/accounts/:id",
+    "error_type": "TypeError"
+  }                                         // structural, NPI-free only (optional)
 }
 ```
 
@@ -31,6 +36,10 @@ Redaction rules (enforced in `src/redaction.ts`, proven in
 - **No media content** (`img/svg/video/canvas/picture/audio/object/embed/map`).
 - **Route templating.** Query strings and ID-like path segments (numeric, UUID, long
   hex) become `:id`. No raw URLs.
+- **Frontend diagnostics are structural only.** API errors and exceptions may record
+  status, method, endpoint template, exception type, source path, line, and column. Raw
+  logs, raw messages, stack traces, request/response bodies, headers, cookies, DOM text,
+  screenshots, input values, and full URLs are never valid producer fields.
 
 ## Ingestion API
 
@@ -45,7 +54,7 @@ Redaction rules (enforced in `src/redaction.ts`, proven in
   "footsteps": [ /* UserFootstep[] */ ],
   "consent_version": "v1 | null",
   "metadata": {
-    "sdk_version": "0.3.0", "sdk_build": "<git-short-sha>",
+    "sdk_version": "0.4.0", "sdk_build": "<git-short-sha>",
     "viewport": "1280x720", "user_agent": "..."
   }
 }
@@ -76,8 +85,10 @@ The scrubber, under the default **`financial-services-enterprise`** policy:
 - **Routes:** re-templated server-side (scheme/host/query/hash stripped, ID-like
   segments → `:id`) so a leaked raw URL cannot persist. Idempotent on a clean template.
 - **Metadata:** strict **allowlist** (top-level: `sdk_version`, `sdk_build`, `viewport`,
-  `user_agent`, `consent_version`, `locale`; footstep: `status`, `error_type`,
-  `method`). Anything else is dropped; surviving string values are still PII-scrubbed.
+  `user_agent`, `consent_version`, `locale`, release/environment fields; footstep:
+  `status`, `error_type`, `method`, `endpoint`, `source_path`, `line`, `column`,
+  `interacted`). Anything else is dropped; surviving string values are still
+  PII-scrubbed and endpoint/source-path values are route-templated.
 - **Forbidden keys** (raw `request_body`/`response_body`, `console`, `headers`,
   `cookies`, `screenshots`, `dom`, `url`, `query_string`, …) are dropped as a leak
   signal. With `reject_on_forbidden: true` their presence makes the POST a **422**
@@ -110,7 +121,7 @@ weaken the allowlist/forbidden sets. Default = `financial-services-enterprise`.
 
 A host wires it via `create_stepstitch_router(scrub_policy=load_profile("..."))`.
 
-## Outbound integrations (sanitized, flat, DRAFT-only)
+## Financial-services support pack (sanitized, flat, DRAFT-only)
 
 Adapters (`service/stepstitch_service/integrations/`) export a trace to a system of
 record. They consume **only** a `TraceSummary` — a flat, structure-derived projection
@@ -133,13 +144,18 @@ Rules (frozen):
 - **Salesforce** → Case draft: `Subject`, `Origin=StepStitch`, `Status`, `Priority`,
   `StepStitchTraceId__c`, `RouteTemplate__c`, `ReplayabilityScore__c`,
   `ReplayabilityGrade__c`, `PrivacyStatus__c`, `PlaywrightReproLink__c=internal-link-only`.
+- **Genesys** → support-context draft: `origin`, `trace_correlation_id`,
+  `issue_headline`, `route_template`, `diagnostic_type`, `diagnostic_endpoint`,
+  `failing_status`, `exception_type`, `replayability_score`, `replayability_grade`,
+  `suggested_queue`, `privacy_status`, `playwright_repro=internal-link-only`.
 
 ## Copilot-safe surface
 
 `copilot/openapi-v2.json` exposes **only** read-only/draft operations to a Microsoft
 Copilot Studio agent: `ListRecentTraces`, `GetTraceSummary`, `GetReplayabilityScore`,
-`GetPrivacyPosture`, `GeneratePlaywrightRepro`, `CreateExportPreview`. It deliberately
-omits delete, retention/purge, kill-switch, the raw `GET /session/{id}` (carries
+`GetPrivacyPosture`, `GetDiagnosticSummary`, `GeneratePlaywrightRepro`,
+`CreateExportPreview`, `CreateFinancialServicesExportPreview`. It deliberately omits
+delete, retention/purge, kill-switch, the raw `GET /session/{id}` (carries
 `explanation`), and any direct system-of-record write. `copilot/action-policy.md` and
 `copilot/system-prompt.md` bound agent behavior. Guarded by
 `test_copilot_surface.py::test_openapi_exposes_no_destructive_operation` and
@@ -153,8 +169,10 @@ omits delete, retention/purge, kill-switch, the raw `GET /session/{id}` (carries
 | `GET /session/{id}` | read one trace (includes `replayability`) | `stepstitch.read` |
 | `GET /session/{id}/replayability` | reproducibility score only | `stepstitch.replayability` |
 | `GET /session/{id}/summary` | sanitized, structure-derived summary (Copilot-safe) | `stepstitch.summary` |
+| `GET /session/{id}/diagnostic-summary` | sanitized frontend/API diagnostic summary | `stepstitch.diagnostic_summary` |
 | `GET /session/{id}/privacy-posture` | per-trace scrub report + never-captured list | `stepstitch.privacy_posture` |
-| `POST /session/{id}/export-preview` | build ServiceNow + Salesforce drafts (sends nothing) | `stepstitch.export_preview` |
+| `POST /session/{id}/export-preview` | build ServiceNow + Salesforce + Genesys drafts (sends nothing) | `stepstitch.export_preview` |
+| `POST /session/{id}/financial-services-export-preview` | named financial-services support draft pack (sends nothing) | `stepstitch.financial_services_export_preview` |
 | `GET /session/{id}/playwright` | compile repro | `stepstitch.compile` |
 | `DELETE /session/by-user/{id}` | right-to-delete bodies | `stepstitch.delete_by_user` |
 | `POST /maintenance/purge-expired` | split-retention body purge | `stepstitch.retention_purge` |

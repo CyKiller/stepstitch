@@ -2,17 +2,21 @@
 
 **Topology:** StepStitch is the core privacy-safe evidence engine. A Microsoft Copilot
 Studio agent is the operator hub. The agent reaches the "supporting areas" (ServiceNow,
-Salesforce, …) through **Microsoft's own native connectors** — StepStitch never holds
-those credentials and never calls those APIs. StepStitch only exposes sanitized reads
-and a flat, connector-ready **draft**; the agent's native connector creates the record.
+Salesforce, Genesys workflows, …) through **Microsoft's own native connectors** or
+governed Power Platform flows — StepStitch never holds those credentials and never calls
+those APIs. StepStitch only exposes sanitized reads, sanitized diagnostics, and flat,
+connector-ready **drafts**; the agent's native connector/flow performs the create or
+handoff.
 
 ```
 Copilot Studio agent
 ├── StepStitch (custom connector, from copilot/openapi-v2.json)   ← read-only / draft
 │     GetTraceSummary · GetPrivacyPosture · GetReplayabilityScore
-│     GeneratePlaywrightRepro · CreateExportPreview · ListRecentTraces
+│     GetDiagnosticSummary · GeneratePlaywrightRepro
+│     CreateFinancialServicesExportPreview · ListRecentTraces
 ├── ServiceNow (native connector)   ← Create Record (Incident)
 └── Salesforce (native connector)   ← Create Record (Case)
+└── Genesys workflow/context         ← queue/case context, via governed flow
 ```
 
 ## 1. Register StepStitch as a custom connector
@@ -28,17 +32,18 @@ Copilot Studio agent
 1. Copilot Studio → **Create agent**.
 2. Paste `copilot/system-prompt.md` as the agent instructions.
 3. Add tools:
-   - the **StepStitch** custom connector actions (all six),
+   - the **StepStitch** custom connector actions,
    - the **ServiceNow** native connector → *Create Record* (Incident),
-   - the **Salesforce** native connector → *Create Record* (Case).
+   - the **Salesforce** native connector → *Create Record* (Case),
+   - the customer's governed Genesys/Power Platform handoff flow, if available.
 4. Apply `copilot/action-policy.md` as the guardrail: StepStitch tools are read/draft
    only; record creation happens **only** via the native connectors, as a governed,
    human-approved step.
 
 ## 3. Governance (do this before enabling create)
 
-- Put the ServiceNow/Salesforce connectors in a **DLP policy** that blocks them from
-  combining with arbitrary HTTP/unknown connectors.
+- Put the ServiceNow/Salesforce/Genesys workflow connectors in a **DLP policy** that
+  blocks them from combining with arbitrary HTTP/unknown connectors.
 - Require **human approval** in the topic before the native *Create Record* runs.
 - Keep StepStitch's tools in the same DLP group so a trace summary can feed a draft but
   cannot be exfiltrated to an unmanaged connector.
@@ -46,11 +51,13 @@ Copilot Studio agent
 ## 4. The flow the agent runs
 
 1. `GetTraceSummary` + `GetPrivacyPosture` → state what was captured / never captured.
-2. `GetReplayabilityScore` → say whether engineering can reproduce it.
-3. `CreateExportPreview` → get the **flat, sanitized draft** for each system.
+2. `GetDiagnosticSummary` + `GetReplayabilityScore` → identify likely owner and whether
+   engineering can reproduce it.
+3. `CreateFinancialServicesExportPreview` → get the **flat, sanitized draft** for each system.
 4. Map the draft fields onto the native connector's *Create Record* (see
    `connector-field-map.md`) and run it **after human approval**.
 5. `GeneratePlaywrightRepro` → attach/share the repro internally.
 
-The only data that ever leaves StepStitch is the sanitized summary + flat draft — no
-footsteps, no free-text explanation, no user id, no page text.
+The only data that ever leaves StepStitch is the sanitized summary, sanitized diagnostic
+summary, and flat drafts — no footsteps, no free-text explanation, no user id, no page
+text, no raw logs, and no screenshots.

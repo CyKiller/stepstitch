@@ -13,7 +13,7 @@
 - Page text / DOM content
 - Raw URLs (templated to routes)
 - Request / response bodies
-- Console messages
+- Raw frontend logs / console messages / stack traces
 - Network headers / cookies
 - SSNs, account/card numbers, emails, phone numbers (redacted from free text)
 
@@ -22,7 +22,9 @@
 - Route templates (e.g. /accounts/:id)
 - Stable selectors (data-testid preferred)
 - API status codes
+- Endpoint templates and source-path templates
 - Exception types
+- SDK/build/release metadata
 - Masked labels
 
 ## Server-side enforcement (defense-in-depth)
@@ -31,13 +33,14 @@ Every ingestion is scrubbed server-side before storage, independent of the SDK (
 
 ### Metadata allowlist (everything else dropped)
 
-- Top-level: `consent_version`, `locale`, `sdk_build`, `sdk_version`, `user_agent`, `viewport`
-- Footstep: `error_type`, `method`, `status`
+- Top-level: `consent_version`, `environment`, `locale`, `release`, `sdk_build`, `sdk_version`, `sentry_environment`, `sentry_release`, `user_agent`, `viewport`
+- Footstep: `column`, `endpoint`, `error_type`, `interacted`, `line`, `method`, `source_path`, `status`
 
 ### Forbidden keys (dropped as a leak signal)
 
 - `body`
 - `console`
+- `console_log`
 - `console_messages`
 - `cookie`
 - `cookies`
@@ -45,6 +48,10 @@ Every ingestion is scrubbed server-side before storage, independent of the SDK (
 - `dom_text`
 - `headers`
 - `html`
+- `log`
+- `logs`
+- `message`
+- `messages`
 - `network_headers`
 - `query`
 - `query_string`
@@ -55,6 +62,8 @@ Every ingestion is scrubbed server-side before storage, independent of the SDK (
 - `response_body`
 - `screenshot`
 - `screenshots`
+- `stack`
+- `stacktrace`
 - `url`
 
 ## Operational controls

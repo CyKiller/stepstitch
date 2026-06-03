@@ -29,7 +29,11 @@ export interface UserFootstep {
    * source element is explicitly marked `data-stepstitch-unmask`.
    */
   label: string
-  /** Structural, NPI-free metadata only. */
+  /**
+   * Structural, NPI-free metadata only. Useful keys include status, method, endpoint,
+   * error_type, source_path, line, and column. Raw logs/messages/stacks/bodies are
+   * forbidden by contract and scrubbed again server-side.
+   */
   metadata?: Record<string, string | number | boolean>
 }
 

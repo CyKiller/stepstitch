@@ -138,3 +138,43 @@ describe("selector + route shaping", () => {
     expect(routeTemplate("/")).toBe("/")
   })
 })
+
+describe("frontend diagnostics", () => {
+  it("records API errors as route templates with method and status only", () => {
+    const t = new StepStitchTracker({ doc, win })
+    t.grantConsent("v1")
+    t.recordApiError(500, "https://portal.example.test/api/accounts/8675309?ssn=1", "post")
+
+    const api = t.getTrace().find((s) => s.type === "api_error")
+    expect(api?.metadata).toMatchObject({
+      status: 500,
+      method: "POST",
+      endpoint: "/api/accounts/:id",
+    })
+    expect(JSON.stringify(api)).not.toContain("8675309")
+    expect(JSON.stringify(api)).not.toContain("ssn=")
+  })
+
+  it("records frontend exceptions without messages or stacks", () => {
+    const t = new StepStitchTracker({ doc, win })
+    t.grantConsent("v1")
+    t.recordFrontendException(
+      "Type Error with spaces and SSN 123-45-6789",
+      "https://portal.example.test/static/app-123456.js?token=abc",
+      12,
+      4,
+    )
+
+    const ex = t.getTrace().find((s) => s.type === "exception")
+    expect(ex?.metadata).toMatchObject({
+      error_type: "TypeErrorwithspacesandSSN",
+      source_path: "/static/:id",
+      line: 12,
+      column: 4,
+    })
+    expect(JSON.stringify(ex)).not.toContain("123-45-6789")
+    expect(JSON.stringify(ex)).not.toContain("token=")
+    expect(JSON.stringify(ex)).not.toContain("stack")
+    expect(JSON.stringify(ex)).not.toContain("message")
+  })
+})
