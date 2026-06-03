@@ -40,7 +40,10 @@ support-to-engineering evidence:
   explanation, or the user id). Direct system-of-record writes stay behind host governance.
 - **Copilot-safe surface** — read-only/draft endpoints + an OpenAPI tool pack
   (`copilot/`) for a Microsoft Copilot Studio agent. Exposes no delete, retention,
-  kill-switch, raw-read, or direct write.
+  kill-switch, raw-read, or direct write. **StepStitch is the core; supporting systems
+  (ServiceNow, Salesforce) are reached through the agent's _native_ Copilot connectors**,
+  fed by StepStitch's sanitized flat draft — StepStitch holds no CRM credentials and
+  builds no outbound CRM send layer. See `copilot/SETUP.md`.
 - **Compliance evidence** — `COMPLIANCE-EVIDENCE.md` is generated from the live scrub
   policy (`npm run evidence`); a drift guard keeps it equal to the code.
 
