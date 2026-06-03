@@ -1,12 +1,22 @@
 # @stepstitch/tracker
 
-Privacy-by-default user-footsteps SDK. Records a structural trace of a user session and
-lets a backend compile it into a deterministic Playwright reproduction script. **Zero
-runtime dependencies.** Built for regulated, self-hosting deployments.
+**Issue-to-repro infrastructure — not session replay.** When a user reports a problem,
+StepStitch turns that single report into a scrubbed event timeline, structural frontend
+diagnostics, a replayability score, and a copyable **Playwright reproduction** — without
+capturing screens, input values, page text, or raw URLs. **Zero runtime dependencies.**
+Built for regulated and quality-focused teams that self-host.
+
+The wedge is deliberate. Session-replay/observability tools (Sentry, LogRocket,
+FullStory, Datadog) already sell "watch every session." Most engineering teams don't
+need another recording to watch — they need a user-reported bug that can become a
+**regression test**. StepStitch leads with privacy-safe *debugging evidence and
+reproducibility*, not analytics.
 
 ## Privacy posture
 
-Adopts the strongest industry model (Sentry Session Replay's "private by default"):
+Borrows the strongest privacy model in the category (Sentry Session Replay's "private by
+default") — but StepStitch captures *structure for reproduction*, never a watchable
+recording:
 
 - Masks **all** text by default; opt-in unmask via `data-stepstitch-unmask`.
 - Never captures input values; hard-skips password / credit-card / `[data-sensitive]`.
