@@ -1,7 +1,7 @@
 {
   "name": "@stepstitch/tracker",
-  "version": "0.3.0",
-  "description": "StepStitch — privacy-by-default user-footsteps SDK that compiles sessions into deterministic Playwright reproduction scripts. Zero runtime dependencies.",
+  "version": "0.4.0",
+  "description": "StepStitch — issue-to-repro infrastructure (not session replay): turns a user-reported problem into scrubbed diagnostics, a replayability score, and a copyable Playwright reproduction, without capturing screens, input values, or page text. Zero runtime dependencies.",
   "license": "UNLICENSED",
   "private": true,
   "type": "module",

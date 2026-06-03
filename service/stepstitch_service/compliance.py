@@ -25,7 +25,7 @@ NEVER_CAPTURED_CATEGORIES = (
     "Page text / DOM content",
     "Raw URLs (templated to routes)",
     "Request / response bodies",
-    "Console messages",
+    "Raw frontend logs / console messages / stack traces",
     "Network headers / cookies",
     "SSNs, account/card numbers, emails, phone numbers (redacted from free text)",
 )
@@ -34,7 +34,9 @@ ALWAYS_STRUCTURAL = (
     "Route templates (e.g. /accounts/:id)",
     "Stable selectors (data-testid preferred)",
     "API status codes",
+    "Endpoint templates and source-path templates",
     "Exception types",
+    "SDK/build/release metadata",
     "Masked labels",
 )
 

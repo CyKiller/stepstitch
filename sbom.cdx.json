@@ -3,7 +3,7 @@
   "specVersion": "1.5",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-06-03T10:06:31.050Z",
+    "timestamp": "2026-06-03T12:34:06.944Z",
     "tools": [
       {
         "vendor": "StepStitch",
@@ -12,15 +12,15 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "pkg:npm/%40stepstitch/tracker@0.3.0",
+      "bom-ref": "pkg:npm/%40stepstitch/tracker@0.4.0",
       "name": "@stepstitch/tracker",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "description": "StepStitch — privacy-by-default user-footsteps SDK that compiles sessions into deterministic Playwright reproduction scripts. Zero runtime dependencies.",
-      "purl": "pkg:npm/%40stepstitch/tracker@0.3.0",
+      "purl": "pkg:npm/%40stepstitch/tracker@0.4.0",
       "properties": [
         {
           "name": "vcs:commit",
-          "value": "4b9cef813afdd0a53ce1207b64cee7fcb9d6879f"
+          "value": "5c2ea11dce575c85afc7690f0afdc8a6da694e62"
         }
       ]
     }
@@ -28,7 +28,7 @@
   "components": [],
   "dependencies": [
     {
-      "ref": "pkg:npm/%40stepstitch/tracker@0.3.0",
+      "ref": "pkg:npm/%40stepstitch/tracker@0.4.0",
       "dependsOn": []
     }
   ]

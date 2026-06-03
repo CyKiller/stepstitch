@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from .integrations import (
+    GenesysAdapter,
     SalesforceAdapter,
     ServiceNowAdapter,
     build_trace_summary,
@@ -275,6 +276,34 @@ def create_stepstitch_router(
         summary = build_trace_summary(trace_id, _loads(row[0]), project_id=row[1])
         return {"status": "ok", "summary": summary.as_dict()}
 
+    @router.get("/session/{trace_id}/diagnostic-summary")
+    async def get_diagnostic_summary(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        row = await fetchone(
+            "SELECT footsteps, project_id FROM stepstitch_traces WHERE id = ?",
+            (trace_id,),
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        await _audit("stepstitch.diagnostic_summary", _actor_id(admin),
+                     {"trace_id": trace_id})
+        summary = build_trace_summary(trace_id, _loads(row[0]), project_id=row[1])
+        return {
+            "status": "ok",
+            "trace_id": trace_id,
+            "diagnostic": {
+                "summary": summary.as_dict(),
+                "recommended_next_step": _recommended_next_step(summary),
+                "never_included": [
+                    "raw console logs", "raw error messages", "stack traces",
+                    "request/response bodies", "headers", "cookies",
+                    "input values", "screenshots", "full URLs",
+                ],
+            },
+        }
+
     @router.get("/session/{trace_id}/privacy-posture")
     async def get_privacy_posture(
         trace_id: str,
@@ -305,7 +334,7 @@ def create_stepstitch_router(
         trace_id: str,
         admin: Any = Depends(require_admin),
     ) -> Dict[str, Any]:
-        # Draft-only: builds ServiceNow + Salesforce drafts. Sends nothing.
+        # Draft-only: builds financial-services support drafts. Sends nothing.
         row = await fetchone(
             "SELECT footsteps, project_id FROM stepstitch_traces WHERE id = ?",
             (trace_id,),
@@ -314,8 +343,34 @@ def create_stepstitch_router(
             raise HTTPException(status_code=404, detail="Trace not found")
         await _audit("stepstitch.export_preview", _actor_id(admin), {"trace_id": trace_id})
         summary = build_trace_summary(trace_id, _loads(row[0]), project_id=row[1])
-        drafts = export_preview(summary, [ServiceNowAdapter(), SalesforceAdapter()])
+        drafts = export_preview(
+            summary, [ServiceNowAdapter(), SalesforceAdapter(), GenesysAdapter()]
+        )
         return {"status": "ok", "trace_id": trace_id, "drafts": drafts}
+
+    @router.post("/session/{trace_id}/financial-services-export-preview")
+    async def post_financial_services_export_preview(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        row = await fetchone(
+            "SELECT footsteps, project_id FROM stepstitch_traces WHERE id = ?",
+            (trace_id,),
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        await _audit("stepstitch.financial_services_export_preview", _actor_id(admin),
+                     {"trace_id": trace_id})
+        summary = build_trace_summary(trace_id, _loads(row[0]), project_id=row[1])
+        drafts = export_preview(
+            summary, [ServiceNowAdapter(), SalesforceAdapter(), GenesysAdapter()]
+        )
+        return {
+            "status": "ok",
+            "trace_id": trace_id,
+            "target_pack": "financial-services-support",
+            "drafts": drafts,
+        }
 
     @router.get("/session/{trace_id}/playwright")
     async def get_compiled_repro(
@@ -356,3 +411,13 @@ def create_stepstitch_router(
         return {"status": "ok", "deleted": deleted}
 
     return router
+
+
+def _recommended_next_step(summary: Any) -> str:
+    if summary.failing_status is not None and summary.failing_status >= 500:
+        return "Route to platform engineering with the generated Playwright repro."
+    if summary.exception_type:
+        return "Route to frontend engineering with the sanitized exception type and repro."
+    if summary.replayability_grade in {"A", "B"}:
+        return "Attach the repro to the support case and prioritize by affected workflow."
+    return "Ask support to gather one more consented reproduction path before escalation."

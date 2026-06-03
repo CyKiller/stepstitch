@@ -81,7 +81,11 @@ def _ingest(client):
              "target": '[data-testid="submit"]', "label": "[masked]"},
             {"timestamp": "t", "type": "api_error",
              "route": "/accounts/8675309/distributions", "label": "[masked]",
-             "metadata": {"status": 500}},
+             "metadata": {
+                 "status": 500,
+                 "endpoint": "https://portal.example.test/api/accounts/8675309?ssn=1",
+                 "message": "raw message with SSN 123-45-6789",
+             }},
         ],
         "metadata": {"sdk_version": "0.2.0"},
     }
@@ -122,12 +126,39 @@ def test_export_preview_builds_drafts_without_npi():
     r = client.post(f"{_PFX}/session/{tid}/export-preview")
     assert r.status_code == 200
     drafts = r.json()["drafts"]
-    assert set(drafts.keys()) == {"servicenow", "salesforce"}
+    assert set(drafts.keys()) == {"servicenow", "salesforce", "genesys"}
     assert drafts["servicenow"]["correlation_id"] == f"stepstitch:{tid}"
+    assert drafts["genesys"]["diagnostic_endpoint"] == "/api/accounts/:id"
     blob = json.dumps(drafts)
     assert "123-45-6789" not in blob
     assert "8675309" not in blob
     assert any(a[0] == "stepstitch.export_preview" for a in db.audits)
+
+
+def test_diagnostic_summary_is_copilot_safe_and_audited():
+    client, db = _build()
+    tid = _ingest(client)
+    r = client.get(f"{_PFX}/session/{tid}/diagnostic-summary")
+    assert r.status_code == 200
+    body = r.json()["diagnostic"]
+    assert body["summary"]["diagnostic_type"] == "api_error"
+    assert body["summary"]["diagnostic_endpoint"] == "/api/accounts/:id"
+    assert "raw console logs" in body["never_included"]
+    assert "123-45-6789" not in json.dumps(body)
+    assert any(a[0] == "stepstitch.diagnostic_summary" for a in db.audits)
+
+
+def test_financial_services_export_preview_is_named_and_audited():
+    client, db = _build()
+    tid = _ingest(client)
+    r = client.post(f"{_PFX}/session/{tid}/financial-services-export-preview")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["target_pack"] == "financial-services-support"
+    assert set(body["drafts"]) == {"servicenow", "salesforce", "genesys"}
+    assert any(
+        a[0] == "stepstitch.financial_services_export_preview" for a in db.audits
+    )
 
 
 def test_summary_404_on_missing():

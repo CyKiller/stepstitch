@@ -3,7 +3,7 @@
   "info": {
     "title": "StepStitch Copilot Tools (read-only / draft)",
     "version": "2.0.0",
-    "description": "Safe, audited StepStitch operations for a Microsoft Copilot Studio custom agent. Every operation returns already-scrubbed data or builds a draft; none deletes data, changes retention, toggles the kill switch, exports raw trace JSON, or writes to a system of record. See action-policy.md."
+    "description": "Safe, audited StepStitch operations for a Microsoft Copilot Studio custom agent. Every operation returns already-scrubbed data, sanitized diagnostics, or draft payloads; none deletes data, changes retention, toggles the kill switch, exports raw trace JSON, or writes to a system of record. See action-policy.md."
   },
   "servers": [
     { "url": "{baseUrl}/api/stepstitch/v1", "variables": { "baseUrl": { "default": "https://stepstitch.internal" } } }
@@ -45,6 +45,14 @@
         "responses": { "200": { "description": "Privacy posture" }, "404": { "description": "Not found" } }
       }
     },
+    "/session/{trace_id}/diagnostic-summary": {
+      "get": {
+        "operationId": "GetDiagnosticSummary",
+        "summary": "Sanitized frontend/API diagnostic summary and recommended next step.",
+        "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Diagnostic summary" }, "404": { "description": "Not found" } }
+      }
+    },
     "/session/{trace_id}/playwright": {
       "get": {
         "operationId": "GeneratePlaywrightRepro",
@@ -59,6 +67,14 @@
         "summary": "Build sanitized ServiceNow + Salesforce DRAFTS (sends nothing).",
         "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
         "responses": { "200": { "description": "Draft previews" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/session/{trace_id}/financial-services-export-preview": {
+      "post": {
+        "operationId": "CreateFinancialServicesExportPreview",
+        "summary": "Build sanitized Salesforce + ServiceNow + Genesys DRAFTS (sends nothing).",
+        "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Financial services support draft previews" }, "404": { "description": "Not found" } }
       }
     }
   },
