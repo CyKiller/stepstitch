@@ -1,0 +1,27 @@
+{
+  "name": "internal-enterprise",
+  "description": "Internal apps with lower regulatory load. Free text is still PII-scrubbed but a longer note is allowed; forbidden keys dropped.",
+  "scrub": {
+    "free_text": "scrub",
+    "max_text_len": 1000,
+    "reject_on_forbidden": false
+  },
+  "posture": {
+    "screenshots": false,
+    "video": false,
+    "dom_text": false,
+    "input_values": false,
+    "raw_urls": false,
+    "request_bodies": false,
+    "response_bodies": false,
+    "console_messages": false,
+    "network_headers": false,
+    "consent_required": true,
+    "respect_gpc": true,
+    "respect_dnt": true,
+    "admin_reads_audited": true,
+    "right_to_delete": true,
+    "retention_enabled": true,
+    "kill_switch": true
+  }
+}

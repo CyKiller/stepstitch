@@ -1,0 +1,28 @@
+{
+  "name": "healthcare-strict",
+  "description": "Maximum strictness for PHI-adjacent surfaces. Free text is dropped entirely and forbidden keys hard-reject the POST (422).",
+  "scrub": {
+    "free_text": "disabled",
+    "max_text_len": 0,
+    "reject_on_forbidden": true
+  },
+  "posture": {
+    "screenshots": false,
+    "video": false,
+    "dom_text": false,
+    "input_values": false,
+    "raw_urls": false,
+    "request_bodies": false,
+    "response_bodies": false,
+    "console_messages": false,
+    "network_headers": false,
+    "free_text_reports": false,
+    "consent_required": true,
+    "respect_gpc": true,
+    "respect_dnt": true,
+    "admin_reads_audited": true,
+    "right_to_delete": true,
+    "retention_enabled": true,
+    "kill_switch": true
+  }
+}
