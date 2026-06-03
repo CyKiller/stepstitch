@@ -45,7 +45,7 @@ Redaction rules (enforced in `src/redaction.ts`, proven in
   "footsteps": [ /* UserFootstep[] */ ],
   "consent_version": "v1 | null",
   "metadata": {
-    "sdk_version": "0.2.0", "sdk_build": "<git-short-sha>",
+    "sdk_version": "0.3.0", "sdk_build": "<git-short-sha>",
     "viewport": "1280x720", "user_agent": "..."
   }
 }

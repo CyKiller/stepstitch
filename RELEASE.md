@@ -54,7 +54,9 @@ git tag -s v<x.y.z> -m "StepStitch v<x.y.z>"
 | SRI hash | from step 4 | Pin an exact, verified bundle |
 | Signed tag / blob sig | `v<x.y.z>` / `*.sig` | Tamper-evident provenance |
 | Build hash in traces | `metadata.sdk_build` | Tie a stored trace to an exact build |
-| Redaction-proof suite | `tests/redaction-proof.test.ts` | Proves NPI never egresses |
+| Redaction-proof suite | `tests/redaction-proof.test.ts` | Proves NPI never egresses (client) |
+| Server-side scrub suite | `service/tests/test_scrubber.py` | Proves NPI never persists (server) |
+| Compliance evidence | `COMPLIANCE-EVIDENCE.md` | Capture/never-capture matrix from live policy (`npm run evidence`) |
 | Incident-response boundary | `INCIDENT-RESPONSE.md` | Kill switch + service-provider boundary |
 
 ## Marvox (reference integration) re-vendor
