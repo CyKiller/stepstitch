@@ -1,4 +1,4 @@
-# Marvox reference integration (Phase 4)
+# Marvox reference integration
 
 How the Marvox host app mounts the StepStitch SDK. This is **product documentation** —
 the host wiring is intentionally tiny. It is delivered here (not committed into Marvox)
