@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
+from stepstitch_service.integrations.bundle import default_draft_adapters
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _OPENAPI = _REPO_ROOT / "copilot" / "openapi-v2.json"
@@ -60,6 +61,7 @@ def _build():
         fetchall=db.fetchall,
         audit=audit,
         generate_playwright_test=generate_playwright_test,
+        draft_adapters=default_draft_adapters(),
     )
     app = FastAPI()
     app.include_router(router, prefix="/api")

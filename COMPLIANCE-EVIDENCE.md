@@ -84,6 +84,35 @@ Every ingestion is scrubbed server-side before storage, independent of the SDK (
 | `internal-enterprise` | scrub | drop |
 | `open-source-default` | scrub | drop |
 
+## Regulatory crosswalk
+
+The controls above mapped to the frameworks a regulated reviewer applies (columns selected for the `financial-services-enterprise` profile).
+
+| Control | SEC Reg S-P (2024) | 2026 interagency MRM (supersedes SR 11-7) | NIST AI RMF |
+|---|---|---|---|
+| Server-side scrub / NPI data-minimization (`scrubber.py`) | Safeguards Rule — protect customer NPI | Sound, controlled data inputs | MAP/MEASURE — data governance |
+| Split retention + 5-yr audit clock (`retention.py`) | Recordkeeping — incident records retained 5 yrs | Auditability & traceability of model use | GOVERN — documentation & records |
+| Admin-only reads, audit on every read (`router.py`) | Access controls; incident-response program | Traceability / effective challenge | GOVERN/MANAGE — accountability |
+| Org-wide kill switch, fail-safe (`router.py`) | Incident-response containment | Controls & human override | MANAGE — incident response |
+| Deterministic compiler + replayability + eval gate (`compiler.py`, `test_repro_eval.py`) | — | Ongoing monitoring & output quality | MEASURE — validity & reliability |
+| Draft-only, human-in-the-loop (`integrations/`, `copilot/action-policy.md`) | — | Human oversight — outputs support, not replace, decisions | GOVERN — human-AI configuration |
+
+## Model risk management evidence
+
+Under the **April-2026 interagency model risk management guidance (superseding SR 11-7)**, StepStitch's release gates are the validation & ongoing-monitoring evidence — each a named, runnable check:
+
+| Gate | Check | MRM role |
+|---|---|---|
+| End-to-end golden path | `test_golden_path.py` | System validation |
+| Server-side scrub boundary | `test_scrubber.py` | Data-control validation |
+| Profile drift guard | `test_profiles.py` | Configuration control |
+| Executable repro proof | `scripts/prove-repro-executes.mjs` | Output validity |
+| Reproduction quality eval | `test_repro_eval.py` | Ongoing output-quality monitoring |
+| Open-core import boundary | `.importlinter` / `test_open_core_boundary.py` | Change control / segregation of duties |
+| Compliance evidence drift guard | `test_compliance.py` | Documentation currency |
+
+StepStitch is a deterministic, **draft-only provider**: it produces evidence and drafts for human decision-makers and never takes autonomous action, keeping AI outputs in a "support, not replace" posture for fiduciary use.
+
 ## Verification
 
 - `pytest service/tests` — scrubber, replayability, profiles, integrations, Copilot surface, retention, compiler, router.

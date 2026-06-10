@@ -5,8 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "stepstitch-service"
 version = "0.4.0"
-description = "StepStitch backend service: deterministic Playwright compiler + decoupled router factory."
+description = "StepStitch backend service: deterministic Playwright compiler + decoupled router factory + MCP connector."
 requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
 dependencies = [
     "fastapi>=0.104",
     "pydantic>=2.5",
@@ -14,6 +15,42 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["httpx>=0.27", "pytest>=8.0"]
+# The universal agentic connector (docs/PRODUCT-PLAN.md P1). Optional so the core
+# service stays dependency-free; the MCP tool registry + dispatch are pure Python and
+# need no extra — only `serve_stdio` (the stdio transport) requires this.
+mcp = ["mcp>=1.0", "httpx>=0.27"]
+# Open-core boundary enforcement (docs/PRODUCT-PLAN.md P3). The boundary is also proven
+# dependency-free by tests/test_open_core_boundary.py; this is for CI `lint-imports`.
+lint = ["import-linter>=2.0"]
 
 [tool.setuptools]
+# Open core only. The commercial adapter pack (integrations.bundle + the concrete
+# servicenow/salesforce/genesys modules) ships from a separate distribution; see
+# COMMERCIAL.md and tests/test_open_core_boundary.py.
 packages = ["stepstitch_service", "stepstitch_service.integrations"]
+
+# Open-core import boundary: no core module may import a concrete commercial adapter.
+[tool.importlinter]
+root_package = "stepstitch_service"
+
+[[tool.importlinter.contracts]]
+name = "Open core must not import commercial adapters"
+type = "forbidden"
+source_modules = [
+    "stepstitch_service.router",
+    "stepstitch_service.scrubber",
+    "stepstitch_service.compiler",
+    "stepstitch_service.replayability",
+    "stepstitch_service.retention",
+    "stepstitch_service.profiles",
+    "stepstitch_service.compliance",
+    "stepstitch_service.mcp_server",
+    "stepstitch_service.mcp_cli",
+    "stepstitch_service.integrations.base",
+]
+forbidden_modules = [
+    "stepstitch_service.integrations.servicenow",
+    "stepstitch_service.integrations.salesforce",
+    "stepstitch_service.integrations.genesys",
+    "stepstitch_service.integrations.bundle",
+]
