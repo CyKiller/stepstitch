@@ -1,6 +1,13 @@
 """StepStitch backend service package (host-agnostic)."""
 from .compiler import generate_playwright_test
 from .compliance import build_evidence
+from .mcp_server import (
+    COPILOT_SAFE_OPERATIONS,
+    assert_no_destructive_operation,
+    build_tool_definitions,
+    dispatch_tool,
+    serve_stdio,
+)
 from .profiles import (
     DEFAULT_PROFILE,
     available_profiles,
@@ -31,4 +38,9 @@ __all__ = [
     "available_profiles",
     "DEFAULT_PROFILE",
     "build_evidence",
+    "COPILOT_SAFE_OPERATIONS",
+    "assert_no_destructive_operation",
+    "build_tool_definitions",
+    "dispatch_tool",
+    "serve_stdio",
 ]

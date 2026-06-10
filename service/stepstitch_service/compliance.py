@@ -40,9 +40,116 @@ ALWAYS_STRUCTURAL = (
     "Masked labels",
 )
 
+# --- Regulatory crosswalk (code-derived; cites the frameworks a reviewer applies) ----
+_REGSP = "SEC Reg S-P (2024)"
+_MRM = "2026 interagency MRM (supersedes SR 11-7)"
+_HIPAA = "HIPAA"
+_NIST = "NIST AI RMF"
+
+# Each control maps to a citation per framework ("—" = not the controlling regime).
+_CROSSWALK = (
+    ("Server-side scrub / NPI data-minimization (`scrubber.py`)", {
+        _REGSP: "Safeguards Rule — protect customer NPI",
+        _MRM: "Sound, controlled data inputs",
+        _HIPAA: "Minimum-necessary; no PHI stored",
+        _NIST: "MAP/MEASURE — data governance",
+    }),
+    ("Split retention + 5-yr audit clock (`retention.py`)", {
+        _REGSP: "Recordkeeping — incident records retained 5 yrs",
+        _MRM: "Auditability & traceability of model use",
+        _HIPAA: "Retain access/audit records",
+        _NIST: "GOVERN — documentation & records",
+    }),
+    ("Admin-only reads, audit on every read (`router.py`)", {
+        _REGSP: "Access controls; incident-response program",
+        _MRM: "Traceability / effective challenge",
+        _HIPAA: "Access controls & audit logging",
+        _NIST: "GOVERN/MANAGE — accountability",
+    }),
+    ("Org-wide kill switch, fail-safe (`router.py`)", {
+        _REGSP: "Incident-response containment",
+        _MRM: "Controls & human override",
+        _HIPAA: "Contingency / incident response",
+        _NIST: "MANAGE — incident response",
+    }),
+    ("Deterministic compiler + replayability + eval gate "
+     "(`compiler.py`, `test_repro_eval.py`)", {
+        _REGSP: "—",
+        _MRM: "Ongoing monitoring & output quality",
+        _HIPAA: "—",
+        _NIST: "MEASURE — validity & reliability",
+    }),
+    ("Draft-only, human-in-the-loop (`integrations/`, `copilot/action-policy.md`)", {
+        _REGSP: "—",
+        _MRM: "Human oversight — outputs support, not replace, decisions",
+        _HIPAA: "—",
+        _NIST: "GOVERN — human-AI configuration",
+    }),
+)
+
+# Release gates reframed as model-risk validation / ongoing-monitoring evidence.
+_MRM_GATES = (
+    ("End-to-end golden path", "`test_golden_path.py`", "System validation"),
+    ("Server-side scrub boundary", "`test_scrubber.py`", "Data-control validation"),
+    ("Profile drift guard", "`test_profiles.py`", "Configuration control"),
+    ("Executable repro proof", "`scripts/prove-repro-executes.mjs`", "Output validity"),
+    ("Reproduction quality eval", "`test_repro_eval.py`", "Ongoing output-quality monitoring"),
+    ("Open-core import boundary", "`.importlinter` / `test_open_core_boundary.py`",
+     "Change control / segregation of duties"),
+    ("Compliance evidence drift guard", "`test_compliance.py`", "Documentation currency"),
+)
+
 
 def _bullets(items) -> List[str]:
     return [f"- {i}" for i in items]
+
+
+def _frameworks_for(policy: ScrubPolicy) -> List[str]:
+    """The framework columns that apply to a profile."""
+    if policy.name == "healthcare-strict":
+        return [_HIPAA, _NIST]
+    return [_REGSP, _MRM, _NIST]
+
+
+def _crosswalk_section(policy: ScrubPolicy) -> List[str]:
+    cols = _frameworks_for(policy)
+    lines = [
+        "## Regulatory crosswalk",
+        "",
+        "The controls above mapped to the frameworks a regulated reviewer applies "
+        f"(columns selected for the `{policy.name}` profile).",
+        "",
+        "| Control | " + " | ".join(cols) + " |",
+        "|---|" + "|".join("---" for _ in cols) + "|",
+    ]
+    for control, mapping in _CROSSWALK:
+        cells = " | ".join(mapping.get(c, "—") for c in cols)
+        lines.append(f"| {control} | {cells} |")
+    lines.append("")
+    return lines
+
+
+def _mrm_section() -> List[str]:
+    lines = [
+        "## Model risk management evidence",
+        "",
+        "Under the **April-2026 interagency model risk management guidance (superseding "
+        "SR 11-7)**, StepStitch's release gates are the validation & ongoing-monitoring "
+        "evidence — each a named, runnable check:",
+        "",
+        "| Gate | Check | MRM role |",
+        "|---|---|---|",
+    ]
+    for gate, check, role in _MRM_GATES:
+        lines.append(f"| {gate} | {check} | {role} |")
+    lines += [
+        "",
+        "StepStitch is a deterministic, **draft-only provider**: it produces evidence and "
+        "drafts for human decision-makers and never takes autonomous action, keeping AI "
+        "outputs in a \"support, not replace\" posture for fiduciary use.",
+        "",
+    ]
+    return lines
 
 
 def build_evidence(policy: ScrubPolicy = FINANCIAL_SERVICES_ENTERPRISE) -> str:
@@ -108,8 +215,11 @@ def build_evidence(policy: ScrubPolicy = FINANCIAL_SERVICES_ENTERPRISE) -> str:
         handling = "reject (422)" if scrub.get("reject_on_forbidden") else "drop"
         lines.append(f"| `{name}` | {scrub.get('free_text')} | {handling} |")
 
+    lines.append("")
+    lines += _crosswalk_section(policy)
+    lines += _mrm_section()
+
     lines += [
-        "",
         "## Verification",
         "",
         "- `pytest service/tests` — scrubber, replayability, profiles, integrations, "

@@ -25,12 +25,17 @@ test is `service/tests/test_golden_path.py`.
 | **Sanitized frontend diagnostics** | SDK + `scrubber.py` + router | SDK tests + `test_scrubber.py` |
 | **Financial-services support drafts (ServiceNow/Salesforce/Genesys)** | `integrations/` | `test_integrations.py` |
 | **Copilot-safe surface + OpenAPI pack** | router + `copilot/` | `test_copilot_surface.py` |
+| **MCP universal connector** (PRODUCT-PLAN P0+P1) | `mcp_server.py`, `mcp_cli.py` | `test_mcp_surface.py` (3-way parity + no-destructive + E2E dispatch) |
+| **Connector enablement (MCP + OpenAPI)** (PRODUCT-PLAN P2) | `copilot/MCP-SETUP.md`, `copilot/SETUP.md` | `test_copilot_pack.py` (tool-SSOT drift + MCP path linked) |
+| **Open-core split** (PRODUCT-PLAN P3) | adapters injected (`router.py` + `integrations/bundle.py`); Apache-2.0 `LICENSE` + `COMMERCIAL.md`; `Dockerfile.mcp` + `docs/DEPLOY.md` | `test_open_core_boundary.py` + `.importlinter` (contract KEPT) |
+| **Compliance pack** (PRODUCT-PLAN P4) | regulatory crosswalk + MRM section generated from live policy (`compliance.py`); profile-aware (Reg S-P + 2026 MRM / HIPAA) | `test_compliance.py` (crosswalk + drift guard) |
+| **Reproduction-quality eval gate** (PRODUCT-PLAN P5) | quality oracle on compiler + scorer; `release-gate:evidence` npm script | `test_repro_eval.py` |
 | **Compliance evidence (generated)** | `compliance.py` | `test_compliance.py` (drift guard) |
 | **End-to-end golden path** | (all of the above) | `test_golden_path.py` |
 | Supply chain (SBOM, SRI, signed tag) | `scripts/`, `RELEASE.md` | `sbom.cdx.json`, release tag |
 | Marvox reference integration | re-vendored @ v0.3.0 | Marvox `test_stepstitch_*` (incl. real-Postgres proof) |
 
-Gates: **80 service + 21 SDK tests green; type-check clean; executable repro proof green.**
+Gates: **99 service + 21 SDK tests green; type-check clean; executable repro proof green; import-linter contract KEPT.**
 
 ## Architecture decision: StepStitch core, integrations via Copilot
 

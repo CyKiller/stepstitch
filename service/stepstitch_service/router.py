@@ -19,13 +19,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from .integrations import (
-    GenesysAdapter,
-    SalesforceAdapter,
-    ServiceNowAdapter,
-    build_trace_summary,
-    export_preview,
-)
+from .integrations.base import DraftAdapter, build_trace_summary, export_preview
 from .replayability import score_trace
 from .retention import purge_expired_traces
 from .scrubber import FINANCIAL_SERVICES_ENTERPRISE, ScrubPolicy, ScrubRejection, scrub_trace_payload
@@ -82,6 +76,7 @@ def create_stepstitch_router(
     retention_days: int = 30,
     capture_enabled: Optional[CaptureEnabledFn] = None,
     scrub_policy: ScrubPolicy = FINANCIAL_SERVICES_ENTERPRISE,
+    draft_adapters: Optional[List[DraftAdapter]] = None,
 ) -> APIRouter:
     """Build the StepStitch router with host-injected auth + DB.
 
@@ -98,8 +93,14 @@ def create_stepstitch_router(
     payload is scrubbed before storage, independent of the SDK, so a hand-rolled or
     hostile POST cannot persist NPI (SSNs, account numbers, raw URLs, request/response
     bodies, unexpected metadata). The default is the strict financial-services posture.
+
+    ``draft_adapters`` are the system-of-record exporters (the commercial pack — see
+    ``integrations.bundle.default_draft_adapters``). The open core never imports concrete
+    adapters; a host injects them. When none are supplied, the export-preview endpoints
+    return an empty draft set (the core still serves all read-only operations).
     """
     router = APIRouter(prefix="/stepstitch/v1", tags=["StepStitch"])
+    adapters: List[DraftAdapter] = list(draft_adapters or [])
 
     async def _audit(action: str, actor_id: str, detail: Dict[str, Any]) -> None:
         if audit is not None:
@@ -343,9 +344,7 @@ def create_stepstitch_router(
             raise HTTPException(status_code=404, detail="Trace not found")
         await _audit("stepstitch.export_preview", _actor_id(admin), {"trace_id": trace_id})
         summary = build_trace_summary(trace_id, _loads(row[0]), project_id=row[1])
-        drafts = export_preview(
-            summary, [ServiceNowAdapter(), SalesforceAdapter(), GenesysAdapter()]
-        )
+        drafts = export_preview(summary, adapters)
         return {"status": "ok", "trace_id": trace_id, "drafts": drafts}
 
     @router.post("/session/{trace_id}/financial-services-export-preview")
@@ -362,9 +361,7 @@ def create_stepstitch_router(
         await _audit("stepstitch.financial_services_export_preview", _actor_id(admin),
                      {"trace_id": trace_id})
         summary = build_trace_summary(trace_id, _loads(row[0]), project_id=row[1])
-        drafts = export_preview(
-            summary, [ServiceNowAdapter(), SalesforceAdapter(), GenesysAdapter()]
-        )
+        drafts = export_preview(summary, adapters)
         return {
             "status": "ok",
             "trace_id": trace_id,

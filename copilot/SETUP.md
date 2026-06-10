@@ -19,6 +19,19 @@ Copilot Studio agent
 └── Genesys workflow/context         ← queue/case context, via governed flow
 ```
 
+## Choose a connection path
+
+Two ways to connect an agent to the **live** StepStitch service — the same eight
+read-only/draft operations, both sharing `system-prompt.md`, `action-policy.md`, and
+`connector-field-map.md`.
+
+| Path | Best for | Doc |
+|---|---|---|
+| **MCP server** (the universal connector) | "for all" — Claude, OpenAI, LangGraph, Vertex, Bedrock, Copilot Studio | [MCP-SETUP.md](MCP-SETUP.md) |
+| **OpenAPI custom connector** | Microsoft Copilot Studio specifically | this file (§1–4) |
+
+The sections below cover the **OpenAPI custom connector** path.
+
 ## 1. Register StepStitch as a custom connector
 
 1. Power Platform → **Custom connectors → New → Import an OpenAPI file**.
