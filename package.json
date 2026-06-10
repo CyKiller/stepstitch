@@ -2,8 +2,11 @@
   "name": "@stepstitch/tracker",
   "version": "0.4.0",
   "description": "StepStitch — issue-to-repro infrastructure (not session replay): turns a user-reported problem into scrubbed diagnostics, a replayability score, and a copyable Playwright reproduction, without capturing screens, input values, or page text. Zero runtime dependencies.",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -31,7 +34,8 @@
     "sbom": "node scripts/generate-sbom.mjs",
     "evidence": "PYTHONPATH=service python3 scripts/generate_compliance_evidence.py",
     "release": "npm run build && npm run stamp && npm run sbom",
-    "test:e2e-proof": "node scripts/prove-repro-executes.mjs"
+    "test:e2e-proof": "node scripts/prove-repro-executes.mjs",
+    "release-gate:evidence": "python3 -m pytest service/tests/test_repro_eval.py service/tests/test_compliance.py service/tests/test_golden_path.py -q"
   },
   "dependencies": {},
   "devDependencies": {

@@ -2,17 +2,19 @@
 import pytest
 
 from stepstitch_service.integrations import (
-    GenesysAdapter,
-    SalesforceAdapter,
-    ServiceNowAdapter,
     assert_flat,
-    build_case_draft,
-    build_genesys_context_draft,
-    build_incident_draft,
     build_trace_summary,
     export_preview,
 )
 from stepstitch_service.integrations.base import _FLAT_SCALARS
+from stepstitch_service.integrations.bundle import (
+    GenesysAdapter,
+    SalesforceAdapter,
+    ServiceNowAdapter,
+    build_case_draft,
+    build_genesys_context_draft,
+    build_incident_draft,
+)
 
 
 def _footsteps():

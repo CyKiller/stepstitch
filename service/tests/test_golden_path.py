@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
+from stepstitch_service.integrations.bundle import default_draft_adapters
 
 _PFX = "/api/stepstitch/v1"
 
@@ -67,6 +68,7 @@ def _client():
         execute=db.execute, fetchone=db.fetchone, fetchall=db.fetchall,
         audit=audit, generate_playwright_test=generate_playwright_test,
         base_url="https://app.example.test",
+        draft_adapters=default_draft_adapters(),
     )
     app = FastAPI()
     app.include_router(router, prefix="/api")
