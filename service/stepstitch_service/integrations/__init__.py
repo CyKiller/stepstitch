@@ -1,11 +1,14 @@
-"""StepStitch outbound integrations — sanitized, flat, DRAFT-only.
+"""StepStitch adapter framework — open-core boundary.
 
-Every adapter turns a :class:`TraceSummary` (derived from an already-scrubbed trace)
-into a flat record draft for a system of record. Adapters never make live API calls in
-this layer — they build the payload a host can preview, approve, and send. Direct
-writes stay behind an explicit host-side governance flag.
+The **base framework** (`TraceSummary`, `DraftAdapter`, `build_trace_summary`,
+`assert_flat`, `export_preview`) is open-core (Apache-2.0). The **concrete vendor
+adapters** (ServiceNow / Salesforce / Genesys) are the COMMERCIAL pack and live in
+``integrations.bundle`` — the open core never imports them. A host injects them via
+``create_stepstitch_router(draft_adapters=...)``.
 
-Core never imports a vendor SDK; these are pure dict builders.
+This separation is enforced by ``tests/test_open_core_boundary.py`` and ``.importlinter``:
+no core module may import a concrete adapter, which keeps the commercial pack cleanly
+extractable into its own distribution.
 """
 from .base import (
     DraftAdapter,
@@ -14,9 +17,6 @@ from .base import (
     build_trace_summary,
     export_preview,
 )
-from .genesys import GenesysAdapter, build_genesys_context_draft
-from .salesforce import SalesforceAdapter, build_case_draft
-from .servicenow import ServiceNowAdapter, build_incident_draft
 
 __all__ = [
     "TraceSummary",
@@ -24,10 +24,4 @@ __all__ = [
     "build_trace_summary",
     "assert_flat",
     "export_preview",
-    "ServiceNowAdapter",
-    "build_incident_draft",
-    "SalesforceAdapter",
-    "build_case_draft",
-    "GenesysAdapter",
-    "build_genesys_context_draft",
 ]

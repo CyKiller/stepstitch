@@ -1,0 +1,27 @@
+# StepStitch MCP connector — the universal agentic connector (docs/PRODUCT-PLAN.md P1/P3).
+#
+# Packages the read-only/draft MCP server. It talks to a deployed StepStitch service over
+# HTTP (the service itself is a library a host mounts with its own auth + DB — see
+# docs/DEPLOY.md), so this image needs STEPSTITCH_BASE_URL + STEPSTITCH_TOKEN at runtime.
+#
+#   docker build -f service/Dockerfile.mcp -t stepstitch-mcp ./service
+#   docker run --rm -i \
+#     -e STEPSTITCH_BASE_URL="https://stepstitch.internal/api/stepstitch/v1" \
+#     -e STEPSTITCH_TOKEN="$OPERATOR_TOKEN" \
+#     stepstitch-mcp
+#
+# Transport is stdio (for local/embedded MCP clients). For remote clients (Copilot Studio),
+# front this with the streamable-HTTP MCP transport — see copilot/MCP-SETUP.md.
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY . /app
+
+# Install the open-core service plus the optional MCP extra (mcp + httpx).
+RUN pip install --no-cache-dir ".[mcp]"
+
+# No secrets baked in; supply at runtime.
+ENV STEPSTITCH_BASE_URL="" \
+    STEPSTITCH_TOKEN=""
+
+ENTRYPOINT ["python", "-m", "stepstitch_service.mcp_cli"]
