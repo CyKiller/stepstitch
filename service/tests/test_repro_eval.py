@@ -44,14 +44,15 @@ def test_strong_trace_compiles_to_runnable_well_graded_repro():
     assert grade in {"A", "B"}, f"strong trace mis-graded {grade}"
 
 
-def test_missing_terminal_action_is_warned_and_not_top_graded():
-    # A navigation-only trace has nothing to assert on. The honest oracle: it must carry
-    # the `no_terminal_action` warning and must never be graded A. (It currently scores
-    # B = 0.75; see the note in PRODUCT-PLAN P5 about tightening that band.)
+def test_missing_terminal_action_is_warned_and_graded_poor():
+    # A navigation-only trace has nothing to assert on. The oracle: it must carry the
+    # `no_terminal_action` warning and grade poorly (D/F) — never a "good" grade.
     score = score_trace(WEAK)
     codes = {w["code"] for w in score["warnings"]}
     assert "no_terminal_action" in codes, "missing-terminal trace must be flagged"
-    assert score["grade"] != "A", "a trace with nothing to assert must not be grade A"
+    assert score["grade"] in {"D", "F"}, (
+        f"a trace with nothing to assert must grade poorly, got {score['grade']}"
+    )
     # It still compiles (the provider never crashes on thin input).
     assert "test('StepStitch reproduction'" in generate_playwright_test("t-weak", WEAK)
 
