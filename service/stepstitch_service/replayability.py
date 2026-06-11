@@ -12,7 +12,7 @@ Signals:
     input with no selector at all is the worst.
   * **Terminal action** — a trace that ends in a click, ``api_error`` or
     ``exception`` gives engineering something to assert on; a navigation-only trace
-    does not.
+    does not, so it is capped to a poor grade (you cannot write the assertion).
   * **Templated routes** — ``/accounts/:id`` is correct for privacy but needs a
     concrete fixture id to replay, so it is flagged (not penalised heavily).
   * **Volume** — an empty trace cannot be replayed; an extremely long one is flaky.
@@ -108,14 +108,16 @@ def score_trace(footsteps: List[Dict[str, Any]]) -> Dict[str, Any]:
                 "step_index": i,
             })
 
-    # Terminal-action signal: something to assert on.
+    # Terminal-action signal: something to assert on. Without one there is no observable
+    # failure to reproduce, so the trace cannot be "good" however clean its steps are —
+    # the penalty lands a minimal navigation-only trace in the D band (not B).
     has_terminal = any(str(s.get("type", "")).lower() in _TERMINAL for s in footsteps)
     if not has_terminal:
-        score -= 0.25
+        score -= 0.50
         warnings.append({
             "code": "no_terminal_action",
             "detail": "Navigation-only trace — no click, api_error, or exception to "
-                      "assert against.",
+                      "assert against; reproducibility is poor (grade capped low).",
         })
 
     # Volume signals.
