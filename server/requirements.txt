@@ -1,0 +1,5 @@
+# StepStitch ingest host (deploy target). The stepstitch-service package itself is
+# installed from ./service in the Dockerfile (pip install ./service).
+fastapi>=0.104
+uvicorn[standard]>=0.30
+asyncpg>=0.29

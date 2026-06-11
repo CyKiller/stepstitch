@@ -12,10 +12,13 @@ StepStitch ships as three things, not one monolith:
 | **SDK** (`@stepstitch/tracker`) | browser capture + redaction | `npm i @stepstitch/tracker` |
 | **Service** (`stepstitch-service`) | privacy/repro engine — a **library** a host mounts | `pip install stepstitch-service` |
 | **MCP connector** | the universal agentic surface | `pip install 'stepstitch-service[mcp]'` |
+| **Ingest API host** (`server/`) | a ready-to-run FastAPI app that mounts the service — the Railway/Docker deploy target | `docker build . ` / `railway up` |
 
 The service is a **decoupled router factory**, not a standalone server: the host injects
 its own auth + DB and mounts the router. This is deliberate — StepStitch never holds your
-identity provider or database. See `contracts/stepstitch.md`.
+identity provider or database. See `contracts/stepstitch.md`. The repo includes a
+reference host in `server/` (demo shared-bearer auth + asyncpg) so you can deploy today —
+see [Deploy on Railway](#deploy-the-ingest-api-on-railway) below.
 
 ## 1. Mount the service in your host app
 
@@ -40,6 +43,42 @@ app.include_router(router, prefix="/api")
 
 The **open core runs with no adapters**: every read-only/draft operation works; export
 previews return an empty draft set until the commercial adapter pack is injected.
+
+## Deploy the ingest API on Railway
+
+The `server/` host (FastAPI + asyncpg, demo shared-bearer auth) is the deploy target. The
+root `Dockerfile` builds it and `railway.json` health-checks `/healthz`.
+
+**Steps**
+1. From the repo root: `railway up` (creates the project + service and deploys the Dockerfile).
+2. Add a Postgres: `railway add --database postgres` — Railway injects `DATABASE_URL`.
+3. Set the variables below, then redeploy.
+
+**Variables to set**
+
+| Variable | Required | Provided by | Notes |
+|---|---|---|---|
+| `DATABASE_URL` | yes | **Railway Postgres** (auto) | added when you attach the Postgres plugin |
+| `PORT` | — | **Railway** (auto) | the Dockerfile binds uvicorn to `$PORT` |
+| `STEPSTITCH_ADMIN_TOKEN` | yes | you | bearer for operator reads/exports; also the MCP connector's `STEPSTITCH_TOKEN` |
+| `STEPSTITCH_INGEST_TOKEN` | yes | you | bearer the SDK/clients use to POST traces |
+| `STEPSTITCH_PROFILE` | no (default FS) | you | `financial-services-enterprise` / `healthcare-strict` / `internal-enterprise` / `open-source-default` |
+| `RETENTION_DAYS` | no (default 30) | you | trace-body retention window |
+| `STEPSTITCH_ENABLE_ADAPTERS` | no (default on) | you | `0` to run open-core only (no ServiceNow/Salesforce/Genesys drafts) |
+
+```bash
+railway variables \
+  --set "STEPSTITCH_ADMIN_TOKEN=$(openssl rand -hex 24)" \
+  --set "STEPSTITCH_INGEST_TOKEN=$(openssl rand -hex 24)" \
+  --set "STEPSTITCH_PROFILE=financial-services-enterprise"
+```
+
+Then point the SDK at `https://<your-app>.up.railway.app/api/stepstitch/v1/session` and
+the MCP connector at `…/api/stepstitch/v1` with `STEPSTITCH_TOKEN=$STEPSTITCH_ADMIN_TOKEN`.
+
+> Demo-grade auth: two shared bearer tokens. For production, replace `server/auth.py`'s
+> `build_auth` with a real JWT/OIDC verifier — no change to StepStitch core. Audit events
+> are logged in the demo host; persist them to a separate 5-year store for Reg S-P.
 
 ## 2. Deployment posture — the `STEPSTITCH_PROFILE` knob
 
