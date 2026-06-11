@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.venv/
+.git/
+coverage/
+test-results/
+playwright-report/
+.stepstitch-proof/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+*.log
