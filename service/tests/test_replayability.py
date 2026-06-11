@@ -61,7 +61,8 @@ def test_missing_selector_penalised_more_than_structural():
 def test_navigation_only_flags_no_terminal_action():
     r = score_trace([_step("navigation", route="/a"), _step("navigation", route="/b")])
     assert any(w["code"] == "no_terminal_action" for w in r["warnings"])
-    assert r["score"] <= 0.75
+    # No terminal action → nothing to assert → cannot be a "good" (A/B/C) grade.
+    assert r["grade"] in {"D", "F"}, f"no-terminal trace mis-graded {r['grade']}"
 
 
 def test_templated_route_flags_fixture():

@@ -63,8 +63,29 @@ support-to-engineering evidence:
 - **Compliance evidence** — `COMPLIANCE-EVIDENCE.md` is generated from the live scrub
   policy (`npm run evidence`); a drift guard keeps it equal to the code.
 
-Each is proven in `service/tests/` (80 tests). See `contracts/stepstitch.md` for the
-frozen contracts and `COMPLIANCE-EVIDENCE.md` for the reviewer packet.
+Each is proven in `service/tests/` (99 service tests; 21 SDK tests). See
+`contracts/stepstitch.md` for the frozen contracts and `COMPLIANCE-EVIDENCE.md` for the
+reviewer packet.
+
+## Universal agentic connector (MCP)
+
+StepStitch is a capability **provider**, not an agent orchestrator — it perceives, scores,
+compiles a Playwright repro, and **drafts**, but never plans or acts autonomously. Its
+universal connector is an **MCP server** (`service/stepstitch_service/mcp_server.py`, run
+via `mcp_cli.py`): the same eight read-only/draft operations, consumable by **any** MCP
+client — Microsoft Copilot Studio, OpenAI, Google Vertex, LangGraph, AWS Bedrock, Claude.
+One server, every agent network; the autonomy stays in the customer's stack. A
+no-destructive guard runs at import, and the tool set is drift-guarded against the OpenAPI
+pack and the live routes (`service/tests/test_mcp_surface.py`). See `copilot/MCP-SETUP.md`
+and `docs/DEPLOY.md`.
+
+## Open core
+
+Apache-2.0 core (SDK + privacy/repro engine + MCP connector) with a commercially-licensed
+adapter pack (the ServiceNow / Salesforce / Genesys exporters) injected at the boundary.
+The core never imports the commercial adapters — enforced by
+`service/tests/test_open_core_boundary.py` and an `.importlinter` contract. See
+`COMMERCIAL.md`, `docs/PRODUCT-PLAN.md`, and `docs/DEPLOY.md`.
 
 ## Usage
 
