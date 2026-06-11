@@ -132,7 +132,7 @@ action ⇒ `no_terminal_action` warning + never grade A**; empty ⇒ F; template
 id substitution; no compiled repro/summary carries credentials or a forbidden field;
 strong > weak (monotonicity). Wired as the `release-gate:evidence` npm script.
 - **Acceptance (green):** `release-gate:evidence` runs `test_repro_eval` + `test_compliance` + `test_golden_path`.
-- **⚠ Finding for you:** the scorer grades a *navigation-only* trace **B (0.75)** despite emitting `no_terminal_action` ("nothing to assert against"). The eval encodes the honest oracle (warned + not-A) rather than silently changing semantics. **Decision:** tighten the band so a no-terminal trace caps at C/D? (a small `replayability.py` change + a scorer test).
+- **✅ Resolved:** the scorer previously graded a *navigation-only* trace B (0.75) despite the `no_terminal_action` warning. The penalty was tightened (−0.50) so a no-terminal trace now grades **D**; locked by `test_replayability.py` + `test_repro_eval.py`.
 
 ### P6 — GTM wedge  *(no new code)*
 README already nails the wedge (issue→repro, not session replay; privacy-safe; regulated/self-host).
