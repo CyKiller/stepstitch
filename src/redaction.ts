@@ -6,7 +6,7 @@
  * is explicitly opted in. URLs are reduced to route templates. No input values, ever.
  */
 
-import { MASKED } from "./types"
+import { MASKED } from "./types.js"
 
 const DEFAULT_UNMASK_ATTR = "data-stepstitch-unmask"
 

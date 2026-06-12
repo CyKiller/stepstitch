@@ -6,20 +6,20 @@
  * masks all text by default, and tears down cleanly via `destroy()`.
  */
 
-import { BUILD_HASH } from "./buildinfo"
+import { BUILD_HASH } from "./buildinfo.js"
 import {
   buildSelector,
   isBlockedMedia,
   isSensitiveInput,
   routeTemplate,
   safeLabel,
-} from "./redaction"
+} from "./redaction.js"
 import type {
   ConsentState,
   StepStitchConfig,
   SubmitResult,
   UserFootstep,
-} from "./types"
+} from "./types.js"
 
 export const SDK_VERSION = "0.4.0"
 

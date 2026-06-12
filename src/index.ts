@@ -1,5 +1,5 @@
-export { StepStitchTracker, SDK_VERSION } from "./tracker"
-export { BUILD_HASH } from "./buildinfo"
+export { StepStitchTracker, SDK_VERSION } from "./tracker.js"
+export { BUILD_HASH } from "./buildinfo.js"
 export {
   buildSelector,
   routeTemplate,
@@ -7,12 +7,12 @@ export {
   isUnmasked,
   isSensitiveInput,
   isBlockedMedia,
-} from "./redaction"
-export { MASKED } from "./types"
+} from "./redaction.js"
+export { MASKED } from "./types.js"
 export type {
   UserFootstep,
   FootstepType,
   ConsentState,
   StepStitchConfig,
   SubmitResult,
-} from "./types"
+} from "./types.js"
