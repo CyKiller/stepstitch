@@ -44,8 +44,9 @@ export interface ConsentState {
 }
 
 export interface StepStitchConfig {
-  /** Logical app/tenant id. */
-  appId?: string
+  /** Logical app/tenant id. **Required** — every app using StepStitch names itself;
+   *  there is no built-in default. */
+  appId: string
   /**
    * Same-tenant ingestion endpoint. Required to submit. There is intentionally NO
    * default cloud URL — the SDK must not phone home.
