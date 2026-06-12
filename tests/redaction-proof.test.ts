@@ -52,7 +52,7 @@ afterEach(() => {
 
 describe("redaction-proof gate", () => {
   it("emits no NPI from clicks, inputs, or navigation", () => {
-    const t = new StepStitchTracker({ doc, win })
+    const t = new StepStitchTracker({ appId: "test", doc, win })
     t.grantConsent("v1")
 
     doc.getElementById("acct-link")!.dispatchEvent(new win.Event("click", { bubbles: true }))
@@ -66,7 +66,7 @@ describe("redaction-proof gate", () => {
   })
 
   it("masks click labels by default and never captures input values", () => {
-    const t = new StepStitchTracker({ doc, win })
+    const t = new StepStitchTracker({ appId: "test", doc, win })
     t.grantConsent("v1")
     doc.getElementById("pay-btn")!.dispatchEvent(new win.Event("click", { bubbles: true }))
 
@@ -78,7 +78,7 @@ describe("redaction-proof gate", () => {
   })
 
   it("only unmasks elements explicitly opted in via data-stepstitch-unmask", () => {
-    const t = new StepStitchTracker({ doc, win })
+    const t = new StepStitchTracker({ appId: "test", doc, win })
     t.grantConsent("v1")
     doc.getElementById("submit-btn")!.dispatchEvent(new win.Event("click", { bubbles: true }))
 
@@ -88,7 +88,7 @@ describe("redaction-proof gate", () => {
   })
 
   it("hard-skips password and credit-card fields entirely", () => {
-    const t = new StepStitchTracker({ doc, win })
+    const t = new StepStitchTracker({ appId: "test", doc, win })
     t.grantConsent("v1")
     doc.getElementById("pw")!.dispatchEvent(new win.Event("focusout", { bubbles: true }))
     doc.getElementById("card")!.dispatchEvent(new win.Event("focusout", { bubbles: true }))
@@ -98,7 +98,7 @@ describe("redaction-proof gate", () => {
   })
 
   it("strips query strings and ID-like path segments from routes", () => {
-    const t = new StepStitchTracker({ doc, win })
+    const t = new StepStitchTracker({ appId: "test", doc, win })
     t.grantConsent("v1")
     doc.getElementById("acct-link")!.dispatchEvent(new win.Event("click", { bubbles: true }))
 
@@ -119,7 +119,7 @@ describe("redaction-proof gate", () => {
       },
     } as unknown as Window & typeof globalThis
 
-    const t = new StepStitchTracker({
+    const t = new StepStitchTracker({ appId: "test",
       doc,
       win: fetchWin,
       ingestEndpoint: "/api/stepstitch/v1/session",
@@ -135,7 +135,7 @@ describe("redaction-proof gate", () => {
   })
 
   it("does not capture raw frontend logs, messages, stacks, or URLs", () => {
-    const t = new StepStitchTracker({ doc, win })
+    const t = new StepStitchTracker({ appId: "test", doc, win })
     t.grantConsent("v1")
     t.recordApiError(500, `https://portal.example.test/api/accounts/8675309?ssn=${NPI.ssn}`)
     t.recordFrontendException(`TypeError ${NPI.ssn}`, "/static/app-8675309.js", 8, 2)
