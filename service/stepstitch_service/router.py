@@ -45,7 +45,8 @@ class FootstepSchema(BaseModel):
 
 
 class IngestTracePayload(BaseModel):
-    app_id: str = "marvox"
+    # Neutral default for hand-rolled clients that omit it; the SDK always sets its own.
+    app_id: str = "unknown"
     project_id: Optional[str] = None
     explanation: Optional[str] = None
     footsteps: List[FootstepSchema]

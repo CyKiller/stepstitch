@@ -42,9 +42,9 @@ async def purge_expired_traces(
     """Delete trace bodies whose retention window has elapsed.
 
     Returns the number of rows purged when ``fetchone`` is supplied (a pre-count, since
-    many async drivers — e.g. asyncpg via Marvox's ``execute_unified`` — do not surface
-    a rowcount on ``execute``); otherwise returns ``-1`` to mean "purged, count
-    unknown". Never raises on an empty table.
+    many async drivers — e.g. asyncpg — do not surface a rowcount on ``execute``);
+    otherwise returns ``-1`` to mean "purged, count unknown". Never raises on an empty
+    table.
     """
     cutoff = now or datetime.now(timezone.utc)
 

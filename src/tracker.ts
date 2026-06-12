@@ -46,8 +46,15 @@ export class StepStitchTracker {
   private readonly onError = (e: Event) => this.handleError(e as ErrorEvent)
   private readonly onPopState = () => this.recordNavigation()
 
-  constructor(config: StepStitchConfig = {}) {
-    this.appId = config.appId ?? "marvox"
+  constructor(config: StepStitchConfig) {
+    // Required — StepStitch is a standalone connector; the host app must name itself.
+    // Guarded at runtime too, so JS callers (no type checking) fail fast and clearly.
+    if (!config || !config.appId) {
+      throw new Error(
+        "StepStitchTracker: `appId` is required — name the app/tenant using StepStitch."
+      )
+    }
+    this.appId = config.appId
     this.ingestEndpoint = config.ingestEndpoint
     this.maxFootsteps = config.maxFootsteps ?? DEFAULT_MAX_FOOTSTEPS
     this.unmaskAttribute = config.unmaskAttribute ?? DEFAULT_UNMASK_ATTR
