@@ -22,15 +22,23 @@ function clickGo() {
   doc.getElementById("go")!.dispatchEvent(new win.Event("click", { bubbles: true }))
 }
 
+describe("config", () => {
+  it("requires appId — throws if the app does not name itself", () => {
+    // StepStitch is a standalone connector: every host app must identify itself.
+    expect(() => new (StepStitchTracker as any)({ doc, win })).toThrow(/appId/)
+    expect(() => new (StepStitchTracker as any)({})).toThrow(/appId/)
+  })
+})
+
 describe("consent gating", () => {
   it("captures nothing before consent is granted", () => {
-    const t = new StepStitchTracker({ doc, win })
+    const t = new StepStitchTracker({ appId: "test", doc, win })
     clickGo()
     expect(t.getTrace()).toHaveLength(0)
   })
 
   it("captures after grantConsent and records an initial navigation", () => {
-    const t = new StepStitchTracker({ doc, win })
+    const t = new StepStitchTracker({ appId: "test", doc, win })
     t.grantConsent("v1")
     clickGo()
     const types = t.getTrace().map((s) => s.type)
@@ -39,7 +47,7 @@ describe("consent gating", () => {
   })
 
   it("stops capturing and clears the buffer on revokeConsent", () => {
-    const t = new StepStitchTracker({ doc, win })
+    const t = new StepStitchTracker({ appId: "test", doc, win })
     t.grantConsent("v1")
     clickGo()
     expect(t.getTrace().length).toBeGreaterThan(0)
@@ -56,7 +64,7 @@ describe("privacy signals", () => {
       ...win,
       navigator: { ...win.navigator, globalPrivacyControl: true },
     } as unknown as Window & typeof globalThis
-    const t = new StepStitchTracker({ doc, win: gpcWin })
+    const t = new StepStitchTracker({ appId: "test", doc, win: gpcWin })
     t.grantConsent("v1")
     clickGo()
     expect(t.getTrace()).toHaveLength(0)
@@ -67,7 +75,7 @@ describe("privacy signals", () => {
       ...win,
       navigator: { ...win.navigator, doNotTrack: "1" },
     } as unknown as Window & typeof globalThis
-    const t = new StepStitchTracker({ doc, win: dntWin })
+    const t = new StepStitchTracker({ appId: "test", doc, win: dntWin })
     t.grantConsent("v1")
     clickGo()
     expect(t.getTrace()).toHaveLength(0)
@@ -79,7 +87,7 @@ describe("privacy signals", () => {
       navigator: { ...win.navigator, globalPrivacyControl: true },
       fetch: async () => ({ json: async () => ({ trace_id: "x" }) }) as Response,
     } as unknown as Window & typeof globalThis
-    const t = new StepStitchTracker({ doc, win: gpcWin, ingestEndpoint: "/api/x" })
+    const t = new StepStitchTracker({ appId: "test", doc, win: gpcWin, ingestEndpoint: "/api/x" })
     t.grantConsent("v1")
     const res = await t.submitTrace("hi")
     expect(res.submitted).toBe(false)
@@ -89,14 +97,14 @@ describe("privacy signals", () => {
 
 describe("buffer + lifecycle", () => {
   it("caps the ring buffer at maxFootsteps", () => {
-    const t = new StepStitchTracker({ doc, win, maxFootsteps: 5 })
+    const t = new StepStitchTracker({ appId: "test", doc, win, maxFootsteps: 5 })
     t.grantConsent("v1")
     for (let i = 0; i < 20; i++) clickGo()
     expect(t.getTrace().length).toBeLessThanOrEqual(5)
   })
 
   it("destroy() removes listeners so later events are ignored", () => {
-    const t = new StepStitchTracker({ doc, win })
+    const t = new StepStitchTracker({ appId: "test", doc, win })
     t.grantConsent("v1")
     t.destroy()
     clickGo()
@@ -104,7 +112,7 @@ describe("buffer + lifecycle", () => {
   })
 
   it("disable() is a permanent kill switch", () => {
-    const t = new StepStitchTracker({ doc, win })
+    const t = new StepStitchTracker({ appId: "test", doc, win })
     t.grantConsent("v1")
     t.disable()
     t.grantConsent("v1") // ignored after kill
@@ -113,10 +121,10 @@ describe("buffer + lifecycle", () => {
   })
 
   it("submitTrace requires consent and an endpoint", async () => {
-    const noConsent = new StepStitchTracker({ doc, win })
+    const noConsent = new StepStitchTracker({ appId: "test", doc, win })
     expect((await noConsent.submitTrace()).reason).toBe("no-consent")
 
-    const noEndpoint = new StepStitchTracker({ doc, win })
+    const noEndpoint = new StepStitchTracker({ appId: "test", doc, win })
     noEndpoint.grantConsent("v1")
     clickGo()
     expect((await noEndpoint.submitTrace()).reason).toBe("no-endpoint")
@@ -141,7 +149,7 @@ describe("selector + route shaping", () => {
 
 describe("frontend diagnostics", () => {
   it("records API errors as route templates with method and status only", () => {
-    const t = new StepStitchTracker({ doc, win })
+    const t = new StepStitchTracker({ appId: "test", doc, win })
     t.grantConsent("v1")
     t.recordApiError(500, "https://portal.example.test/api/accounts/8675309?ssn=1", "post")
 
@@ -156,7 +164,7 @@ describe("frontend diagnostics", () => {
   })
 
   it("records frontend exceptions without messages or stacks", () => {
-    const t = new StepStitchTracker({ doc, win })
+    const t = new StepStitchTracker({ appId: "test", doc, win })
     t.grantConsent("v1")
     t.recordFrontendException(
       "Type Error with spaces and SSN 123-45-6789",
