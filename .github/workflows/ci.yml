@@ -24,6 +24,8 @@ jobs:
         run: npm run type-check
       - name: Unit + redaction-proof suite
         run: npm test
+      - name: Audit runtime deps (zero-dep invariant -> must stay clean)
+        run: npm audit --omit=dev --audit-level=high
 
   service:
     name: Service (compiler + router)
@@ -35,10 +37,23 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
-      - name: Install service with test extras
-        run: pip install ./service[test]
+      - name: Install service with test + lint extras
+        run: pip install "./service[test,lint]"
       - name: Run service tests
         run: pytest service/tests -q
+      - name: Layering boundary (import-linter contract)
+        working-directory: service
+        run: lint-imports
+      - name: Lint (ruff) — informational
+        continue-on-error: true
+        run: |
+          pip install ruff
+          ruff check service/stepstitch_service
+      - name: Dependency audit (pip-audit) — informational
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit -r <(pip freeze) || true
 
   e2e-proof:
     name: E2E (compiler output executes in Chromium)

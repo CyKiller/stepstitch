@@ -179,13 +179,19 @@ def test_openapi_exposes_no_destructive_operation():
     assert "/session/{trace_id}" not in spec["paths"]
 
 
+def _live_service_paths(app, prefix="/api/stepstitch/v1"):
+    """The served paths under ``prefix``, from FastAPI's generated OpenAPI schema.
+
+    Using the schema (rather than walking ``app.routes``) is robust across Starlette
+    versions, which differ in how an included router's routes are nested. Returns paths with
+    ``prefix`` stripped."""
+    paths = app.openapi().get("paths", {})
+    return {p[len(prefix):] for p in paths if p.startswith(prefix)}
+
+
 def test_openapi_paths_are_real_routes():
     client, _ = _build()
     spec = json.loads(_OPENAPI.read_text())
-    live = set()
-    for route in client.app.routes:
-        path = getattr(route, "path", "")
-        if path.startswith("/api/stepstitch/v1"):
-            live.add(path.replace("/api/stepstitch/v1", "", 1))
+    live = _live_service_paths(client.app)
     for spec_path in spec["paths"]:
         assert spec_path in live, f"OpenAPI path {spec_path} has no live route"

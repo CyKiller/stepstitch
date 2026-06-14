@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from stepstitch_service import (
     COPILOT_SAFE_OPERATIONS,
     assert_no_destructive_operation,
+    build_function_tool_specs,
     build_tool_definitions,
     create_stepstitch_router,
     dispatch_tool,
@@ -141,6 +142,21 @@ def test_tool_definitions_have_schemas():
     assert "required" not in by_name["list_recent_traces"]["inputSchema"]
 
 
+def test_function_tool_specs_match_mcp_tools_exactly():
+    # The OpenAI/JSON-Schema function projection (for non-MCP models like Hermes) is drawn
+    # from the same SSOT and must not drift from the MCP tool definitions.
+    mcp = {d["name"]: d["inputSchema"] for d in build_tool_definitions()}
+    specs = build_function_tool_specs()
+    assert len(specs) == len(COPILOT_SAFE_OPERATIONS)
+    fn = {}
+    for s in specs:
+        assert s["type"] == "function"
+        f = s["function"]
+        fn[f["name"]] = f["parameters"]
+        assert f["description"]
+    assert fn == mcp, "function-tool projection drifted from the MCP tool set"
+
+
 # --- P0: three-way parity (MCP <-> OpenAPI <-> live routes) ---------------------------
 
 def test_mcp_matches_openapi_exactly():
@@ -154,13 +170,18 @@ def test_mcp_matches_openapi_exactly():
     assert mcp_ops == spec_ops, "MCP tools and openapi-v2.json have drifted apart"
 
 
+def _live_service_paths(app, prefix=_PFX):
+    """The served paths under ``prefix``, from FastAPI's generated OpenAPI schema.
+
+    Robust across Starlette versions (they differ in how an included router's routes nest
+    under ``app.routes``). Returns paths with ``prefix`` stripped."""
+    paths = app.openapi().get("paths", {})
+    return {p[len(prefix):] for p in paths if p.startswith(prefix)}
+
+
 def test_mcp_paths_are_real_routes():
     client, _ = _build()
-    live = set()
-    for route in client.app.routes:
-        path = getattr(route, "path", "")
-        if path.startswith(_PFX):
-            live.add(path.replace(_PFX, "", 1))
+    live = _live_service_paths(client.app)
     for op in COPILOT_SAFE_OPERATIONS:
         assert op.path in live, f"MCP tool {op.tool_name} path {op.path} has no live route"
     assert SERVICE_PREFIX == "/stepstitch/v1"

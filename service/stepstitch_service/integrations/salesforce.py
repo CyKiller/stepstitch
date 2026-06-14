@@ -10,6 +10,12 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from .base import DraftAdapter, TraceSummary, assert_flat
+from .validation import (
+    SALESFORCE_PRIORITY,
+    SALESFORCE_SUBJECT_MAX,
+    cap,
+    validate_choice,
+)
 
 __all__ = ["SalesforceAdapter", "build_case_draft"]
 
@@ -23,12 +29,19 @@ def _priority(summary: TraceSummary) -> str:
 
 
 def build_case_draft(summary: TraceSummary) -> Dict[str, Any]:
-    """Build a flat Salesforce Case draft from a sanitized summary."""
+    """Build a flat Salesforce Case draft from a sanitized summary.
+
+    ``Priority`` is validated against the stock picklist and ``Subject`` is capped to
+    Salesforce's 255-char limit, so the connector never silently rejects or truncates.
+    """
+    subject, _ = cap(summary.headline, SALESFORCE_SUBJECT_MAX)
     draft = {
-        "Subject": summary.headline,
+        "Subject": subject,
         "Origin": "StepStitch",
         "Status": "New",
-        "Priority": _priority(summary),
+        "Priority": validate_choice(
+            _priority(summary), SALESFORCE_PRIORITY, field="Priority"
+        ),
         "StepStitchTraceId__c": summary.trace_id,
         "RouteTemplate__c": summary.route,
         "ReplayabilityScore__c": summary.replayability_score,

@@ -19,6 +19,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from .delivery.base import DeliveryError, DeliveryService, RecordWriter
 from .integrations.base import DraftAdapter, build_trace_summary, export_preview
 from .replayability import score_trace
 from .retention import purge_expired_traces
@@ -54,6 +55,13 @@ class IngestTracePayload(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class DeliverPayload(BaseModel):
+    # Governance: a write requires a named human approver and an idempotency key.
+    approved_by: str
+    idempotency_key: str
+    targets: Optional[List[str]] = None
+
+
 def _actor_id(actor: Any) -> str:
     if isinstance(actor, dict):
         return str(actor.get("user_id") or actor.get("id") or actor.get("sub") or "unknown")
@@ -78,6 +86,7 @@ def create_stepstitch_router(
     capture_enabled: Optional[CaptureEnabledFn] = None,
     scrub_policy: ScrubPolicy = FINANCIAL_SERVICES_ENTERPRISE,
     draft_adapters: Optional[List[DraftAdapter]] = None,
+    record_writers: Optional[List[RecordWriter]] = None,
 ) -> APIRouter:
     """Build the StepStitch router with host-injected auth + DB.
 
@@ -95,13 +104,23 @@ def create_stepstitch_router(
     hostile POST cannot persist NPI (SSNs, account numbers, raw URLs, request/response
     bodies, unexpected metadata). The default is the strict financial-services posture.
 
-    ``draft_adapters`` are the system-of-record exporters (the commercial pack — see
-    ``integrations.bundle.default_draft_adapters``). The open core never imports concrete
-    adapters; a host injects them. When none are supplied, the export-preview endpoints
-    return an empty draft set (the core still serves all read-only operations).
+    ``draft_adapters`` are the system-of-record exporters (the built-in pack — see
+    ``integrations.bundle.default_draft_adapters``). The core never imports concrete
+    adapters; a host injects them (a layering rule). When none are supplied, the
+    export-preview endpoints return an empty draft set (the core still serves all read-only
+    operations).
+
+    ``record_writers`` enable the OPTIONAL governed direct-write (``delivery/``). Off unless
+    the host injects configured writers (which carry the system-of-record credentials in a
+    closure — core stores none). When enabled, ``POST /session/{id}/deliver`` requires a
+    named human approver + idempotency key, defaults to a dry run, and sends only the
+    sanitized export-preview draft. It is intentionally NOT part of the MCP/Copilot agent
+    surface. When no writers are injected, ``/deliver`` returns 404.
     """
     router = APIRouter(prefix="/stepstitch/v1", tags=["StepStitch"])
     adapters: List[DraftAdapter] = list(draft_adapters or [])
+    # Optional governed direct-write. Disabled unless the host injects writers.
+    delivery = DeliveryService(record_writers)
 
     async def _audit(action: str, actor_id: str, detail: Dict[str, Any]) -> None:
         if audit is not None:
@@ -278,6 +297,37 @@ def create_stepstitch_router(
         summary = build_trace_summary(trace_id, _loads(row[0]), project_id=row[1])
         return {"status": "ok", "summary": summary.as_dict()}
 
+    @router.get("/correlation/{correlation_id}/summary")
+    async def get_summary_by_correlation(
+        correlation_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        # Reverse lookup: a real ServiceNow incident / Salesforce case carries
+        # correlation_id = "stepstitch:<trace_id>", so an operator who has the ticket can
+        # resolve it back to the sanitized trace summary. Read-only and audited.
+        prefix = "stepstitch:"
+        if not correlation_id.startswith(prefix) or not correlation_id[len(prefix):]:
+            raise HTTPException(
+                status_code=400,
+                detail="correlation_id must be 'stepstitch:<trace_id>'",
+            )
+        trace_id = correlation_id[len(prefix):]
+        row = await fetchone(
+            "SELECT footsteps, project_id FROM stepstitch_traces WHERE id = ?",
+            (trace_id,),
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        await _audit("stepstitch.by_correlation", _actor_id(admin),
+                     {"correlation_id": correlation_id, "trace_id": trace_id})
+        summary = build_trace_summary(trace_id, _loads(row[0]), project_id=row[1])
+        return {
+            "status": "ok",
+            "trace_id": trace_id,
+            "correlation_id": correlation_id,
+            "summary": summary.as_dict(),
+        }
+
     @router.get("/session/{trace_id}/diagnostic-summary")
     async def get_diagnostic_summary(
         trace_id: str,
@@ -369,6 +419,65 @@ def create_stepstitch_router(
             "target_pack": "financial-services-support",
             "drafts": drafts,
         }
+
+    @router.post("/session/{trace_id}/deliver")
+    async def post_deliver(
+        trace_id: str,
+        payload: DeliverPayload,
+        admin: Any = Depends(require_admin),
+        dry_run: bool = Query(True),
+    ) -> Dict[str, Any]:
+        # OPTIONAL governed direct-write. NOT an agent tool. Sends only the sanitized
+        # export-preview draft, and only when explicitly approved + not a dry run.
+        if not delivery.enabled:
+            raise HTTPException(status_code=404, detail="direct-write is not enabled")
+        if not payload.approved_by.strip():
+            raise HTTPException(status_code=422, detail="approved_by is required")
+        if not payload.idempotency_key.strip():
+            raise HTTPException(status_code=422, detail="idempotency_key is required")
+
+        row = await fetchone(
+            "SELECT footsteps, project_id FROM stepstitch_traces WHERE id = ?",
+            (trace_id,),
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        summary = build_trace_summary(trace_id, _loads(row[0]), project_id=row[1])
+        drafts = export_preview(summary, adapters)
+
+        # Default to every target that has BOTH a draft and a configured writer.
+        requested = payload.targets or [t for t in delivery.targets() if t in drafts]
+        results: Dict[str, Any] = {}
+        for target in requested:
+            if target not in drafts:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"no draft adapter configured for target '{target}'",
+                )
+            if not delivery.has(target):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"direct-write not configured for target '{target}'",
+                )
+            if dry_run:
+                # Exactly what would be sent — same payload as export-preview.
+                results[target] = {"would_send": drafts[target]}
+            else:
+                try:
+                    res = await delivery.deliver(
+                        target, drafts[target],
+                        idempotency_key=payload.idempotency_key,
+                    )
+                except DeliveryError as exc:
+                    raise HTTPException(status_code=502, detail=str(exc)) from exc
+                results[target] = res.as_dict()
+
+        await _audit("stepstitch.deliver", _actor_id(admin), {
+            "trace_id": trace_id, "targets": requested,
+            "approved_by": payload.approved_by, "dry_run": dry_run,
+            "idempotency_key": payload.idempotency_key,
+        })
+        return {"status": "ok", "trace_id": trace_id, "dry_run": dry_run, "results": results}
 
     @router.get("/session/{trace_id}/playwright")
     async def get_compiled_repro(

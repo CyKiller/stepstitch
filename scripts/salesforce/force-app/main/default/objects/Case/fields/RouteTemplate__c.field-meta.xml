@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>RouteTemplate__c</fullName>
+    <label>Route Template</label>
+    <description>Templated route of the failing step, e.g. /accounts/:id (no real ids).</description>
+    <type>Text</type>
+    <length>255</length>
+    <required>false</required>
+</CustomField>
