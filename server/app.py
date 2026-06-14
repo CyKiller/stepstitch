@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 
+from .audit import make_db_audit
 from .auth import build_auth
 from .db import build_db_callables, ensure_schema
 from .host import build_app
@@ -43,6 +44,7 @@ def create_app_from_env():
     proxy = _PoolProxy()
     get_user_id, require_admin = build_auth(admin_token, ingest_token)
     execute, fetchone, fetchall = build_db_callables(proxy)
+    audit = make_db_audit(execute)  # durable audit trail (stepstitch_audit table)
 
     draft_adapters = None
     if enable_adapters:  # the built-in adapters (Apache-2.0); the core never imports them
@@ -69,6 +71,7 @@ def create_app_from_env():
         profile=profile,
         retention_days=retention_days,
         draft_adapters=draft_adapters,
+        audit=audit,
         lifespan=lifespan,
     )
 

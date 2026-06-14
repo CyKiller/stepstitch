@@ -26,6 +26,18 @@ CREATE TABLE IF NOT EXISTS stepstitch_traces (
 CREATE INDEX IF NOT EXISTS ix_stepstitch_created_at  ON stepstitch_traces (created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_stepstitch_user_id     ON stepstitch_traces (user_id);
 CREATE INDEX IF NOT EXISTS ix_stepstitch_retention   ON stepstitch_traces (retention_expires_at);
+
+-- Audit trail (Reg S-P recordkeeping). Kept on a separate, longer retention clock than
+-- trace bodies; never carries NPI (actions + ids only).
+CREATE TABLE IF NOT EXISTS stepstitch_audit (
+    id          TEXT PRIMARY KEY,
+    action      TEXT NOT NULL,
+    actor       TEXT NOT NULL,
+    detail      TEXT,
+    created_at  TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_stepstitch_audit_created_at ON stepstitch_audit (created_at DESC);
+CREATE INDEX IF NOT EXISTS ix_stepstitch_audit_action     ON stepstitch_audit (action);
 """
 
 
