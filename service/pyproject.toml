@@ -30,6 +30,7 @@ lint = ["import-linter>=2.0"]
 packages = [
     "stepstitch_service",
     "stepstitch_service.integrations",
+    "stepstitch_service.integrations.contrib",
     "stepstitch_service.delivery",
 ]
 
