@@ -198,6 +198,28 @@ def build_tool_definitions() -> list[Dict[str, Any]]:
     ]
 
 
+def build_function_tool_specs() -> list[Dict[str, Any]]:
+    """The SAME Copilot-safe operations projected into the OpenAI/JSON-Schema *function
+    tool* format, for function-calling models that don't speak MCP (e.g. Hermes, the OpenAI
+    tools API, Gemini function calling).
+
+    Drawn from the same ``COPILOT_SAFE_OPERATIONS`` source of truth as the MCP tools and the
+    OpenAPI pack — so the three surfaces cannot drift (see ``test_mcp_surface.py``). Still
+    read-only / draft-only: a destructive op can never appear here.
+    """
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": op.tool_name,
+                "description": op.description,
+                "parameters": op.input_schema(),
+            },
+        }
+        for op in COPILOT_SAFE_OPERATIONS
+    ]
+
+
 async def dispatch_tool(
     tool_name: str,
     arguments: Dict[str, Any],

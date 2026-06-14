@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from stepstitch_service import (
     COPILOT_SAFE_OPERATIONS,
     assert_no_destructive_operation,
+    build_function_tool_specs,
     build_tool_definitions,
     create_stepstitch_router,
     dispatch_tool,
@@ -139,6 +140,21 @@ def test_tool_definitions_have_schemas():
     by_name = {d["name"]: d for d in defs}
     assert by_name["get_trace_summary"]["inputSchema"]["required"] == ["trace_id"]
     assert "required" not in by_name["list_recent_traces"]["inputSchema"]
+
+
+def test_function_tool_specs_match_mcp_tools_exactly():
+    # The OpenAI/JSON-Schema function projection (for non-MCP models like Hermes) is drawn
+    # from the same SSOT and must not drift from the MCP tool definitions.
+    mcp = {d["name"]: d["inputSchema"] for d in build_tool_definitions()}
+    specs = build_function_tool_specs()
+    assert len(specs) == len(COPILOT_SAFE_OPERATIONS)
+    fn = {}
+    for s in specs:
+        assert s["type"] == "function"
+        f = s["function"]
+        fn[f["name"]] = f["parameters"]
+        assert f["description"]
+    assert fn == mcp, "function-tool projection drifted from the MCP tool set"
 
 
 # --- P0: three-way parity (MCP <-> OpenAPI <-> live routes) ---------------------------
