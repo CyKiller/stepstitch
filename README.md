@@ -136,3 +136,13 @@ npm run build
 
 See `contracts/stepstitch.md` for the frozen wire contract and `INCIDENT-RESPONSE.md`
 for the self-host incident-response notes.
+
+## Documentation
+
+- **Contributing & governance** — `CONTRIBUTING.md`, `GOVERNANCE.md`, `SECURITY.md`
+- **Build a connector** — `docs/connectors.md` (the public `DraftAdapter` SDK + conformance kit)
+- **Agent networks** — `docs/AGENTS.md` (MCP, function specs for Hermes/OpenAI, the repro→PR loop)
+- **System-of-record integrations** — `docs/integrations/servicenow.md`,
+  `docs/integrations/salesforce.md` (incl. the optional governed direct-write)
+- **Deploy & release** — `docs/DEPLOY.md`, `RELEASE.md` (automated via release-please + publish-on-tag)
+- **Pilot** — `docs/targets/voya.md`; status ledger `docs/STATUS.md`; plan `docs/PRODUCT-PLAN.md`
