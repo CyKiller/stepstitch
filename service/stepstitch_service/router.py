@@ -95,10 +95,11 @@ def create_stepstitch_router(
     hostile POST cannot persist NPI (SSNs, account numbers, raw URLs, request/response
     bodies, unexpected metadata). The default is the strict financial-services posture.
 
-    ``draft_adapters`` are the system-of-record exporters (the commercial pack — see
-    ``integrations.bundle.default_draft_adapters``). The open core never imports concrete
-    adapters; a host injects them. When none are supplied, the export-preview endpoints
-    return an empty draft set (the core still serves all read-only operations).
+    ``draft_adapters`` are the system-of-record exporters (the built-in pack — see
+    ``integrations.bundle.default_draft_adapters``). The core never imports concrete
+    adapters; a host injects them (a layering rule). When none are supplied, the
+    export-preview endpoints return an empty draft set (the core still serves all read-only
+    operations).
     """
     router = APIRouter(prefix="/stepstitch/v1", tags=["StepStitch"])
     adapters: List[DraftAdapter] = list(draft_adapters or [])
@@ -277,6 +278,37 @@ def create_stepstitch_router(
         await _audit("stepstitch.summary", _actor_id(admin), {"trace_id": trace_id})
         summary = build_trace_summary(trace_id, _loads(row[0]), project_id=row[1])
         return {"status": "ok", "summary": summary.as_dict()}
+
+    @router.get("/correlation/{correlation_id}/summary")
+    async def get_summary_by_correlation(
+        correlation_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        # Reverse lookup: a real ServiceNow incident / Salesforce case carries
+        # correlation_id = "stepstitch:<trace_id>", so an operator who has the ticket can
+        # resolve it back to the sanitized trace summary. Read-only and audited.
+        prefix = "stepstitch:"
+        if not correlation_id.startswith(prefix) or not correlation_id[len(prefix):]:
+            raise HTTPException(
+                status_code=400,
+                detail="correlation_id must be 'stepstitch:<trace_id>'",
+            )
+        trace_id = correlation_id[len(prefix):]
+        row = await fetchone(
+            "SELECT footsteps, project_id FROM stepstitch_traces WHERE id = ?",
+            (trace_id,),
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        await _audit("stepstitch.by_correlation", _actor_id(admin),
+                     {"correlation_id": correlation_id, "trace_id": trace_id})
+        summary = build_trace_summary(trace_id, _loads(row[0]), project_id=row[1])
+        return {
+            "status": "ok",
+            "trace_id": trace_id,
+            "correlation_id": correlation_id,
+            "summary": summary.as_dict(),
+        }
 
     @router.get("/session/{trace_id}/diagnostic-summary")
     async def get_diagnostic_summary(

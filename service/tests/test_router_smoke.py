@@ -142,6 +142,33 @@ def test_kill_switch_fails_safe_when_flag_raises():
     assert db.rows == {}
 
 
+def test_correlation_reverse_lookup_resolves_summary():
+    app, db = _build()
+    client = TestClient(app)
+    tid = _post_trace(client).json()["trace_id"]
+    r = client.get(f"/api/stepstitch/v1/correlation/stepstitch:{tid}/summary")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["trace_id"] == tid
+    assert body["correlation_id"] == f"stepstitch:{tid}"
+    assert body["summary"]["trace_id"] == tid
+    assert any(a[0] == "stepstitch.by_correlation" for a in db.audits)
+
+
+def test_correlation_reverse_lookup_rejects_bad_prefix():
+    app, _ = _build()
+    client = TestClient(app)
+    r = client.get("/api/stepstitch/v1/correlation/not-a-stepstitch-id/summary")
+    assert r.status_code == 400
+
+
+def test_correlation_reverse_lookup_missing_trace_404():
+    app, _ = _build()
+    client = TestClient(app)
+    r = client.get("/api/stepstitch/v1/correlation/stepstitch:does-not-exist/summary")
+    assert r.status_code == 404
+
+
 def test_purge_expired_endpoint_admin_audited():
     app, db = _build()
     client = TestClient(app)

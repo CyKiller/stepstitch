@@ -106,6 +106,44 @@ def test_export_preview_builds_financial_services_pack():
     assert preview["genesys"]["trace_correlation_id"] == "stepstitch:trace_123"
 
 
+def _long_route_footsteps():
+    long_route = "/accounts/:id/" + "segment/" * 30  # > 200 chars
+    return [
+        {"timestamp": "t", "type": "api_error", "route": long_route, "label": "[masked]",
+         "metadata": {"status": 500, "endpoint": "/api/x"}},
+    ]
+
+
+def test_servicenow_rejects_out_of_range_impact():
+    s = build_trace_summary("trace_123", _footsteps())
+    with pytest.raises(ValueError):
+        build_incident_draft(s, impact="9")
+    with pytest.raises(ValueError):
+        build_incident_draft(s, urgency="critical")
+
+
+def test_servicenow_caps_short_description_explicitly():
+    s = build_trace_summary("trace_123", _long_route_footsteps())
+    draft = build_incident_draft(s)
+    assert len(draft["short_description"]) <= 160
+    assert draft["short_description"].endswith("…")  # visible, not silent
+    assert "truncated to 160" in draft["work_notes"]
+    assert_flat(draft)
+
+
+def test_salesforce_caps_subject_and_priority_in_picklist():
+    long = build_trace_summary("trace_123", _long_route_footsteps())
+    draft = build_case_draft(long)
+    assert len(draft["Subject"]) <= 255
+    # Priority for every kind of trace must be a stock picklist value.
+    from stepstitch_service.integrations.validation import SALESFORCE_PRIORITY
+    for s in (build_trace_summary("a", _footsteps()),
+              build_trace_summary("b", _long_route_footsteps()),
+              build_trace_summary("c", [{"timestamp": "t", "type": "navigation",
+                                         "route": "/d", "label": "[masked]"}])):
+        assert build_case_draft(s)["Priority"] in SALESFORCE_PRIORITY
+
+
 def test_summary_handles_navigation_only_trace():
     nav = [{"timestamp": "t", "type": "navigation", "route": "/dashboard",
             "label": "[masked]"}]
