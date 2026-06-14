@@ -1,15 +1,16 @@
-"""Bundled system-of-record draft adapters — COMMERCIAL pack (not open-core).
+"""Bundled system-of-record draft adapters — built-in pack (Apache-2.0).
 
-The concrete ServiceNow / Salesforce / Genesys draft builders are the commercial layer.
-The open core never imports this module; a host wires the adapters into the router:
+The concrete ServiceNow / Salesforce / Genesys draft builders. The core never imports this
+module; a host wires the adapters into the router:
 
     from stepstitch_service import create_stepstitch_router
     from stepstitch_service.integrations.bundle import default_draft_adapters
     router = create_stepstitch_router(..., draft_adapters=default_draft_adapters())
 
-Keeping this isolated (enforced by tests/test_open_core_boundary.py + .importlinter) means
-the open-core service runs with zero adapters by default, and the commercial pack can be
-shipped as a separate distribution without touching core code.
+Keeping this isolated (enforced as a *layering* rule by tests/test_open_core_boundary.py +
+.importlinter — core never imports a concrete adapter; adapters only see ``TraceSummary``)
+means the service runs with zero adapters by default and the adapter set stays cleanly
+swappable. A future commercially-licensed edition may ship additional adapters the same way.
 """
 from typing import List
 

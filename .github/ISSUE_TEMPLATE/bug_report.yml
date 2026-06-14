@@ -1,0 +1,51 @@
+name: Bug report
+description: Report a defect in StepStitch
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. **Do not include NPI or real user data** (input values,
+        page text, screenshots, raw URLs, request/response bodies). For security issues,
+        use the Security tab instead of this form — see SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: "@stepstitch/tracker version, stepstitch-service version, or git SHA"
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - SDK (@stepstitch/tracker)
+        - Service (stepstitch-service)
+        - MCP connector
+        - ServiceNow / Salesforce / Genesys adapter
+        - Direct-write (delivery)
+        - Docs / other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps. Use synthetic data only.
+    validations:
+      required: true
+  - type: checkboxes
+    id: no-npi
+    attributes:
+      label: Confirmation
+      options:
+        - label: This report contains no NPI / real user data
+          required: true

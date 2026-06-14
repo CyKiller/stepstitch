@@ -1,9 +1,16 @@
-"""Open-core boundary proof (docs/PRODUCT-PLAN.md P3).
+"""Architecture/layering boundary proof (docs/PRODUCT-PLAN.md P3).
 
-The open core (privacy/repro engine + MCP connector) must not import the COMMERCIAL
-adapters (ServiceNow / Salesforce / Genesys, and the `bundle` factory). The boundary is
-enforced here by static AST analysis — no import-linter install required — so the
-commercial pack stays cleanly extractable into its own distribution. `.importlinter`
+Everything here is Apache-2.0; this is a *layering* rule, not a licensing one. Two
+invariants keep the privacy seam intact and the adapter set cleanly swappable:
+
+1. The core (privacy/repro engine + MCP connector) must not import a *concrete* adapter
+   (ServiceNow / Salesforce / Genesys, or the `bundle` factory). Adapters are injected by
+   the host instead.
+2. Each concrete adapter may depend only on ``integrations.base`` — so an adapter only ever
+   sees the sanitized ``TraceSummary`` and can never reach into core internals (router,
+   scrubber, storage, …).
+
+Enforced here by static AST analysis — no import-linter install required. `.importlinter`
 carries the same contract for teams that run `lint-imports` in CI.
 """
 import ast
@@ -11,15 +18,30 @@ from pathlib import Path
 
 _PKG = Path(__file__).resolve().parents[1] / "stepstitch_service"
 
-# Filenames (module stems) that constitute the COMMERCIAL adapter pack.
-_COMMERCIAL_STEMS = {"servicenow", "salesforce", "genesys", "bundle"}
+# Filenames (module stems) of the concrete, host-injected adapters.
+_ADAPTER_STEMS = {"servicenow", "salesforce", "genesys", "bundle"}
 
-# Core = every package module EXCEPT the commercial adapter modules themselves.
+# Core internals an adapter must never reach into (it only gets a TraceSummary).
+_CORE_INTERNALS = {
+    "router", "scrubber", "compiler", "replayability",
+    "retention", "profiles", "compliance", "mcp_server", "mcp_cli",
+}
+
+
+# Core = every package module EXCEPT the concrete adapter modules themselves.
 def _core_files():
     for path in _PKG.rglob("*.py"):
-        if path.parent.name == "integrations" and path.stem in _COMMERCIAL_STEMS:
+        if path.parent.name == "integrations" and path.stem in _ADAPTER_STEMS:
             continue
         yield path
+
+
+def _concrete_adapter_files():
+    """The concrete vendor adapters (not the `bundle` factory, which legitimately
+    imports them)."""
+    for path in (_PKG / "integrations").glob("*.py"):
+        if path.stem in (_ADAPTER_STEMS - {"bundle"}):
+            yield path
 
 
 def _referenced_tokens(tree: ast.AST):
@@ -37,14 +59,26 @@ def _referenced_tokens(tree: ast.AST):
     return tokens
 
 
-def test_core_modules_do_not_import_commercial_adapters():
+def test_core_modules_do_not_import_concrete_adapters():
     violations = []
     for path in _core_files():
         tree = ast.parse(path.read_text(), filename=str(path))
-        hits = _referenced_tokens(tree) & _COMMERCIAL_STEMS
+        hits = _referenced_tokens(tree) & _ADAPTER_STEMS
         if hits:
-            violations.append(f"{path.relative_to(_PKG)} imports commercial: {sorted(hits)}")
-    assert not violations, "open-core boundary violated:\n" + "\n".join(violations)
+            violations.append(f"{path.relative_to(_PKG)} imports adapter: {sorted(hits)}")
+    assert not violations, "layering boundary violated:\n" + "\n".join(violations)
+
+
+def test_concrete_adapters_only_depend_on_base():
+    """An adapter may use ``integrations.base`` but must never reach into core internals —
+    that is what guarantees adapters only ever see the sanitized TraceSummary."""
+    violations = []
+    for path in _concrete_adapter_files():
+        tree = ast.parse(path.read_text(), filename=str(path))
+        hits = _referenced_tokens(tree) & _CORE_INTERNALS
+        if hits:
+            violations.append(f"{path.relative_to(_PKG)} reaches core internals: {sorted(hits)}")
+    assert not violations, "adapter layering violated:\n" + "\n".join(violations)
 
 
 def test_router_serves_reads_with_zero_adapters():
