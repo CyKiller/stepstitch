@@ -1,0 +1,22 @@
+name: release-please
+
+# Opens/maintains a release PR from Conventional Commits, bumping the three version
+# locations in lockstep (package.json + src/tracker.ts + service/pyproject.toml) and
+# generating CHANGELOG.md. Merging that PR creates the git tag, which triggers release.yml.
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
