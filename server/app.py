@@ -45,7 +45,7 @@ def create_app_from_env():
     execute, fetchone, fetchall = build_db_callables(proxy)
 
     draft_adapters = None
-    if enable_adapters:  # the commercial pack; a host may include it (the core does not)
+    if enable_adapters:  # the built-in adapters (Apache-2.0); the core never imports them
         from stepstitch_service.integrations.bundle import default_draft_adapters
         draft_adapters = default_draft_adapters()
 
