@@ -179,13 +179,23 @@ def test_openapi_exposes_no_destructive_operation():
     assert "/session/{trace_id}" not in spec["paths"]
 
 
+def _live_service_paths(app, prefix="/api/stepstitch/v1"):
+    """Collect mounted route paths under ``prefix``, robust to Starlette 0.x (flat routes)
+    and 1.x (routes nested under a Mount). Returns paths with ``prefix`` stripped."""
+    def walk(routes, base=""):
+        for route in routes:
+            full = base + getattr(route, "path", "")
+            sub = getattr(route, "routes", None)
+            if sub:
+                yield from walk(sub, full)
+            else:
+                yield full
+    return {p[len(prefix):] for p in walk(app.routes) if p.startswith(prefix)}
+
+
 def test_openapi_paths_are_real_routes():
     client, _ = _build()
     spec = json.loads(_OPENAPI.read_text())
-    live = set()
-    for route in client.app.routes:
-        path = getattr(route, "path", "")
-        if path.startswith("/api/stepstitch/v1"):
-            live.add(path.replace("/api/stepstitch/v1", "", 1))
+    live = _live_service_paths(client.app)
     for spec_path in spec["paths"]:
         assert spec_path in live, f"OpenAPI path {spec_path} has no live route"
