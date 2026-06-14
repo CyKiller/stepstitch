@@ -170,13 +170,23 @@ def test_mcp_matches_openapi_exactly():
     assert mcp_ops == spec_ops, "MCP tools and openapi-v2.json have drifted apart"
 
 
+def _live_service_paths(app, prefix=_PFX):
+    """Collect mounted route paths under ``prefix``, robust to Starlette 0.x (flat routes)
+    and 1.x (routes nested under a Mount). Returns paths with ``prefix`` stripped."""
+    def walk(routes, base=""):
+        for route in routes:
+            full = base + getattr(route, "path", "")
+            sub = getattr(route, "routes", None)
+            if sub:
+                yield from walk(sub, full)
+            else:
+                yield full
+    return {p[len(prefix):] for p in walk(app.routes) if p.startswith(prefix)}
+
+
 def test_mcp_paths_are_real_routes():
     client, _ = _build()
-    live = set()
-    for route in client.app.routes:
-        path = getattr(route, "path", "")
-        if path.startswith(_PFX):
-            live.add(path.replace(_PFX, "", 1))
+    live = _live_service_paths(client.app)
     for op in COPILOT_SAFE_OPERATIONS:
         assert op.path in live, f"MCP tool {op.tool_name} path {op.path} has no live route"
     assert SERVICE_PREFIX == "/stepstitch/v1"
