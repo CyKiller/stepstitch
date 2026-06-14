@@ -72,9 +72,11 @@ def build_app(
         start = time.perf_counter()
         response = await call_next(request)
         elapsed = time.perf_counter() - start
-        # Use the matched route TEMPLATE so trace ids never become label values.
+        # Use the matched route TEMPLATE so trace ids never become label values. On an
+        # unmatched path (404) record a constant sentinel rather than the raw URL, so junk
+        # paths can't blow up metric label cardinality.
         route = request.scope.get("route")
-        route_path = getattr(route, "path", None) or request.url.path
+        route_path = getattr(route, "path", None) or "<unmatched>"
         metrics.observe(request.method, route_path, response.status_code, elapsed)
         logger.info(json.dumps({
             "evt": "http", "method": request.method, "route": route_path,
