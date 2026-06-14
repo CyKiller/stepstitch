@@ -5,6 +5,28 @@ review before any third-party JS touches a customer-facing app; this runbook pro
 the artifacts that review signs against: a **reproducible build**, an **SBOM**, an
 **SRI hash**, and a **signed, provenance-bearing release**.
 
+## Automated release (preferred)
+
+Releases are automated end-to-end:
+
+1. **Commit** with [Conventional Commits](https://www.conventionalcommits.org/)
+   (`feat:`, `fix:`, …). On push to `main`, **release-please** opens/updates a release PR
+   that bumps the three version locations in lockstep — `package.json`, `src/tracker.ts`,
+   `service/pyproject.toml` (each carries an `x-release-please-version` annotation) — and
+   updates `CHANGELOG.md`.
+2. **Merge the release PR.** release-please creates the GitHub Release + `vX.Y.Z` tag.
+3. The tag triggers **`.github/workflows/release.yml`**, which runs all gates, then:
+   - `npm publish --provenance` (`@stepstitch/tracker`),
+   - `python -m build` + PyPI publish (`stepstitch-service`),
+   - multi-arch Docker build + push to GHCR (`stepstitch-api`, `stepstitch-mcp`),
+   - attaches `sbom.cdx.json` + the SRI hash to the release.
+
+**Required repository secrets** (publish steps skip cleanly if absent):
+`NPM_TOKEN`, `PYPI_API_TOKEN`. GHCR uses the built-in `GITHUB_TOKEN`. Optional:
+`RAILWAY_TOKEN` for staging/preview deploys.
+
+The manual runbook below remains valid as a fallback / for the regulated vendor sign-off.
+
 ## Invariants (must hold every release)
 
 - **Zero runtime dependencies.** `package.json` `dependencies` is `{}`. `npm run sbom`

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stepstitch-service"
-version = "0.4.0"
+version = "0.4.0"  # x-release-please-version
 description = "StepStitch backend service: deterministic Playwright compiler + decoupled router factory + MCP connector."
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
