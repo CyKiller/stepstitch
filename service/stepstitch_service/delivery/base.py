@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from ..integrations.base import assert_flat
 
@@ -71,9 +71,19 @@ class DeliveryService:
     own correlation key (the draft carries ``correlation_id = stepstitch:<trace_id>``).
     """
 
-    def __init__(self, writers: Optional[List[RecordWriter]] = None) -> None:
+    def __init__(
+        self,
+        writers: Optional[List[RecordWriter]] = None,
+        *,
+        idempotency_store: Optional[Dict[str, Dict[str, Any]]] = None,
+    ) -> None:
         self._writers: Dict[str, RecordWriter] = {w.name: w for w in (writers or [])}
-        self._receipts: Dict[Tuple[str, str], DeliveryResult] = {}
+        # A dict-like store of {key: receipt_dict}. Default is in-process; a host can pass a
+        # durable MutableMapping (Redis/DB-backed) so idempotency survives restarts and is
+        # shared across replicas. Receipts are stored as plain dicts to be JSON-friendly.
+        self._store: Dict[str, Dict[str, Any]] = (
+            {} if idempotency_store is None else idempotency_store
+        )
 
     @property
     def enabled(self) -> bool:
@@ -91,11 +101,13 @@ class DeliveryService:
         writer = self._writers.get(target)
         if writer is None:
             raise DeliveryError(f"no writer configured for target {target!r}")
-        key = (target, idempotency_key)
-        cached = self._receipts.get(key)
+        key = f"{target}:{idempotency_key}"
+        cached = self._store.get(key)
         if cached is not None:
             # Already delivered with this key — do NOT POST again.
-            return DeliveryResult(cached.target, cached.record_id, True, cached.receipt)
+            return DeliveryResult(
+                cached["target"], cached["record_id"], True, cached["receipt"]
+            )
         result = await writer.deliver(draft)
-        self._receipts[key] = result
+        self._store[key] = result.as_dict()
         return result
