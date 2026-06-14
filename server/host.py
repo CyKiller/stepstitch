@@ -6,16 +6,19 @@ testable (inject fakes); ``server.app`` wires it to asyncpg + env for deployment
 """
 from __future__ import annotations
 
+import json
 import logging
+import time
 from typing import Any, Awaitable, Callable, List, Optional
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
 from stepstitch_service.profiles import load_profile
 
 from .dashboard import DASHBOARD_HTML
+from .metrics import Metrics
 
 logger = logging.getLogger("stepstitch.host")
 
@@ -62,9 +65,30 @@ def build_app(
     app = FastAPI(title="StepStitch ingest API", lifespan=lifespan)
     app.include_router(router, prefix="/api")
 
+    metrics = Metrics()
+
+    @app.middleware("http")
+    async def _observe(request, call_next):
+        start = time.perf_counter()
+        response = await call_next(request)
+        elapsed = time.perf_counter() - start
+        # Use the matched route TEMPLATE so trace ids never become label values.
+        route = request.scope.get("route")
+        route_path = getattr(route, "path", None) or request.url.path
+        metrics.observe(request.method, route_path, response.status_code, elapsed)
+        logger.info(json.dumps({
+            "evt": "http", "method": request.method, "route": route_path,
+            "status": response.status_code, "ms": round(elapsed * 1000, 2),
+        }))
+        return response
+
     @app.get("/healthz")
     async def healthz() -> dict:  # Railway healthcheck target
         return {"status": "ok"}
+
+    @app.get("/metrics", response_class=PlainTextResponse)
+    async def metrics_endpoint() -> str:
+        return metrics.render()
 
     @app.get("/dashboard", response_class=HTMLResponse)
     async def dashboard() -> str:
