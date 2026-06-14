@@ -27,7 +27,11 @@ lint = ["import-linter>=2.0"]
 # All Apache-2.0. The concrete adapters (integrations.bundle + servicenow/salesforce/genesys)
 # are injected by the host; the core never imports them (a layering rule, not a license one).
 # See COMMERCIAL.md and tests/test_open_core_boundary.py.
-packages = ["stepstitch_service", "stepstitch_service.integrations"]
+packages = [
+    "stepstitch_service",
+    "stepstitch_service.integrations",
+    "stepstitch_service.delivery",
+]
 
 # Layering boundary: no core module may import a concrete adapter (keeps the privacy seam
 # clean and the adapter set swappable — independent of licensing).
@@ -48,6 +52,10 @@ source_modules = [
     "stepstitch_service.mcp_server",
     "stepstitch_service.mcp_cli",
     "stepstitch_service.integrations.base",
+    "stepstitch_service.delivery.base",
+    "stepstitch_service.delivery.servicenow_writer",
+    "stepstitch_service.delivery.salesforce_writer",
+    "stepstitch_service.delivery.config",
 ]
 forbidden_modules = [
     "stepstitch_service.integrations.servicenow",

@@ -32,10 +32,14 @@ It is enforced two ways: (1) the agent is only given the tools in `openapi-v2.js
 - Reading or exposing raw frontend logs, raw error messages, stack traces, headers,
   cookies, request/response bodies, screenshots, or full URLs
 - Running Playwright against production
-- **A StepStitch tool** writing to ServiceNow, Salesforce, or Genesys. StepStitch is
+- **A StepStitch tool** writing to ServiceNow, Salesforce, or Genesys. The agent surface is
   preview/draft only. Record creation or queue handoff happens through native
   connectors/governed flows as a human-approved step, mapped from the StepStitch draft
   per `connector-field-map.md`, and constrained by a Power Platform DLP policy.
+- The optional **governed direct-write** (`POST /session/{id}/deliver`, `delivery/`) is a
+  separate, admin-only, human-approval-gated capability for customers not on Power Platform.
+  It is **off by default**, defaults to a dry run, sends only the sanitized draft, and is
+  **deliberately excluded from this agent/MCP surface** — never expose it as a Copilot tool.
 
 ## Operating rules for the agent
 
