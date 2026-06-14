@@ -171,17 +171,12 @@ def test_mcp_matches_openapi_exactly():
 
 
 def _live_service_paths(app, prefix=_PFX):
-    """Collect mounted route paths under ``prefix``, robust to Starlette 0.x (flat routes)
-    and 1.x (routes nested under a Mount). Returns paths with ``prefix`` stripped."""
-    def walk(routes, base=""):
-        for route in routes:
-            full = base + getattr(route, "path", "")
-            sub = getattr(route, "routes", None)
-            if sub:
-                yield from walk(sub, full)
-            else:
-                yield full
-    return {p[len(prefix):] for p in walk(app.routes) if p.startswith(prefix)}
+    """The served paths under ``prefix``, from FastAPI's generated OpenAPI schema.
+
+    Robust across Starlette versions (they differ in how an included router's routes nest
+    under ``app.routes``). Returns paths with ``prefix`` stripped."""
+    paths = app.openapi().get("paths", {})
+    return {p[len(prefix):] for p in paths if p.startswith(prefix)}
 
 
 def test_mcp_paths_are_real_routes():
