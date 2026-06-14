@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>StepStitchTraceId__c</fullName>
+    <label>StepStitch Trace Id</label>
+    <description>Opaque StepStitch trace id (no NPI). Set from the StepStitch draft.</description>
+    <type>Text</type>
+    <length>255</length>
+    <externalId>true</externalId>
+    <unique>false</unique>
+    <required>false</required>
+</CustomField>

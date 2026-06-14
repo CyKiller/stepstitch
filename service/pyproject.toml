@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stepstitch-service"
-version = "0.4.0"
+version = "0.4.0"  # x-release-please-version
 description = "StepStitch backend service: deterministic Playwright compiler + decoupled router factory + MCP connector."
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
@@ -19,22 +19,28 @@ test = ["httpx>=0.27", "pytest>=8.0"]
 # service stays dependency-free; the MCP tool registry + dispatch are pure Python and
 # need no extra — only `serve_stdio` (the stdio transport) requires this.
 mcp = ["mcp>=1.0", "httpx>=0.27"]
-# Open-core boundary enforcement (docs/PRODUCT-PLAN.md P3). The boundary is also proven
-# dependency-free by tests/test_open_core_boundary.py; this is for CI `lint-imports`.
+# Architecture/layering boundary enforcement (docs/PRODUCT-PLAN.md P3). The boundary is also
+# proven dependency-free by tests/test_open_core_boundary.py; this is for CI `lint-imports`.
 lint = ["import-linter>=2.0"]
 
 [tool.setuptools]
-# Open core only. The commercial adapter pack (integrations.bundle + the concrete
-# servicenow/salesforce/genesys modules) ships from a separate distribution; see
-# COMMERCIAL.md and tests/test_open_core_boundary.py.
-packages = ["stepstitch_service", "stepstitch_service.integrations"]
+# All Apache-2.0. The concrete adapters (integrations.bundle + servicenow/salesforce/genesys)
+# are injected by the host; the core never imports them (a layering rule, not a license one).
+# See COMMERCIAL.md and tests/test_open_core_boundary.py.
+packages = [
+    "stepstitch_service",
+    "stepstitch_service.integrations",
+    "stepstitch_service.integrations.contrib",
+    "stepstitch_service.delivery",
+]
 
-# Open-core import boundary: no core module may import a concrete commercial adapter.
+# Layering boundary: no core module may import a concrete adapter (keeps the privacy seam
+# clean and the adapter set swappable — independent of licensing).
 [tool.importlinter]
 root_package = "stepstitch_service"
 
 [[tool.importlinter.contracts]]
-name = "Open core must not import commercial adapters"
+name = "Core must not import concrete adapters"
 type = "forbidden"
 source_modules = [
     "stepstitch_service.router",
@@ -47,6 +53,10 @@ source_modules = [
     "stepstitch_service.mcp_server",
     "stepstitch_service.mcp_cli",
     "stepstitch_service.integrations.base",
+    "stepstitch_service.delivery.base",
+    "stepstitch_service.delivery.servicenow_writer",
+    "stepstitch_service.delivery.salesforce_writer",
+    "stepstitch_service.delivery.config",
 ]
 forbidden_modules = [
     "stepstitch_service.integrations.servicenow",

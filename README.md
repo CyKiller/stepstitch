@@ -63,7 +63,7 @@ support-to-engineering evidence:
 - **Compliance evidence** — `COMPLIANCE-EVIDENCE.md` is generated from the live scrub
   policy (`npm run evidence`); a drift guard keeps it equal to the code.
 
-Each is proven in `service/tests/` (99 service tests; 21 SDK tests). See
+Each is proven in `service/tests/` (99 service tests; 22 SDK tests). See
 `contracts/stepstitch.md` for the frozen contracts and `COMPLIANCE-EVIDENCE.md` for the
 reviewer packet.
 
@@ -79,12 +79,20 @@ no-destructive guard runs at import, and the tool set is drift-guarded against t
 pack and the live routes (`service/tests/test_mcp_surface.py`). See `copilot/MCP-SETUP.md`
 and `docs/DEPLOY.md`.
 
-## Open core
+## Fully open (Apache-2.0)
 
-Apache-2.0 core (SDK + privacy/repro engine + MCP connector) with a commercially-licensed
-adapter pack (the ServiceNow / Salesforce / Genesys exporters) injected at the boundary.
-The core never imports the commercial adapters — enforced by
-`service/tests/test_open_core_boundary.py` and an `.importlinter` contract. See
+Everything in this repository is Apache-2.0 — the SDK, the privacy/repro engine, the MCP
+connector, **and** the concrete ServiceNow / Salesforce / Genesys adapters. The adapter
+**framework** (`integrations/base.py`: `TraceSummary`, `DraftAdapter`, `assert_flat`) is the
+single, public extension seam: a host injects adapters via
+`create_stepstitch_router(draft_adapters=...)`, and anyone can add their own (Jira, Zendesk,
+…) the same way.
+
+An **architecture boundary** is still enforced so the design stays clean — the core never
+imports a *concrete* adapter, and adapters only ever see the sanitized `TraceSummary`. This
+is a layering rule (not a licensing one), proven by
+`service/tests/test_open_core_boundary.py` and an `.importlinter` contract. A future
+commercially-licensed edition may re-introduce a paid adapter/compliance pack; see
 `COMMERCIAL.md`, `docs/PRODUCT-PLAN.md`, and `docs/DEPLOY.md`.
 
 ## Usage
@@ -93,7 +101,7 @@ The core never imports the commercial adapters — enforced by
 import { StepStitchTracker } from "@stepstitch/tracker"
 
 const tracker = new StepStitchTracker({
-  appId: "marvox",
+  appId: "your-app",
   ingestEndpoint: "/api/stepstitch/v1/session", // same-tenant only
 })
 
@@ -128,3 +136,13 @@ npm run build
 
 See `contracts/stepstitch.md` for the frozen wire contract and `INCIDENT-RESPONSE.md`
 for the self-host incident-response notes.
+
+## Documentation
+
+- **Contributing & governance** — `CONTRIBUTING.md`, `GOVERNANCE.md`, `SECURITY.md`
+- **Build a connector** — `docs/connectors.md` (the public `DraftAdapter` SDK + conformance kit)
+- **Agent networks** — `docs/AGENTS.md` (MCP, function specs for Hermes/OpenAI, the repro→PR loop)
+- **System-of-record integrations** — `docs/integrations/servicenow.md`,
+  `docs/integrations/salesforce.md` (incl. the optional governed direct-write)
+- **Deploy & release** — `docs/DEPLOY.md`, `RELEASE.md` (automated via release-please + publish-on-tag)
+- **Pilot** — `docs/targets/voya.md`; status ledger `docs/STATUS.md`; plan `docs/PRODUCT-PLAN.md`

@@ -4,6 +4,7 @@ from .compliance import build_evidence
 from .mcp_server import (
     COPILOT_SAFE_OPERATIONS,
     assert_no_destructive_operation,
+    build_function_tool_specs,
     build_tool_definitions,
     dispatch_tool,
     serve_stdio,
@@ -41,6 +42,7 @@ __all__ = [
     "COPILOT_SAFE_OPERATIONS",
     "assert_no_destructive_operation",
     "build_tool_definitions",
+    "build_function_tool_specs",
     "dispatch_tool",
     "serve_stdio",
 ]

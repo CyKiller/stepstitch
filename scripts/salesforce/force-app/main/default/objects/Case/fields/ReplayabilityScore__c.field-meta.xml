@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>ReplayabilityScore__c</fullName>
+    <label>Replayability Score</label>
+    <description>Deterministic 0.00-1.00 reproducibility score from StepStitch.</description>
+    <type>Number</type>
+    <precision>3</precision>
+    <scale>2</scale>
+    <required>false</required>
+</CustomField>
