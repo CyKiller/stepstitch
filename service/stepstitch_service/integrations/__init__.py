@@ -1,14 +1,15 @@
-"""StepStitch adapter framework — open-core boundary.
+"""StepStitch adapter framework — the public extension seam (Apache-2.0).
 
 The **base framework** (`TraceSummary`, `DraftAdapter`, `build_trace_summary`,
-`assert_flat`, `export_preview`) is open-core (Apache-2.0). The **concrete vendor
-adapters** (ServiceNow / Salesforce / Genesys) are the COMMERCIAL pack and live in
-``integrations.bundle`` — the open core never imports them. A host injects them via
-``create_stepstitch_router(draft_adapters=...)``.
+`assert_flat`, `export_preview`) and the **concrete vendor adapters** (ServiceNow /
+Salesforce / Genesys, in ``integrations.bundle``) are all Apache-2.0. The base module is
+the single, public seam anyone can extend with their own adapter. A host injects adapters
+via ``create_stepstitch_router(draft_adapters=...)``.
 
-This separation is enforced by ``tests/test_open_core_boundary.py`` and ``.importlinter``:
-no core module may import a concrete adapter, which keeps the commercial pack cleanly
-extractable into its own distribution.
+A **layering** rule is enforced by ``tests/test_open_core_boundary.py`` and
+``.importlinter``: no core module imports a concrete adapter, and adapters only ever see the
+sanitized ``TraceSummary`` — keeping the privacy boundary intact and the adapter set cleanly
+swappable.
 """
 from .base import (
     DraftAdapter,

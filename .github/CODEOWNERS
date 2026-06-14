@@ -1,0 +1,11 @@
+# StepStitch code owners — see GOVERNANCE.md
+# The maintainer reviews everything by default.
+*       @CyKiller
+
+# Privacy-critical surfaces: always require maintainer review.
+/service/stepstitch_service/scrubber.py        @CyKiller
+/service/stepstitch_service/mcp_server.py       @CyKiller
+/service/stepstitch_service/integrations/       @CyKiller
+/service/stepstitch_service/delivery/           @CyKiller
+/src/                                           @CyKiller
+/.github/                                        @CyKiller

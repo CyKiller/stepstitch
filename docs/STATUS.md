@@ -35,7 +35,7 @@ test is `service/tests/test_golden_path.py`.
 | Supply chain (SBOM, SRI, signed tag) | `scripts/`, `RELEASE.md` | `sbom.cdx.json`, release tag |
 | Marvox reference integration | re-vendored @ v0.3.0 | Marvox `test_stepstitch_*` (incl. real-Postgres proof) |
 
-Gates: **99 service + 21 SDK tests green; type-check clean; executable repro proof green; import-linter contract KEPT.**
+Gates: **99 service + 22 SDK tests green; type-check clean; executable repro proof green; import-linter contract KEPT.**
 
 ## Architecture decision: StepStitch core, integrations via Copilot
 
@@ -46,11 +46,15 @@ Studio** agent using Microsoft's **native connectors** or governed Power Platfor
 sanitized diagnostics, and flat connector-ready **drafts**; the agent's native
 connector/flow performs the governed, human-approved create or handoff.
 
-Consequence: **StepStitch does not build or maintain an outbound CRM send layer** — by
-design. That removes the previously-listed "build send transport" item entirely. The
-enablement is documentation + Copilot configuration, now shipped in `copilot/`:
-`SETUP.md`, `connector-field-map.md`, `openapi-v2.json`, `system-prompt.md`,
-`action-policy.md`.
+Consequence: the **default** model builds no outbound CRM send layer — the agent's native
+connector/flow performs the governed create. The enablement is documentation + Copilot
+configuration, shipped in `copilot/`: `SETUP.md`, `connector-field-map.md`,
+`openapi-v2.json`, `system-prompt.md`, `action-policy.md`.
+
+**Update (path-to-100):** an *optional* governed direct-write
+(`service/stepstitch_service/delivery/`) is being added for customers not on Power Platform.
+It is **off by default**, human-approval-gated, audited, and deliberately **excluded from the
+agent/MCP surface** — so the draft-only default and the no-NPI guarantee are unchanged.
 
 ## Current PR scope
 
@@ -63,7 +67,7 @@ workflow docs. It intentionally contains no customer naming or unrelated platfor
 | Item | Why it's not "done" | Exact unblocker | Owner |
 |---|---|---|---|
 | **Stand up the Copilot agent** | The blueprint + connector field map are shipped; building the agent is a Power Platform configuration task in the customer tenant. | Follow `copilot/SETUP.md` in Copilot Studio: import the connector, attach native ServiceNow/Salesforce connectors, apply DLP + approval. | **You** (tenant config) |
-| **OSS split** (public core vs. private adapters) | A packaging/licensing decision, not code. | Decide public scope → I add the package boundary + `docker compose` + import-linter rule. | **You** (decision) |
+| ~~**OSS split** (public core vs. private adapters)~~ **— DECIDED** | Resolved: the project is **fully Apache-2.0 for now** (incl. the ServiceNow/Salesforce/Genesys adapters). The import boundary is kept as a *layering* rule, not a license one. A commercial edition may return later (`COMMERCIAL.md`). | Done. | **Decided** |
 | **Additional SDK framework packages** (react/vue/angular) | Deliberately deferred — premature breadth with no consumer. The current SDK + Marvox reference is the only proven need. | A real consumer asks for one. | **Pull-driven** |
 
 ## Definition of 100%
