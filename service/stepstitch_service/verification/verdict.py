@@ -15,6 +15,13 @@ VERDICT_REPRODUCED_UNFIXED = "reproduced_unfixed"  # pre failed, no post yet
 VERDICT_NOT_FIXED = "not_fixed"                     # pre failed, post still failed
 VERDICT_CONFIRMED_FIXED = "confirmed_fixed"         # pre failed -> post passed (red->green)
 
+ALL_VERDICTS = frozenset({
+    VERDICT_NOT_REPRODUCED,
+    VERDICT_REPRODUCED_UNFIXED,
+    VERDICT_NOT_FIXED,
+    VERDICT_CONFIRMED_FIXED,
+})
+
 
 def derive_verdict(pre_passed: bool, post_passed: Optional[bool]) -> str:
     """Map a (pre-fix, post-fix) repro outcome to a verdict."""

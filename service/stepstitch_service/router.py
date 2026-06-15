@@ -25,7 +25,7 @@ from .integrations.base import DraftAdapter, build_trace_summary, export_preview
 from .replayability import score_trace
 from .retention import purge_expired_traces
 from .scrubber import FINANCIAL_SERVICES_ENTERPRISE, ScrubPolicy, ScrubRejection, scrub_trace_payload
-from .verification.verdict import derive_verdict
+from .verification.verdict import ALL_VERDICTS, derive_verdict
 
 logger = logging.getLogger("stepstitch")
 
@@ -609,6 +609,11 @@ def create_stepstitch_router(
         trace_id: str,
         admin: Any = Depends(require_admin),
     ) -> Dict[str, Any]:
+        exists = await fetchone(
+            "SELECT footsteps FROM stepstitch_traces WHERE id = ?", (trace_id,)
+        )
+        if not exists:
+            raise HTTPException(status_code=404, detail="Trace not found")
         rows = await fetchall(
             "SELECT trace_id, pre_passed, post_passed, verdict, fix_ref, run_url, "
             "created_at FROM stepstitch_verifications WHERE trace_id = ? "
@@ -626,6 +631,10 @@ def create_stepstitch_router(
         limit: int = Query(50, ge=1, le=500),
     ) -> Dict[str, Any]:
         # The regression corpus: every reproduced failure with the given verdict.
+        if verdict not in ALL_VERDICTS:
+            raise HTTPException(
+                status_code=422, detail=f"unknown verdict '{verdict}'"
+            )
         rows = await fetchall(
             "SELECT trace_id, pre_passed, post_passed, verdict, fix_ref, run_url, "
             "created_at FROM stepstitch_verifications WHERE verdict = ? "
