@@ -9,10 +9,12 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from ..integrations.base import TraceSummary
+from .client import GitHubClient
 from .content import (
     LABEL_BASE,
     LABEL_FIX_CANDIDATE,
     branch_name,
+    build_body,
     build_issue,
     regression_test_path,
 )
@@ -41,7 +43,7 @@ class BridgeReceipt:
 class GitHubBridge:
     def __init__(
         self,
-        client: Any,
+        client: GitHubClient,
         *,
         base_branch: str = "main",
         idempotency_store: Optional[Dict[str, Dict[str, Any]]] = None,
@@ -95,12 +97,11 @@ class GitHubBridge:
             repro_code,
             f"test: add StepStitch regression for {summary.trace_id}",
         )
-        content = build_issue(summary)
         pr = await self._client.open_pull_request(
             branch,
             self._base,
             f"[StepStitch] regression + repro for {summary.route}",
-            content.body,
+            build_body(summary),
         )
         receipt = BridgeReceipt(
             trace_id=summary.trace_id,
