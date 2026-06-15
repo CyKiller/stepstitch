@@ -29,6 +29,9 @@ class _DB:
         if q.startswith("SELECT footsteps, project_id"):
             row = self.traces.get(params[0])
             return (row["footsteps"], row["project_id"]) if row else None
+        if q.startswith("SELECT footsteps FROM stepstitch_traces"):
+            row = self.traces.get(params[0])
+            return (row["footsteps"],) if row else None
         return None
 
     async def fetchall(self, query, params=()):
@@ -113,3 +116,28 @@ def test_corpus_lists_only_confirmed_fixed_by_default():
     entries = r.json()["entries"]
     assert all(e["verdict"] == "confirmed_fixed" for e in entries)
     assert len(entries) == 1
+
+
+def test_verifications_missing_trace_404():
+    client, _ = _build()
+    assert client.get(f"{_PFX}/session/nope/verifications").status_code == 404
+
+
+def test_corpus_rejects_unknown_verdict():
+    client, _ = _build()
+    assert client.get(f"{_PFX}/corpus?verdict=garbage").status_code == 422
+
+
+def test_verify_pre_passed_is_not_reproduced():
+    client, _ = _build()
+    tid = _ingest(client)
+    r = client.post(f"{_PFX}/session/{tid}/verify", json={"pre_passed": True})
+    assert r.json()["verdict"] == "not_reproduced"
+
+
+def test_verify_red_then_red_is_not_fixed():
+    client, _ = _build()
+    tid = _ingest(client)
+    r = client.post(f"{_PFX}/session/{tid}/verify",
+                    json={"pre_passed": False, "post_passed": False})
+    assert r.json()["verdict"] == "not_fixed"
