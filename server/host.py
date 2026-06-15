@@ -6,13 +6,19 @@ testable (inject fakes); ``server.app`` wires it to asyncpg + env for deployment
 """
 from __future__ import annotations
 
+import json
 import logging
+import time
 from typing import Any, Awaitable, Callable, List, Optional
 
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, PlainTextResponse
 
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
 from stepstitch_service.profiles import load_profile
+
+from .dashboard import DASHBOARD_HTML
+from .metrics import Metrics
 
 logger = logging.getLogger("stepstitch.host")
 
@@ -27,14 +33,20 @@ def build_app(
     profile: str = "financial-services-enterprise",
     retention_days: int = 30,
     draft_adapters: Optional[List[Any]] = None,
+    record_writers: Optional[List[Any]] = None,
+    audit: Optional[Callable[..., Awaitable[Any]]] = None,
     lifespan: Any = None,
 ) -> FastAPI:
-    """Build the ingest API. ``draft_adapters`` is the optional commercial pack."""
+    """Build the ingest API. ``draft_adapters`` are the injected (Apache-2.0) adapters;
+    ``record_writers`` enable the optional governed direct-write; ``audit`` is the audit
+    sink (defaults to logging — a deployment should pass a durable store)."""
 
-    async def audit(action: str, actor: str, detail: dict) -> None:
-        # Demo: audit to logs. PRODUCTION: persist to a separate 5-year store
-        # (Reg S-P recordkeeping) — see contracts/stepstitch.md "Retention (split clocks)".
-        logger.info("stepstitch.audit action=%s actor=%s detail=%s", action, actor, detail)
+    if audit is None:
+        async def audit(action: str, actor: str, detail: dict) -> None:
+            # Default: audit to logs. PRODUCTION: pass a durable sink (server/audit.py)
+            # on a separate 5-year clock (Reg S-P) — see contracts/stepstitch.md.
+            logger.info("stepstitch.audit action=%s actor=%s detail=%s",
+                        action, actor, detail)
 
     router = create_stepstitch_router(
         get_user_id=get_user_id,
@@ -47,13 +59,43 @@ def build_app(
         retention_days=retention_days,
         scrub_policy=load_profile(profile),
         draft_adapters=draft_adapters,
+        record_writers=record_writers,
     )
 
     app = FastAPI(title="StepStitch ingest API", lifespan=lifespan)
     app.include_router(router, prefix="/api")
 
+    metrics = Metrics()
+
+    @app.middleware("http")
+    async def _observe(request, call_next):
+        start = time.perf_counter()
+        response = await call_next(request)
+        elapsed = time.perf_counter() - start
+        # Use the matched route TEMPLATE so trace ids never become label values. On an
+        # unmatched path (404) record a constant sentinel rather than the raw URL, so junk
+        # paths can't blow up metric label cardinality.
+        route = request.scope.get("route")
+        route_path = getattr(route, "path", None) or "<unmatched>"
+        metrics.observe(request.method, route_path, response.status_code, elapsed)
+        logger.info(json.dumps({
+            "evt": "http", "method": request.method, "route": route_path,
+            "status": response.status_code, "ms": round(elapsed * 1000, 2),
+        }))
+        return response
+
     @app.get("/healthz")
     async def healthz() -> dict:  # Railway healthcheck target
         return {"status": "ok"}
+
+    @app.get("/metrics", response_class=PlainTextResponse)
+    async def metrics_endpoint() -> str:
+        return metrics.render()
+
+    @app.get("/dashboard", response_class=HTMLResponse)
+    async def dashboard() -> str:
+        # Read-only operator UI; calls only the read/draft endpoints with the admin token
+        # the operator supplies in the browser. No data is embedded server-side.
+        return DASHBOARD_HTML
 
     return app
