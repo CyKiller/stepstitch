@@ -25,6 +25,7 @@ from .integrations.base import DraftAdapter, build_trace_summary, export_preview
 from .replayability import score_trace
 from .retention import purge_expired_traces
 from .scrubber import FINANCIAL_SERVICES_ENTERPRISE, ScrubPolicy, ScrubRejection, scrub_trace_payload
+from .verification.verdict import derive_verdict
 
 logger = logging.getLogger("stepstitch")
 
@@ -70,6 +71,13 @@ class GitHubIssuePayload(BaseModel):
 class GitHubPrPayload(BaseModel):
     approved_by: str
     idempotency_key: str
+
+
+class VerifyPayload(BaseModel):
+    pre_passed: bool
+    post_passed: Optional[bool] = None
+    fix_ref: Optional[str] = None
+    run_url: Optional[str] = None
 
 
 def _actor_id(actor: Any) -> str:
@@ -564,6 +572,70 @@ def create_stepstitch_router(
         return {"status": "ok", "trace_id": trace_id, "dry_run": False,
                 "pr": receipt.as_dict()}
 
+    @router.post("/session/{trace_id}/verify")
+    async def post_verify(
+        trace_id: str,
+        payload: VerifyPayload,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        # CI reports the repro outcome; StepStitch derives + stores the verdict. StepStitch
+        # never runs code itself. Red->green is the only confirmed fix.
+        row = await fetchone(
+            "SELECT footsteps, project_id FROM stepstitch_traces WHERE id = ?",
+            (trace_id,),
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        verdict = derive_verdict(payload.pre_passed, payload.post_passed)
+        await execute(
+            "INSERT INTO stepstitch_verifications (id, trace_id, pre_passed, post_passed, "
+            "verdict, fix_ref, run_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                str(uuid.uuid4()), trace_id, payload.pre_passed, payload.post_passed,
+                verdict, payload.fix_ref, payload.run_url, datetime.now(timezone.utc),
+            ),
+        )
+        await _audit("stepstitch.verify", _actor_id(admin), {
+            "trace_id": trace_id, "verdict": verdict, "fix_ref": payload.fix_ref,
+        })
+        return {
+            "status": "ok", "trace_id": trace_id, "verdict": verdict,
+            "pre_passed": payload.pre_passed, "post_passed": payload.post_passed,
+            "fix_ref": payload.fix_ref,
+        }
+
+    @router.get("/session/{trace_id}/verifications")
+    async def get_verifications(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        rows = await fetchall(
+            "SELECT trace_id, pre_passed, post_passed, verdict, fix_ref, run_url, "
+            "created_at FROM stepstitch_verifications WHERE trace_id = ? "
+            "ORDER BY created_at DESC",
+            (trace_id,),
+        )
+        await _audit("stepstitch.verifications", _actor_id(admin), {"trace_id": trace_id})
+        return {"status": "ok", "trace_id": trace_id,
+                "verifications": [_verification_row(r) for r in rows]}
+
+    @router.get("/corpus")
+    async def get_corpus(
+        admin: Any = Depends(require_admin),
+        verdict: str = Query("confirmed_fixed"),
+        limit: int = Query(50, ge=1, le=500),
+    ) -> Dict[str, Any]:
+        # The regression corpus: every reproduced failure with the given verdict.
+        rows = await fetchall(
+            "SELECT trace_id, pre_passed, post_passed, verdict, fix_ref, run_url, "
+            "created_at FROM stepstitch_verifications WHERE verdict = ? "
+            "ORDER BY created_at DESC LIMIT ?",
+            (verdict, limit),
+        )
+        await _audit("stepstitch.corpus", _actor_id(admin), {"verdict": verdict})
+        return {"status": "ok", "verdict": verdict,
+                "entries": [_verification_row(r) for r in rows]}
+
     @router.get("/session/{trace_id}/playwright")
     async def get_compiled_repro(
         trace_id: str,
@@ -613,3 +685,15 @@ def _recommended_next_step(summary: Any) -> str:
     if summary.replayability_grade in {"A", "B"}:
         return "Attach the repro to the support case and prioritize by affected workflow."
     return "Ask support to gather one more consented reproduction path before escalation."
+
+
+def _verification_row(r: Any) -> Dict[str, Any]:
+    return {
+        "trace_id": r[0],
+        "pre_passed": r[1],
+        "post_passed": r[2],
+        "verdict": r[3],
+        "fix_ref": r[4],
+        "run_url": r[5],
+        "created_at": r[6].isoformat() if hasattr(r[6], "isoformat") else r[6],
+    }

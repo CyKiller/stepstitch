@@ -38,6 +38,21 @@ CREATE TABLE IF NOT EXISTS stepstitch_audit (
 );
 CREATE INDEX IF NOT EXISTS ix_stepstitch_audit_created_at ON stepstitch_audit (created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_stepstitch_audit_action     ON stepstitch_audit (action);
+
+-- Verified-Fix corpus: each reproduced failure + its certified fix (red->green).
+-- Carries trace ids, pass/fail booleans, and a fix reference only — never NPI.
+CREATE TABLE IF NOT EXISTS stepstitch_verifications (
+    id           TEXT PRIMARY KEY,
+    trace_id     TEXT NOT NULL,
+    pre_passed   BOOLEAN NOT NULL,
+    post_passed  BOOLEAN,
+    verdict      TEXT NOT NULL,
+    fix_ref      TEXT,
+    run_url      TEXT,
+    created_at   TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_stepstitch_verif_trace   ON stepstitch_verifications (trace_id);
+CREATE INDEX IF NOT EXISTS ix_stepstitch_verif_verdict ON stepstitch_verifications (verdict, created_at DESC);
 """
 
 
