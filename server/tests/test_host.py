@@ -83,6 +83,17 @@ def test_healthz_open():
     assert client.get("/healthz").json() == {"status": "ok"}
 
 
+def test_dashboard_served_readonly():
+    client, _ = _client()
+    r = client.get("/dashboard")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/html")
+    body = r.text
+    # It is the operator UI and targets the read-only API base; no embedded data/secrets.
+    assert "StepStitch" in body and "/api/stepstitch/v1" in body
+    assert "read-only operator view" in body
+
+
 def test_ingest_requires_bearer():
     client, _ = _client()
     assert client.post(f"{_PFX}/session", json=_PAYLOAD).status_code == 401

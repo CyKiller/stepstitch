@@ -33,6 +33,24 @@ also accepted. Out-of-range values fail loudly at draft time rather than at send
 3. Use `correlation_id` as the reconciliation key — store it and, optionally, make it
    searchable so support can jump from an Incident back to the trace.
 
+## Production direct-write (Mode B)
+
+Enable with `STEPSTITCH_DIRECT_WRITE=servicenow` and inject a configured writer. The
+`[delivery]` extra ships reference HTTP clients (timeout + bounded retry/backoff; credentials
+live in the closure, not in StepStitch core):
+
+```python
+# pip install "stepstitch-service[delivery]"
+from stepstitch_service.delivery import ServiceNowWriter
+from stepstitch_service.delivery.clients import servicenow_basic
+writer = ServiceNowWriter(servicenow_basic("https://acme.service-now.com", user, pw))
+# create_stepstitch_router(..., record_writers=[writer])
+```
+
+For idempotency that survives restarts/replicas, pass a durable store:
+`DeliveryService(writers, idempotency_store=my_redis_backed_dict)` — keyed by
+`target:idempotency_key`, so a retried `/deliver` never creates a duplicate incident.
+
 ## Reverse lookup
 
 ```
