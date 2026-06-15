@@ -46,9 +46,9 @@ class IssueContent:
     labels: List[str]
 
 
-def build_issue(summary: TraceSummary) -> IssueContent:
-    title = f"[StepStitch] {summary.headline}"
-    body = (
+def build_body(summary: TraceSummary) -> str:
+    """The privacy-safe issue/PR body text, derived only from the sanitized summary."""
+    return (
         "Reported issue reproduced by StepStitch (privacy-safe; no NPI captured).\n\n"
         f"- **Route:** `{summary.route}`\n"
         f"- **Replayability:** {summary.replayability_score:.2f} "
@@ -59,4 +59,11 @@ def build_issue(summary: TraceSummary) -> IssueContent:
         "A deterministic Playwright reproduction is available from StepStitch and can be "
         "committed as a regression test. StepStitch never merges — a human reviews and merges."
     )
-    return IssueContent(title=title, body=body, labels=repro_labels(summary))
+
+
+def build_issue(summary: TraceSummary) -> IssueContent:
+    return IssueContent(
+        title=f"[StepStitch] {summary.headline}",
+        body=build_body(summary),
+        labels=repro_labels(summary),
+    )

@@ -47,3 +47,12 @@ def test_issue_is_privacy_safe_and_deterministic():
 def test_branch_and_test_path():
     assert branch_name("trace_42") == "stepstitch/trace-trace_42"
     assert regression_test_path("trace_42") == "tests/stepstitch/repro_trace_42.spec.ts"
+
+
+def test_build_body_matches_issue_body():
+    from stepstitch_service.integrations.base import build_trace_summary
+    from stepstitch_service.github_bridge.content import build_body, build_issue
+    s = build_trace_summary("trace_42", [
+        {"timestamp": "t", "type": "api_error", "route": "/x", "label": "[masked]",
+         "metadata": {"status": 500}}], project_id="p1")
+    assert build_body(s) == build_issue(s).body

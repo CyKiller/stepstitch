@@ -6,7 +6,7 @@ audited, human-merged; never on the agent/MCP surface. There is no merge capabil
 """
 from .bridge import BridgeReceipt, GitHubBridge
 from .client import BridgeError, GitHubClient, GitHubRequestFn
-from .content import IssueContent, build_issue, branch_name, regression_test_path, repro_labels
+from .content import IssueContent, build_body, build_issue, branch_name, regression_test_path, repro_labels
 
 # Reference HTTP client needs the optional [github] extra (httpx); import lazily.
 try:  # pragma: no cover - exercised via the [github] extra
@@ -22,6 +22,7 @@ __all__ = [
     "BridgeError",
     "github_token_request",
     "IssueContent",
+    "build_body",
     "build_issue",
     "branch_name",
     "regression_test_path",
