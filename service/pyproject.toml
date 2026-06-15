@@ -37,6 +37,7 @@ packages = [
     "stepstitch_service.integrations.contrib",
     "stepstitch_service.delivery",
     "stepstitch_service.github_bridge",
+    "stepstitch_service.verification",
 ]
 
 # Layering boundary: no core module may import a concrete adapter (keeps the privacy seam
@@ -67,6 +68,7 @@ source_modules = [
     "stepstitch_service.github_bridge.client",
     "stepstitch_service.github_bridge.bridge",
     "stepstitch_service.github_bridge.workflow",
+    "stepstitch_service.verification.verdict",
 ]
 forbidden_modules = [
     "stepstitch_service.integrations.servicenow",
