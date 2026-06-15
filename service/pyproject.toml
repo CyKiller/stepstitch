@@ -21,6 +21,8 @@ test = ["httpx>=0.27", "pytest>=8.0"]
 mcp = ["mcp>=1.0", "httpx>=0.27"]
 # Reference HTTP clients for the optional governed direct-write (delivery/clients.py).
 delivery = ["httpx>=0.27"]
+# Reference GitHub client for the optional Repair Loop bridge (github_bridge/client.py).
+github = ["httpx>=0.27"]
 # Architecture/layering boundary enforcement (docs/PRODUCT-PLAN.md P3). The boundary is also
 # proven dependency-free by tests/test_open_core_boundary.py; this is for CI `lint-imports`.
 lint = ["import-linter>=2.0"]
@@ -34,6 +36,7 @@ packages = [
     "stepstitch_service.integrations",
     "stepstitch_service.integrations.contrib",
     "stepstitch_service.delivery",
+    "stepstitch_service.github_bridge",
 ]
 
 # Layering boundary: no core module may import a concrete adapter (keeps the privacy seam
