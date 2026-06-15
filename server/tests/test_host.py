@@ -115,3 +115,25 @@ def test_operator_read_requires_admin_not_ingest():
                    headers={"Authorization": f"Bearer {ADMIN}"})
     assert r.status_code == 200
     assert r.json()["summary"]["failing_status"] == 500
+
+
+def test_build_app_accepts_github_bridge():
+    from server.host import build_app
+    get_user_id, require_admin = build_auth(ADMIN, INGEST)
+
+    class _DB:
+        async def execute(self, q, p=()):
+            return None
+        async def fetchone(self, q, p=()):
+            return None
+        async def fetchall(self, q, p=()):
+            return []
+
+    db = _DB()
+    sentinel = object()
+    app = build_app(
+        get_user_id=get_user_id, require_admin=require_admin,
+        execute=db.execute, fetchone=db.fetchone, fetchall=db.fetchall,
+        github_bridge=sentinel,
+    )
+    assert app is not None
