@@ -40,6 +40,19 @@ jobs:
       - name: Run the reproduction
         id: run
         run: npx playwright test tests/stepstitch/ --reporter=line
+      - name: Report the repro result to StepStitch (post-fix outcome)
+        if: ${{ always() }}
+        env:
+          BASE: ${{ secrets.STEPSTITCH_BASE_URL }}
+          TOKEN: ${{ secrets.STEPSTITCH_ADMIN_TOKEN }}
+          TRACE: ${{ github.event.inputs.trace_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "${{ steps.run.outcome }}" = "success" ]; then PASSED=true; else PASSED=false; fi
+          curl -fsS -X POST -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            "$BASE/api/stepstitch/v1/session/$TRACE/verify" \
+            -d "{\"pre_passed\": false, \"post_passed\": $PASSED, \"run_url\": \"$RUN_URL\"}"
       - name: Label the issue stepstitch:confirmed-repro (when an issue number is given)
         if: ${{ success() && github.event.inputs.issue_number != '' }}
         env:

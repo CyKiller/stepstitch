@@ -65,3 +65,10 @@ def test_repro_workflow_template_is_runnable_yaml_text():
     assert "trace_id" in t
     assert "playwright" in t.lower()
     assert "stepstitch:confirmed-repro" in t
+
+
+def test_repro_workflow_reports_verify_result():
+    from stepstitch_service.github_bridge.workflow import STEPSTITCH_REPRO_WORKFLOW
+    t = STEPSTITCH_REPRO_WORKFLOW
+    assert "/verify" in t            # CI reports the repro outcome back to StepStitch
+    assert "post_passed" in t        # the run result is posted as the post-fix outcome

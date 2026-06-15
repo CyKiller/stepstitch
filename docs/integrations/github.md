@@ -31,6 +31,9 @@ Copy `STEPSTITCH_REPRO_WORKFLOW` (`stepstitch_service.github_bridge.workflow`) i
 confirm it in CI. Pass the optional `issue_number` input to have the workflow apply the
 `stepstitch:confirmed-repro` label to that issue (via `gh`) when the repro run is green.
 
+The workflow also reports the run outcome to the Verified-Fix engine — see
+[verified-fix.md](verified-fix.md).
+
 ## Labels
 
 `stepstitch`, `privacy-safe`, `stepstitch:needs-fix`, `stepstitch:repro-ready` /
