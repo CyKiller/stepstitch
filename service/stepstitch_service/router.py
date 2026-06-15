@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from .delivery.base import DeliveryError, DeliveryService, RecordWriter
+from .github_bridge.content import branch_name, regression_test_path
 from .integrations.base import DraftAdapter, build_trace_summary, export_preview
 from .replayability import score_trace
 from .retention import purge_expired_traces
@@ -62,6 +63,15 @@ class DeliverPayload(BaseModel):
     targets: Optional[List[str]] = None
 
 
+class GitHubIssuePayload(BaseModel):
+    approved_by: str
+
+
+class GitHubPrPayload(BaseModel):
+    approved_by: str
+    idempotency_key: str
+
+
 def _actor_id(actor: Any) -> str:
     if isinstance(actor, dict):
         return str(actor.get("user_id") or actor.get("id") or actor.get("sub") or "unknown")
@@ -87,6 +97,7 @@ def create_stepstitch_router(
     scrub_policy: ScrubPolicy = FINANCIAL_SERVICES_ENTERPRISE,
     draft_adapters: Optional[List[DraftAdapter]] = None,
     record_writers: Optional[List[RecordWriter]] = None,
+    github_bridge: Optional[Any] = None,
 ) -> APIRouter:
     """Build the StepStitch router with host-injected auth + DB.
 
@@ -478,6 +489,80 @@ def create_stepstitch_router(
             "idempotency_key": payload.idempotency_key,
         })
         return {"status": "ok", "trace_id": trace_id, "dry_run": dry_run, "results": results}
+
+    @router.post("/session/{trace_id}/github/issue")
+    async def post_github_issue(
+        trace_id: str,
+        payload: GitHubIssuePayload,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        # Repair Loop (optional). NOT an agent tool. Creates/labels a GitHub issue from the
+        # sanitized summary. Off unless a github_bridge is injected.
+        if github_bridge is None:
+            raise HTTPException(status_code=404, detail="github bridge is not enabled")
+        if not payload.approved_by.strip():
+            raise HTTPException(status_code=422, detail="approved_by is required")
+        row = await fetchone(
+            "SELECT footsteps, project_id FROM stepstitch_traces WHERE id = ?",
+            (trace_id,),
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        summary = build_trace_summary(trace_id, _loads(row[0]), project_id=row[1])
+        receipt = await github_bridge.create_issue(summary)
+        await _audit("stepstitch.github_issue", _actor_id(admin), {
+            "trace_id": trace_id, "approved_by": payload.approved_by,
+            "issue_number": receipt.issue_number,
+        })
+        return {"status": "ok", "trace_id": trace_id, "issue": receipt.as_dict()}
+
+    @router.post("/session/{trace_id}/github/pr")
+    async def post_github_pr(
+        trace_id: str,
+        payload: GitHubPrPayload,
+        admin: Any = Depends(require_admin),
+        dry_run: bool = Query(True),
+    ) -> Dict[str, Any]:
+        # Opens a regression-test PR (branch + committed Playwright test). Dry-run by
+        # default; admin + approved_by + idempotency_key required. NEVER merges.
+        if github_bridge is None:
+            raise HTTPException(status_code=404, detail="github bridge is not enabled")
+        if not payload.approved_by.strip():
+            raise HTTPException(status_code=422, detail="approved_by is required")
+        if not payload.idempotency_key.strip():
+            raise HTTPException(status_code=422, detail="idempotency_key is required")
+        row = await fetchone(
+            "SELECT footsteps, project_id FROM stepstitch_traces WHERE id = ?",
+            (trace_id,),
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        footsteps = _loads(row[0])
+        summary = build_trace_summary(trace_id, footsteps, project_id=row[1])
+        repro_code = generate_playwright_test(trace_id, footsteps, base_url)
+        if dry_run:
+            await _audit("stepstitch.github_pr", _actor_id(admin),
+                         {"trace_id": trace_id, "dry_run": True,
+                          "approved_by": payload.approved_by,
+                          "idempotency_key": payload.idempotency_key})
+            return {
+                "status": "ok", "trace_id": trace_id, "dry_run": True,
+                "would_open": {
+                    "branch": branch_name(trace_id),
+                    "test_path": regression_test_path(trace_id),
+                    "title": f"[StepStitch] regression + repro for {summary.route}",
+                },
+            }
+        receipt = await github_bridge.open_regression_pr(
+            summary, repro_code, idempotency_key=payload.idempotency_key
+        )
+        await _audit("stepstitch.github_pr", _actor_id(admin), {
+            "trace_id": trace_id, "dry_run": False,
+            "pr_number": receipt.pr_number, "approved_by": payload.approved_by,
+            "idempotency_key": payload.idempotency_key,
+        })
+        return {"status": "ok", "trace_id": trace_id, "dry_run": False,
+                "pr": receipt.as_dict()}
 
     @router.get("/session/{trace_id}/playwright")
     async def get_compiled_repro(

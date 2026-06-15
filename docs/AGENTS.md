@@ -56,3 +56,5 @@ follows the same principle: governed, human-approved, never an autonomous agent 
 - Treat a draft/preview as a created record (always say "draft").
 - Reach for a destructive or direct-write operation — they are not on the agent surface, by
   design (`assert_no_destructive_operation()`).
+- Use the Repair Loop (`/github/issue`, `/github/pr`) — it is a governed, admin-only,
+  human-merged capability, deliberately off the agent surface (see docs/integrations/github.md).

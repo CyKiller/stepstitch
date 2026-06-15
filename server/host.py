@@ -34,6 +34,7 @@ def build_app(
     retention_days: int = 30,
     draft_adapters: Optional[List[Any]] = None,
     record_writers: Optional[List[Any]] = None,
+    github_bridge: Optional[Any] = None,
     audit: Optional[Callable[..., Awaitable[Any]]] = None,
     lifespan: Any = None,
 ) -> FastAPI:
@@ -60,6 +61,7 @@ def build_app(
         scrub_policy=load_profile(profile),
         draft_adapters=draft_adapters,
         record_writers=record_writers,
+        github_bridge=github_bridge,
     )
 
     app = FastAPI(title="StepStitch ingest API", lifespan=lifespan)
