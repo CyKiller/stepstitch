@@ -124,3 +124,19 @@ def test_github_is_never_an_agent_tool():
         params=(ToolParam("trace_id", "string", required=True),),
     )
     assert sneaky.is_destructive
+
+
+def test_pr_disabled_returns_404():
+    client = _build(with_bridge=False)
+    tid = _ingest(client)
+    assert client.post(f"{_PFX}/session/{tid}/github/pr",
+                       json={"approved_by": "ops", "idempotency_key": "k"}).status_code == 404
+
+
+def test_pr_requires_approver_and_key():
+    client = _build()
+    tid = _ingest(client)
+    assert client.post(f"{_PFX}/session/{tid}/github/pr",
+                       json={"approved_by": "  ", "idempotency_key": "k"}).status_code == 422
+    assert client.post(f"{_PFX}/session/{tid}/github/pr",
+                       json={"approved_by": "ops", "idempotency_key": ""}).status_code == 422

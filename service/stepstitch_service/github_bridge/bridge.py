@@ -82,9 +82,15 @@ class GitHubBridge:
         return receipt
 
     async def open_regression_pr(
-        self, summary: TraceSummary, repro_code: str
+        self,
+        summary: TraceSummary,
+        repro_code: str,
+        *,
+        idempotency_key: Optional[str] = None,
     ) -> BridgeReceipt:
-        key = f"pr:{summary.trace_id}"
+        # Caller-supplied key controls dedup (mirrors DeliveryService); fall back to the
+        # trace id so a retry without a key still won't open a second PR.
+        key = f"pr:{idempotency_key or summary.trace_id}"
         hit = self._cached(key)
         if hit is not None:
             return hit
