@@ -63,6 +63,10 @@ source_modules = [
     "stepstitch_service.delivery.salesforce_writer",
     "stepstitch_service.delivery.config",
     "stepstitch_service.delivery.clients",
+    "stepstitch_service.github_bridge.content",
+    "stepstitch_service.github_bridge.client",
+    "stepstitch_service.github_bridge.bridge",
+    "stepstitch_service.github_bridge.workflow",
 ]
 forbidden_modules = [
     "stepstitch_service.integrations.servicenow",

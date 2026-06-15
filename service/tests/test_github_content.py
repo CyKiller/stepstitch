@@ -56,3 +56,12 @@ def test_build_body_matches_issue_body():
         {"timestamp": "t", "type": "api_error", "route": "/x", "label": "[masked]",
          "metadata": {"status": 500}}], project_id="p1")
     assert build_body(s) == build_issue(s).body
+
+
+def test_repro_workflow_template_is_runnable_yaml_text():
+    from stepstitch_service.github_bridge.workflow import STEPSTITCH_REPRO_WORKFLOW
+    t = STEPSTITCH_REPRO_WORKFLOW
+    assert "workflow_dispatch" in t
+    assert "trace_id" in t
+    assert "playwright" in t.lower()
+    assert "stepstitch:confirmed-repro" in t
