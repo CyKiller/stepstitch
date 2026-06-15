@@ -13,6 +13,9 @@ on:
       trace_id:
         description: StepStitch trace id
         required: true
+      issue_number:
+        description: GitHub issue to label on a confirmed repro (optional)
+        required: false
 permissions:
   contents: read
   issues: write
@@ -37,7 +40,9 @@ jobs:
       - name: Run the reproduction
         id: run
         run: npx playwright test tests/stepstitch/ --reporter=line
-      - name: Label issue confirmed on green-then-red repro
-        if: success()
-        run: echo "stepstitch:confirmed-repro (wire to your issue via gh CLI)"
+      - name: Label the issue stepstitch:confirmed-repro (when an issue number is given)
+        if: ${{ success() && github.event.inputs.issue_number != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh issue edit "${{ github.event.inputs.issue_number }}" --add-label "stepstitch:confirmed-repro"
 """

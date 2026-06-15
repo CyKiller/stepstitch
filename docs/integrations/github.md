@@ -28,7 +28,8 @@ bridge = GitHubBridge(GitHubClient(request, repo="acme/app"), base_branch="main"
 Copy `STEPSTITCH_REPRO_WORKFLOW` (`stepstitch_service.github_bridge.workflow`) into
 `.github/workflows/stepstitch-repro.yml`, set repo secrets `STEPSTITCH_BASE_URL` +
 `STEPSTITCH_ADMIN_TOKEN`, then dispatch it with a `trace_id` to run the reproduction and
-confirm it in CI.
+confirm it in CI. Pass the optional `issue_number` input to have the workflow apply the
+`stepstitch:confirmed-repro` label to that issue (via `gh`) when the repro run is green.
 
 ## Labels
 
