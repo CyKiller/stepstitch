@@ -65,8 +65,9 @@ class CopilotSafeOperation:
         lowered = self.path.lower()
         if any(token in lowered for token in (
             "purge", "by-user", "delete", "maintenance", "retention", "deliver",
+            "github", "merge",
         )):
-            # "deliver" = the optional governed direct-write; it must never be an agent tool.
+            # "deliver"/"github"/"merge" = governed write loops; never agent tools.
             return True
         # The raw single-trace read endpoint is exactly "/session/{trace_id}".
         if self.path == "/session/{trace_id}":
