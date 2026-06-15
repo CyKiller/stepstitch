@@ -15,8 +15,11 @@ LABEL_PRIVACY = "privacy-safe"
 LABEL_REPRO_READY = "stepstitch:repro-ready"
 LABEL_NEEDS_DATA = "stepstitch:needs-data"
 LABEL_NEEDS_FIX = "stepstitch:needs-fix"
-LABEL_CONFIRMED = "stepstitch:confirmed-repro"
 LABEL_FIX_CANDIDATE = "stepstitch:fix-candidate"
+# Vocabulary applied by the customer's CI workflow / review process, NOT by the bridge
+# itself (the bridge applies the labels above). Defined here as the single source of the
+# label names so the workflow template and docs stay in sync.
+LABEL_CONFIRMED = "stepstitch:confirmed-repro"
 LABEL_REGRESSION_ADDED = "stepstitch:regression-added"
 LABEL_READY_FOR_REVIEW = "stepstitch:ready-for-review"
 
