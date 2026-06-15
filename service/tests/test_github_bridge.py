@@ -82,3 +82,12 @@ def test_open_regression_pr_is_idempotent():
     run(b.open_regression_pr(_summary(), "code"))
     run(b.open_regression_pr(_summary(), "code"))
     assert c.prs == 1
+
+
+def test_open_regression_pr_dedupes_by_caller_key():
+    c = FakeClient()
+    store = {}
+    b = GitHubBridge(c, idempotency_store=store)
+    run(b.open_regression_pr(_summary(), "code", idempotency_key="abc"))
+    run(b.open_regression_pr(_summary(), "code", idempotency_key="abc"))
+    assert c.prs == 1

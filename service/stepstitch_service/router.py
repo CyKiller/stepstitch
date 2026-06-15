@@ -542,7 +542,9 @@ def create_stepstitch_router(
         repro_code = generate_playwright_test(trace_id, footsteps, base_url)
         if dry_run:
             await _audit("stepstitch.github_pr", _actor_id(admin),
-                         {"trace_id": trace_id, "dry_run": True})
+                         {"trace_id": trace_id, "dry_run": True,
+                          "approved_by": payload.approved_by,
+                          "idempotency_key": payload.idempotency_key})
             return {
                 "status": "ok", "trace_id": trace_id, "dry_run": True,
                 "would_open": {
@@ -551,10 +553,13 @@ def create_stepstitch_router(
                     "title": f"[StepStitch] regression + repro for {summary.route}",
                 },
             }
-        receipt = await github_bridge.open_regression_pr(summary, repro_code)
+        receipt = await github_bridge.open_regression_pr(
+            summary, repro_code, idempotency_key=payload.idempotency_key
+        )
         await _audit("stepstitch.github_pr", _actor_id(admin), {
             "trace_id": trace_id, "dry_run": False,
             "pr_number": receipt.pr_number, "approved_by": payload.approved_by,
+            "idempotency_key": payload.idempotency_key,
         })
         return {"status": "ok", "trace_id": trace_id, "dry_run": False,
                 "pr": receipt.as_dict()}
