@@ -1,4 +1,7 @@
 node_modules/
+web/
+.agents/
+.claude/
 dist/
 .venv/
 .git/
