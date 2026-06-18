@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import { JsonLd } from "@/components/json-ld";
+import { SITE_URL } from "@/lib/links";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "StepStitch: issue-to-repro infrastructure, not session replay",
   description:
-    "StepStitch turns one user-reported bug into a scrubbed event timeline, a replayability score, and a copyable Playwright reproduction. No screens, no input values, no page text. Open source, self-hosted, built for regulated teams.",
-  metadataBase: new URL("https://stepstitch.dev"),
+    "Turn a user-reported bug into a regression test. A replayability score and a Playwright repro, with no screens, input values, or PII. Open source, self-hosted.",
+  metadataBase: new URL(SITE_URL),
   robots: { index: true, follow: true },
   openGraph: {
     title: "StepStitch: issue-to-repro infrastructure",
@@ -44,6 +46,7 @@ export default function RootLayout({
         </noscript>
       </head>
       <body className="min-h-full flex flex-col bg-bg text-fg font-sans">
+        <JsonLd />
         <div className="grain-overlay" aria-hidden />
         {children}
       </body>
