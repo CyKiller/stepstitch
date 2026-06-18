@@ -1,0 +1,252 @@
+@import "tailwindcss";
+
+/* Manual theme toggle: dark variant keys off [data-theme=dark] so a user
+   choice overrides system preference. Default theme is resolved by an inline
+   script in layout.tsx (system preference unless a choice is stored). */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* ---- Design tokens. One neutral base (zinc), one accent (emerald). ---- */
+:root,
+[data-theme="light"] {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --line: #e4e4e7;
+  --fg: #18181b;
+  --muted: #52525b;
+  --accent: #047857;       /* emerald-700, link/label text on light */
+  --accent-solid: #047857; /* emerald-700: white text on it passes WCAG AA */
+  --accent-2: #0d9488;     /* teal-600: second stop of the brand gradient */
+  --accent-fg: #ffffff;
+  --ok: #059669;
+  --bad: #b91c1c;
+}
+
+[data-theme="dark"] {
+  --bg: #09090b;
+  --surface: #101013;
+  --surface-2: #18181b;
+  --line: #27272a;
+  --fg: #fafafa;
+  --muted: #a1a1aa;
+  --accent: #34d399;       /* emerald-400, link/label text on dark */
+  --accent-solid: #10b981; /* emerald-500, primary button fill */
+  --accent-2: #2dd4bf;     /* teal-400: second stop of the brand gradient */
+  --accent-fg: #04241a;
+  --ok: #34d399;
+  --bad: #f87171;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-solid: var(--accent-solid);
+  --color-accent-2: var(--accent-2);
+  --color-accent-fg: var(--accent-fg);
+  --color-ok: var(--ok);
+  --color-bad: var(--bad);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+:root {
+  /* Signature spring curve for all premium transitions. */
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  /* Brand-tinted shadow, not neutral black. */
+  --shadow-brand: 0 24px 70px -34px color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--accent-solid) 28%, transparent);
+}
+
+/* Fixed grain/scrim layer pattern reserved for hero; kept pointer-events-none. */
+.hairline {
+  background-image: linear-gradient(
+    to right,
+    transparent,
+    var(--line) 12%,
+    var(--line) 88%,
+    transparent
+  );
+}
+
+/* ---- Brand gradient + motion. All decorative motion sits behind a
+   prefers-reduced-motion guard so the static read stays intact. ---- */
+
+.brand-gradient-text {
+  background-image: linear-gradient(
+    100deg,
+    var(--accent) 0%,
+    var(--accent-2) 50%,
+    var(--accent) 100%
+  );
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.brand-gradient-border {
+  position: relative;
+}
+.brand-gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    140deg,
+    color-mix(in oklab, var(--accent) 55%, transparent),
+    transparent 40%,
+    color-mix(in oklab, var(--accent-2) 45%, transparent)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Fixed film-grain overlay: premium physical texture, never on a scroller. */
+.grain-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Double-bezel (Doppelrand): outer tray + inner core with concentric radii. */
+.bezel-outer {
+  border-radius: 1.6rem;
+  padding: 0.375rem;
+  background: color-mix(in oklab, var(--fg) 3%, transparent);
+  box-shadow: var(--shadow-brand);
+}
+.bezel-inner {
+  border-radius: calc(1.6rem - 0.375rem);
+  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--fg) 8%, transparent);
+}
+
+/* Cursor-following spotlight: a soft fill plus an illuminated border edge. */
+.spotlight::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.35s var(--ease-spring);
+  background: radial-gradient(
+    260px circle at var(--mx, 50%) var(--my, 50%),
+    color-mix(in oklab, var(--accent) 14%, transparent),
+    transparent 62%
+  );
+  pointer-events: none;
+}
+.spotlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  opacity: 0;
+  transition: opacity 0.35s var(--ease-spring);
+  background: radial-gradient(
+    220px circle at var(--mx, 50%) var(--my, 50%),
+    color-mix(in oklab, var(--accent) 60%, transparent),
+    transparent 65%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.spotlight:hover::after,
+.spotlight:hover::before {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-aurora {
+    animation: aurora 18s ease-in-out infinite alternate;
+  }
+  .animate-shimmer {
+    animation: shimmer 6s linear infinite;
+  }
+  .marquee-track {
+    animation: marquee 38s linear infinite;
+  }
+  .marquee-paused:hover .marquee-track {
+    animation-play-state: paused;
+  }
+  .pulse-dot {
+    animation: pulsedot 2s ease-in-out infinite;
+  }
+}
+
+@keyframes aurora {
+  0% {
+    transform: translate3d(-6%, -4%, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(6%, 4%, 0) scale(1.15);
+  }
+}
+
+@keyframes shimmer {
+  to {
+    background-position: 220% center;
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes pulsedot {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--ok) 55%, transparent);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 5px color-mix(in oklab, var(--ok) 0%, transparent);
+  }
+}
