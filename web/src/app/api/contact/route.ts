@@ -30,23 +30,43 @@ export async function POST(request: Request) {
   if (!valid(email)) {
     return NextResponse.json({ error: "invalid_email" }, { status: 400 });
   }
+  // Length caps so a webhook payload can't be abused as a giant relay.
+  if (name.length > 200 || email.length > 320 || org.length > 200 || message.length > 4000) {
+    return NextResponse.json({ error: "too_long" }, { status: 400 });
+  }
 
-  // Forward to a webhook if configured (e.g. a Slack/email relay). Without one,
-  // accept and log server-side so the form is functional before wiring a relay.
+  const summary = `Pilot enquiry from ${name} <${email}>${org ? ` (${org})` : ""}:\n${message}`;
+
+  // Forward to a webhook if configured. The payload carries BOTH a `text`
+  // field (Slack incoming webhooks render this) and structured fields (Zapier /
+  // Google Sheets / generic relays consume these), so one URL fits any of them.
   const hook = process.env.CONTACT_WEBHOOK_URL;
   if (hook) {
     try {
-      await fetch(hook, {
+      const res = await fetch(hook, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text: `Pilot enquiry from ${name} <${email}>${org ? ` (${org})` : ""}:\n${message}`,
+          text: summary,
+          source: "stepstitch.dev/contact",
+          name,
+          email,
+          org,
+          message,
+          submitted_at: new Date().toISOString(),
         }),
+        signal: AbortSignal.timeout(8000),
       });
-    } catch {
+      if (!res.ok) {
+        console.error("[contact] relay non-2xx", res.status);
+        return NextResponse.json({ error: "relay_failed" }, { status: 502 });
+      }
+    } catch (err) {
+      console.error("[contact] relay error", err);
       return NextResponse.json({ error: "relay_failed" }, { status: 502 });
     }
   } else {
+    // No relay configured yet: log so the submission is at least captured.
     console.log("[contact]", { name, email, org, message });
   }
 
