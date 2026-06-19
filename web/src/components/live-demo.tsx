@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { track } from "@vercel/analytics";
 import {
   ArrowClockwise,
   CursorClick,
@@ -55,6 +56,7 @@ export function LiveDemo() {
 
   // Refresh: reset state, then fetch. `loading` already starts true on mount.
   function reload() {
+    track("demo_refresh");
     setLoading(true);
     setError(false);
     fetchTrace();
@@ -106,7 +108,10 @@ export function LiveDemo() {
           <button
             key={t.key}
             type="button"
-            onClick={() => setTab(t.key)}
+            onClick={() => {
+              track("demo_tab", { tab: t.key });
+              setTab(t.key);
+            }}
             className={`whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors ${
               tab === t.key
                 ? "border-accent-solid text-fg"
