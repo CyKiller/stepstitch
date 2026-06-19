@@ -1,0 +1,58 @@
+# StepStitch marketing site
+
+The public marketing + live-demo site for StepStitch. Next.js (App Router) +
+Tailwind v4, deployed on Vercel. The live demo reads a sanitized trace from a
+running StepStitch service (deployed on Railway) through a server-side proxy, so
+no admin token ever reaches the browser.
+
+## Local development
+
+```bash
+npm install
+cp .env.local.example .env.local   # optional; without it the demo shows a sample trace
+npm run dev
+```
+
+Open http://localhost:3000.
+
+## Architecture
+
+- Marketing sections are static (Server Components) under `src/components/`.
+- The live demo (`src/components/live-demo.tsx`, client) calls `/api/demo/trace`.
+- `src/app/api/demo/trace/route.ts` (server) holds the admin token and issues
+  only read-only GETs to the StepStitch service. The browser never sees the token.
+- Without `STEPSTITCH_BASE_URL` + `STEPSTITCH_ADMIN_TOKEN`, the proxy returns a
+  bundled sample trace (`src/lib/stepstitch.ts`) so the page works offline.
+- `/api/contact` accepts the pilot form and optionally relays to `CONTACT_WEBHOOK_URL`.
+
+## Deploy to Vercel
+
+1. Import the repo in Vercel and set the **Root Directory** to `web`.
+2. Add the environment variables from `.env.local.example` (server-side, no
+   `NEXT_PUBLIC_` prefix).
+3. Deploy. The framework preset is auto-detected (Next.js).
+
+Or from the CLI:
+
+```bash
+cd web
+npx vercel        # preview
+npx vercel --prod # production
+```
+
+## Wiring the live demo to Railway
+
+1. Deploy the StepStitch service (repo root `Dockerfile` + `railway.json`) on
+   Railway with a Postgres plugin and a `financial-services-enterprise` profile.
+2. Seed a demo trace:
+   ```bash
+   STEPSTITCH_BASE_URL="https://<app>.up.railway.app" \
+   STEPSTITCH_INGEST_TOKEN="<ingest-token>" \
+   node ../scripts/seed-demo-trace.mjs
+   ```
+3. Set `STEPSTITCH_BASE_URL` and `STEPSTITCH_ADMIN_TOKEN` (and optionally
+   `STEPSTITCH_DEMO_TRACE_ID`) in the Vercel project. The demo then renders the
+   live trace and shows a "live trace" badge instead of "sample trace".
+
+No CORS configuration is needed: the browser only talks to the Next.js API on
+the same origin, which proxies to Railway server-to-server.

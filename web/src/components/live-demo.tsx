@@ -1,0 +1,298 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import {
+  ArrowClockwise,
+  CursorClick,
+  Warning,
+  ShieldCheck,
+  Path,
+} from "@phosphor-icons/react";
+import type { DemoTrace } from "@/lib/stepstitch";
+import { ScoreGauge } from "./score-gauge";
+import { CountUp } from "./count-up";
+
+type TabKey = "timeline" | "replayability" | "privacy" | "playwright";
+
+const tabs: { key: TabKey; label: string }[] = [
+  { key: "timeline", label: "Timeline" },
+  { key: "replayability", label: "Replayability" },
+  { key: "privacy", label: "Privacy posture" },
+  { key: "playwright", label: "Playwright repro" },
+];
+
+export function LiveDemo() {
+  const [trace, setTrace] = useState<DemoTrace | null>(null);
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<TabKey>("timeline");
+
+  async function fetchTrace() {
+    try {
+      const res = await fetch("/api/demo/trace", { cache: "no-store" });
+      if (!res.ok) throw new Error();
+      setTrace((await res.json()) as DemoTrace);
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Refresh: reset state, then fetch. `loading` already starts true on mount.
+  function reload() {
+    setLoading(true);
+    setError(false);
+    fetchTrace();
+  }
+
+  useEffect(() => {
+    // Fetch the demo trace once on mount. State updates happen after the
+    // network await, not synchronously, so this is the intended pattern.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchTrace();
+  }, []);
+
+  return (
+    <div className="overflow-hidden">
+      {/* Header: trace id + source badge + refresh */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface-2/60 px-4 py-3 sm:px-5">
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-xs text-muted">
+            {trace ? trace.trace_id : "loading…"}
+          </span>
+          {trace ? (
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                trace.source === "live"
+                  ? "bg-ok/12 text-ok"
+                  : "bg-surface-2 text-muted"
+              }`}
+            >
+              {trace.source === "live" && (
+                <span className="pulse-dot size-1.5 rounded-full bg-ok" />
+              )}
+              {trace.source === "live" ? "live trace" : "sample trace"}
+            </span>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={reload}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:text-fg hover:border-fg/30 active:scale-[0.98]"
+        >
+          <ArrowClockwise size={13} weight="bold" />
+          Refresh
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 overflow-x-auto border-b border-line px-2 sm:px-3">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors ${
+              tab === t.key
+                ? "border-accent-solid text-fg"
+                : "border-transparent text-muted hover:text-fg"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="min-h-[320px] p-4 sm:p-6">
+        {loading ? (
+          <DemoSkeleton />
+        ) : error || !trace ? (
+          <DemoError onRetry={reload} />
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={tab}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <DemoBody trace={trace} tab={tab} />
+            </motion.div>
+          </AnimatePresence>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DemoBody({ trace, tab }: { trace: DemoTrace; tab: TabKey }) {
+  const reduce = useReducedMotion();
+
+  if (tab === "timeline") {
+    return (
+      <ol className="space-y-px overflow-hidden rounded-xl border border-line">
+        {trace.timeline.map((s) => (
+          <motion.li
+            key={s.index}
+            initial={reduce ? false : { opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: s.index * 0.05, duration: 0.35 }}
+            className="flex items-start gap-3 bg-surface px-4 py-3"
+          >
+            <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-surface-2 text-muted">
+              {s.kind === "api_error" ? (
+                <Warning size={15} weight="bold" className="text-bad" />
+              ) : s.kind === "click" ? (
+                <CursorClick size={15} weight="bold" />
+              ) : (
+                <Path size={15} weight="bold" />
+              )}
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-fg">{s.label}</p>
+              <p className="truncate font-mono text-[12px] text-muted">
+                {s.selector ?? s.detail}
+              </p>
+            </div>
+          </motion.li>
+        ))}
+      </ol>
+    );
+  }
+
+  if (tab === "replayability") {
+    const r = trace.replayability;
+    return (
+      <div className="grid gap-6 md:grid-cols-[auto_1fr] md:gap-8">
+        <div className="flex items-center justify-center md:justify-start">
+          <ScoreGauge score={r.score} grade={r.grade} />
+        </div>
+        <div>
+          <div className="grid grid-cols-3 gap-3">
+            <Signal label="Steps" value={r.signals.steps} />
+            <Signal label="Interactive" value={r.signals.interactive} />
+            <Signal label="Stable selectors" value={r.signals.stable_selectors} />
+          </div>
+          {r.warnings.length > 0 && (
+            <ul className="mt-4 space-y-2">
+              {r.warnings.map((w) => (
+                <li
+                  key={w.code}
+                  className="flex items-start gap-2 rounded-lg border border-line bg-surface-2/50 px-3 py-2 text-[13px] text-muted"
+                >
+                  <Warning
+                    size={15}
+                    weight="bold"
+                    className="mt-0.5 shrink-0 text-accent"
+                  />
+                  <span>
+                    <span className="font-mono text-[12px] text-fg">
+                      {w.code}
+                    </span>{" "}
+                    {w.detail}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (tab === "privacy") {
+    return (
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="rounded-xl border border-line bg-surface-2/40 p-5">
+          <div className="flex items-center gap-2 text-sm font-semibold text-ok">
+            <ShieldCheck size={18} weight="bold" />
+            Scrub status: {trace.privacy.scrub_status}
+          </div>
+          <p className="mt-4 text-xs font-medium uppercase tracking-wide text-muted">
+            Fields scrubbed before storage
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {trace.privacy.scrubbed_fields.map((f) => (
+              <span
+                key={f}
+                className="rounded-md bg-surface px-2 py-1 font-mono text-[12px] text-fg"
+              >
+                {f}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-xl border border-line bg-surface-2/40 p-5">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">
+            Never captured
+          </p>
+          <ul className="mt-3 grid gap-2 text-[13px] text-muted">
+            {trace.privacy.never_captured.map((n) => (
+              <li key={n} className="flex items-center gap-2">
+                <span className="size-1 rounded-full bg-bad/70" aria-hidden />
+                {n}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <pre className="overflow-x-auto rounded-xl border border-line bg-surface-2/40 p-4 font-mono text-[12.5px] leading-relaxed text-fg/90">
+      <code>{trace.playwright_code}</code>
+    </pre>
+  );
+}
+
+function Signal({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-line bg-surface-2/40 px-3 py-3 text-center">
+      <p className="font-mono text-xl font-semibold tabular-nums text-fg">
+        <CountUp to={value} />
+      </p>
+      <p className="mt-0.5 text-[11px] text-muted">{label}</p>
+    </div>
+  );
+}
+
+function DemoSkeleton() {
+  return (
+    <div className="space-y-3" aria-hidden>
+      {[0, 1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className="h-12 animate-pulse rounded-xl bg-surface-2"
+          style={{ opacity: 1 - i * 0.15 }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function DemoError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="grid min-h-[260px] place-items-center text-center">
+      <div>
+        <p className="text-sm font-medium text-fg">
+          The demo service did not respond.
+        </p>
+        <p className="mt-1 text-sm text-muted">
+          It is read-only and rate-limited. Try again in a moment.
+        </p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-sm font-medium text-fg transition-colors hover:border-fg/30"
+        >
+          <ArrowClockwise size={14} weight="bold" />
+          Retry
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -36,7 +36,7 @@ if (runtimeDeps.length > 0) {
   process.exit(1)
 }
 
-const purl = `pkg:npm/${pkg.name.replace("@", "%40")}@${pkg.version}`
+const purl = `pkg:npm/${pkg.name.replace(/@/g, "%40")}@${pkg.version}`
 const sbom = {
   bomFormat: "CycloneDX",
   specVersion: "1.5",
