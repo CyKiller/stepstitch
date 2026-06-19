@@ -1,4 +1,5 @@
 import { Hero } from "@/components/hero";
+import { PlainExplainer } from "@/components/plain-explainer";
 import { Problem } from "@/components/problem";
 import { HowItWorks } from "@/components/how-it-works";
 import { WorkflowSection } from "@/components/workflow-section";
@@ -14,6 +15,7 @@ export default function Home() {
   return (
     <main id="main" className="flex-1">
       <Hero />
+      <PlainExplainer />
       <Problem />
       <HowItWorks />
       <WorkflowSection />
