@@ -34,9 +34,9 @@ export function Hero() {
 
           <Reveal delay={0.1}>
             <p className="mt-5 max-w-[56ch] text-lg leading-relaxed text-muted">
-              StepStitch captures what broke as structure, scores whether it
-              reproduces, and compiles a Playwright test. No screens. No input
-              values. No PII.
+              When a customer hits a bug, your team can reproduce it and prove
+              the fix. StepStitch never records their screen, their keystrokes,
+              or their data.
             </p>
           </Reveal>
 

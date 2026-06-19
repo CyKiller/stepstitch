@@ -23,6 +23,18 @@ const tabs: { key: TabKey; label: string }[] = [
   { key: "playwright", label: "Playwright repro" },
 ];
 
+// Plain-language narration so a non-technical visitor can follow each tab.
+const captions: Record<TabKey, string> = {
+  timeline:
+    "The trail of clicks that led to the error. Notice there is no personal information anywhere, only what was clicked.",
+  replayability:
+    "How confident we are that your team can reproduce this bug, scored automatically from 0 to 1.",
+  privacy:
+    "Exactly what was kept (the structure) and what was never captured (screens, typing, and personal data).",
+  playwright:
+    "The test StepStitch wrote automatically. It fails while the bug exists and passes once it is fixed.",
+};
+
 export function LiveDemo() {
   const [trace, setTrace] = useState<DemoTrace | null>(null);
   const [error, setError] = useState(false);
@@ -105,6 +117,13 @@ export function LiveDemo() {
           </button>
         ))}
       </div>
+
+      {/* Plain-language narration of the active tab */}
+      {!loading && !error && trace && (
+        <p className="border-b border-line bg-surface/40 px-4 py-3 text-[13.5px] leading-relaxed text-muted sm:px-6">
+          {captions[tab]}
+        </p>
+      )}
 
       <div className="min-h-[320px] p-4 sm:p-6">
         {loading ? (
