@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { JsonLd } from "@/components/json-ld";
+import { Nav } from "@/components/nav";
+import { Footer } from "@/components/footer";
 import { SITE_URL } from "@/lib/links";
 import "./globals.css";
 
@@ -47,8 +49,16 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-bg text-fg font-sans">
         <JsonLd />
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-accent-solid focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-accent-fg"
+        >
+          Skip to content
+        </a>
         <div className="grain-overlay" aria-hidden />
+        <Nav />
         {children}
+        <Footer />
       </body>
     </html>
   );

@@ -47,7 +47,23 @@ def test_deterministic_output():
     assert a == b
 
 
-def test_api_error_and_exception_are_comments_only():
+def test_api_error_becomes_a_real_assertion():
     code = generate_playwright_test("t_1", TRACE)
+    # The failure is still labeled for the reader…
     assert "// expected API failure: /api/pay (HTTP 500)" in code
-    assert "client exception observed here: TypeError" in code
+    # …but it is now a real network assertion: armed before the action and
+    # checked after, matched on URL so it resolves whether or not the bug is
+    # present. Red while broken, green once fixed.
+    assert "page.waitForResponse(" in code
+    assert "r.url().includes('/api/pay')" in code
+    assert ".toBeLessThan(500);" in code
+    # No vacuous wait that would let a broken page pass.
+    assert "waitForTimeout" not in code
+
+
+def test_exception_becomes_a_pageerror_assertion():
+    code = generate_playwright_test("t_1", TRACE)
+    assert "const pageErrors: string[] = [];" in code
+    assert "page.on('pageerror'" in code
+    assert "pageErrors.some((m) => m.includes('TypeError'))" in code
+    assert ".toBe(false);" in code
