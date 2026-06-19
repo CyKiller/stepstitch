@@ -4,10 +4,16 @@ Pure functions, no I/O, no network, no embedded credentials. Given a trace's
 structural footsteps (see contracts/stepstitch.md), emit an executable Playwright
 TypeScript reproduction script. Output is fully determined by the inputs so it is
 trivially unit-testable.
+
+The compiled test is a real regression test: a captured API failure becomes an
+armed ``page.waitForResponse`` (matched on URL + method, so it resolves whether or
+not the bug is present) plus a status assertion, and a captured client exception
+becomes a ``pageerror`` assertion. The test therefore FAILS while the bug is
+present and PASSES once it is fixed (red -> green).
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .replayability import score_trace
 
@@ -24,6 +30,50 @@ def _comment(text: str) -> str:
     return text.replace("\r", " ").replace("\n", " ")
 
 
+def _coerce_status(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _url_prefix(endpoint: str) -> str:
+    """Literal URL prefix before the first templated segment.
+
+    ``/api/accounts/:id/transfers`` -> ``/api/accounts/`` so ``url().includes(...)``
+    matches the concrete runtime URL (``/api/accounts/123/transfers``).
+    """
+    if not endpoint:
+        return ""
+    marker = endpoint.find("/:")
+    if marker != -1:
+        return endpoint[: marker + 1]
+    colon = endpoint.find(":")
+    if colon != -1:
+        return endpoint[:colon]
+    return endpoint
+
+
+def _status_assertion(var: str, status: Optional[int], endpoint: str) -> str:
+    ep = _comment(endpoint or "the endpoint")
+    if status is not None and status >= 500:
+        return f"  expect({var}.status(), 'no server error from {ep}').toBeLessThan(500);"
+    if status is not None:
+        return f"  expect({var}.status(), '{ep} must not return {status}').not.toBe({status});"
+    return f"  expect({var}.status(), '{ep} must succeed').toBeLessThan(400);"
+
+
+def _arm_wait(var: str, prefix: str, method: str) -> List[str]:
+    method_clause = (
+        f" && r.request().method() === '{_ts_str(method.upper())}'" if method else ""
+    )
+    return [
+        f"  const {var} = page.waitForResponse(",
+        f"    (r) => r.url().includes('{_ts_str(prefix)}'){method_clause},",
+        "  );",
+    ]
+
+
 def generate_playwright_test(
     trace_id: str,
     footsteps: List[Dict[str, Any]],
@@ -38,6 +88,10 @@ def generate_playwright_test(
     """
     base = base_url.rstrip("/")
     replay = score_trace(footsteps)
+    has_exception = any(
+        str(s.get("type", "")).lower() == "exception" for s in footsteps
+    )
+
     lines: List[str] = [
         "import { test, expect } from '@playwright/test';",
         "",
@@ -54,42 +108,117 @@ def generate_playwright_test(
         "  // TODO: authenticate as a synthetic test user if the flow requires it.",
         "",
     ]
+    if has_exception:
+        lines += [
+            "  // Capture uncaught client exceptions so we can assert they no longer occur.",
+            "  const pageErrors: string[] = [];",
+            "  page.on('pageerror', (e) => pageErrors.push(e.message));",
+            "",
+        ]
 
-    for step in footsteps:
-        step_type = str(step.get("type", "")).lower()
-        route = str(step.get("route", "/"))
-        target = step.get("target")
-        label = str(step.get("label", ""))
-        metadata = step.get("metadata") or {}
+    asserted = False
+    resp_n = 0
 
-        lines.append(f"  // [{step_type.upper()}] {_comment(route)}")
-
+    def emit_action(step_type: str, route: str, target: Optional[str], label: str) -> None:
         if step_type == "navigation":
             if ":" in route:
-                lines.append(f"  // TODO: substitute id(s) in templated route '{_comment(route)}'")
+                lines.append(
+                    f"  // TODO: substitute id(s) in templated route '{_comment(route)}'"
+                )
             lines.append(f"  await page.goto('{_ts_str(base + route)}');")
-
         elif step_type == "click" and target:
             if label and label != "[masked]":
                 lines.append(f"  // label: {_comment(label)}")
             lines.append(f"  await page.locator('{_ts_str(target)}').click();")
-
         elif step_type == "input" and target:
             lines.append("  // value redacted by StepStitch; fill a test value:")
             lines.append(
                 f"  await page.locator('{_ts_str(target)}').fill('stepstitch-test-value');"
             )
 
+    i = 0
+    n = len(footsteps)
+    while i < n:
+        step = footsteps[i]
+        step_type = str(step.get("type", "")).lower()
+        route = str(step.get("route", "/"))
+        target = step.get("target")
+        label = str(step.get("label", ""))
+        metadata = step.get("metadata") or {}
+
+        nxt = footsteps[i + 1] if i + 1 < n else None
+        nxt_is_api = bool(nxt) and str(nxt.get("type", "")).lower() == "api_error"
+
+        lines.append(f"  // [{step_type.upper()}] {_comment(route)}")
+
+        # An interaction immediately followed by an API error: arm the response
+        # wait BEFORE the action, then assert on the response after it.
+        if step_type in ("navigation", "click", "input") and nxt_is_api:
+            api_meta = nxt.get("metadata") or {}
+            endpoint = str(api_meta.get("endpoint", ""))
+            status = _coerce_status(api_meta.get("status"))
+            method = str(api_meta.get("method", ""))
+            var = f"response{resp_n}"
+            lines += _arm_wait(var, _url_prefix(endpoint), method)
+            emit_action(step_type, route, target, label)
+            lines.append(
+                f"  // expected API failure: {_comment(endpoint)} (HTTP {api_meta.get('status', '?')})"
+            )
+            lines.append(f"  const res{resp_n} = await {var};")
+            lines.append(_status_assertion(f"res{resp_n}", status, endpoint))
+            asserted = True
+            resp_n += 1
+            lines.append("")
+            i += 2
+            continue
+
+        if step_type in ("navigation", "click", "input"):
+            emit_action(step_type, route, target, label)
+
         elif step_type == "api_error":
-            status = metadata.get("status", "?")
-            endpoint = _comment(str(metadata.get("endpoint", "")))
-            lines.append(f"  // expected API failure: {endpoint} (HTTP {status})")
+            # Standalone API error (no immediately preceding interaction): bind a
+            # short post-hoc wait so we still assert rather than just comment.
+            endpoint = str(metadata.get("endpoint", ""))
+            status = _coerce_status(metadata.get("status"))
+            method = str(metadata.get("method", ""))
+            method_clause = (
+                f" && r.request().method() === '{_ts_str(method.upper())}'"
+                if method
+                else ""
+            )
+            lines.append(
+                f"  // expected API failure: {_comment(endpoint)} (HTTP {metadata.get('status', '?')})"
+            )
+            lines.append(
+                f"  const res{resp_n} = await page.waitForResponse("
+            )
+            lines.append(
+                f"    (r) => r.url().includes('{_ts_str(_url_prefix(endpoint))}'){method_clause},"
+            )
+            lines.append("  );")
+            lines.append(_status_assertion(f"res{resp_n}", status, endpoint))
+            asserted = True
+            resp_n += 1
 
         elif step_type == "exception":
-            name = _comment(str(metadata.get("name", "Error")))
-            lines.append(f"  // client exception observed here: {name}")
+            name = str(metadata.get("name", "Error"))
+            lines.append(
+                f"  expect(pageErrors.some((m) => m.includes('{_ts_str(_comment(name))}')), "
+                f"'the reported {_comment(name)} must not reproduce').toBe(false);"
+            )
+            asserted = True
 
         lines.append("")
+        i += 1
 
-    lines.append("  await page.waitForTimeout(1000);")
-    return "\n".join(lines) + "\n});\n"
+    if not asserted:
+        lines.append(
+            "  // Navigation-only trace: no terminal failure was captured to assert on."
+        )
+        lines.append(
+            "  // See the replayability warnings above; add a fixture/assertion to make this a"
+        )
+        lines.append("  // true regression test.")
+
+    lines.append("});")
+    return "\n".join(lines) + "\n"
