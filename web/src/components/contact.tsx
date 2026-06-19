@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { track } from "@vercel/analytics";
 import { ArrowRight, CheckCircle } from "@phosphor-icons/react";
 
 type State = "idle" | "submitting" | "done" | "error";
@@ -24,6 +25,7 @@ export function Contact() {
         }),
       });
       if (!res.ok) throw new Error();
+      track("contact_submit");
       setState("done");
     } catch {
       setState("error");
