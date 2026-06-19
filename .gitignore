@@ -13,3 +13,10 @@ __pycache__/
 .stepstitch-proof/
 test-results/
 playwright-report/
+
+# Local tooling & build artifacts (keep the repo professional)
+.agents/
+service/build/
+skills-lock.json
+.claude/*
+!.claude/settings.json
