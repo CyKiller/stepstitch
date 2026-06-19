@@ -1,5 +1,27 @@
+import { VideoCamera, Warning, Path } from "@phosphor-icons/react/dist/ssr";
 import { Reveal } from "./reveal";
 import { Section } from "./section";
+
+const analogy = [
+  {
+    icon: VideoCamera,
+    title: "Session replay is a security camera",
+    body: "It records the screen, inputs, and PII. Useful, until an auditor asks why customer data left the building.",
+    muted: true,
+  },
+  {
+    icon: Warning,
+    title: "Error tracking is a crash sensor",
+    body: "It tells you where the code broke, but not the steps the user took to break it.",
+    muted: true,
+  },
+  {
+    icon: Path,
+    title: "StepStitch is a flight recorder",
+    body: "It keeps the structural steps, no screens or values, and replays them as a test you can run.",
+    muted: false,
+  },
+];
 
 export function Problem() {
   return (
@@ -11,6 +33,31 @@ export function Problem() {
           <span className="text-accent">regression test</span>.
         </p>
       </Reveal>
+
+      <div className="mt-12 grid gap-4 md:grid-cols-3">
+        {analogy.map((a, i) => {
+          const Glyph = a.icon;
+          return (
+            <Reveal key={a.title} delay={i * 0.06}>
+              <div
+                className={`h-full rounded-2xl border p-6 ${a.muted ? "border-line bg-surface" : "border-accent/30 bg-accent/[0.04]"}`}
+              >
+                <Glyph
+                  size={22}
+                  weight="bold"
+                  className={a.muted ? "text-muted" : "text-accent"}
+                />
+                <h3 className="mt-4 text-base font-semibold text-fg">
+                  {a.title}
+                </h3>
+                <p className="mt-2 text-[15px] leading-relaxed text-muted">
+                  {a.body}
+                </p>
+              </div>
+            </Reveal>
+          );
+        })}
+      </div>
 
       <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-line bg-line md:grid-cols-2">
         <Reveal className="bg-surface">

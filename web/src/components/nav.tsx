@@ -3,31 +3,45 @@ import { GithubLogo } from "@phosphor-icons/react/dist/ssr";
 import { Wordmark } from "./wordmark";
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "./button";
-import { GITHUB_URL } from "@/lib/links";
+import { MobileMenu } from "./mobile-menu";
+import { GITHUB_URL, DOCS_URL } from "@/lib/links";
 
-const links = [
-  { href: "#how", label: "How it works" },
-  { href: "#workflow", label: "Workflow" },
-  { href: "#demo", label: "Live demo" },
-  { href: "#compare", label: "Comparison" },
-  { href: "#agents", label: "Agents" },
-  { href: "#trust", label: "Trust" },
+// Anchors are absolute (/#id) so they work from sub-pages too.
+const desktopLinks = [
+  { href: "/#how", label: "How it works" },
+  { href: "/#demo", label: "Live demo" },
+  { href: "/#compare", label: "Comparison" },
+  { href: "/security", label: "Security" },
+  { href: DOCS_URL, label: "Docs", external: true },
+];
+
+const mobileLinks = [
+  { href: "/#how", label: "How it works" },
+  { href: "/#workflow", label: "Workflow" },
+  { href: "/#demo", label: "Live demo" },
+  { href: "/#compare", label: "Comparison" },
+  { href: "/#agents", label: "Agents" },
+  { href: "/security", label: "Security" },
+  { href: "/self-host", label: "Self-host" },
+  { href: DOCS_URL, label: "Docs", external: true },
 ];
 
 export function Nav() {
   return (
     <header className="sticky top-0 z-40">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
         <nav className="mt-4 flex h-14 items-center justify-between rounded-full border border-line/70 bg-bg/70 pl-5 pr-2 shadow-[0_10px_40px_-24px_color-mix(in_oklab,var(--accent)_45%,transparent)] backdrop-blur-xl">
-          <Link href="#top" aria-label="StepStitch home">
+          <Link href="/" aria-label="StepStitch home">
             <Wordmark />
           </Link>
 
           <div className="hidden items-center gap-6 lg:flex">
-            {links.map((l) => (
+            {desktopLinks.map((l) => (
               <a
                 key={l.href}
                 href={l.href}
+                target={l.external ? "_blank" : undefined}
+                rel={l.external ? "noreferrer" : undefined}
                 className="group relative text-sm text-muted transition-colors hover:text-fg"
               >
                 {l.label}
@@ -47,7 +61,10 @@ export function Nav() {
               <GithubLogo size={17} weight="bold" />
             </a>
             <ThemeToggle />
-            <Button href="#contact">Book a pilot</Button>
+            <div className="hidden sm:block">
+              <Button href="/#contact">Book a pilot</Button>
+            </div>
+            <MobileMenu links={mobileLinks} />
           </div>
         </nav>
       </div>

@@ -4,7 +4,6 @@ import { Aurora } from "./aurora";
 import { Button } from "./button";
 import { Tilt } from "./tilt";
 import { Bezel } from "./bezel";
-import { GITHUB_URL } from "@/lib/links";
 import { SAMPLE_TRACE } from "@/lib/stepstitch";
 
 export function Hero() {
@@ -45,13 +44,12 @@ export function Hero() {
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button href="#contact">Book a pilot</Button>
               <Button
-                href={GITHUB_URL}
+                href="/self-host"
                 variant="secondary"
-                external
                 leadingIcon={GithubLogo}
                 trailingIcon={null}
               >
-                View on GitHub
+                Self-host free
               </Button>
             </div>
           </Reveal>

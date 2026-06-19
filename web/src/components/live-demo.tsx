@@ -12,6 +12,7 @@ import {
 import type { DemoTrace } from "@/lib/stepstitch";
 import { ScoreGauge } from "./score-gauge";
 import { CountUp } from "./count-up";
+import { CopyButton } from "./copy-button";
 
 type TabKey = "timeline" | "replayability" | "privacy" | "playwright";
 
@@ -243,9 +244,14 @@ function DemoBody({ trace, tab }: { trace: DemoTrace; tab: TabKey }) {
   }
 
   return (
-    <pre className="overflow-x-auto rounded-xl border border-line bg-surface-2/40 p-4 font-mono text-[12.5px] leading-relaxed text-fg/90">
-      <code>{trace.playwright_code}</code>
-    </pre>
+    <div className="relative">
+      <div className="absolute right-2 top-2 z-10">
+        <CopyButton text={trace.playwright_code} label="Copy" />
+      </div>
+      <pre className="overflow-x-auto rounded-xl border border-line bg-surface-2/40 p-4 font-mono text-[12.5px] leading-relaxed text-fg/90">
+        <code>{trace.playwright_code}</code>
+      </pre>
+    </div>
   );
 }
 
