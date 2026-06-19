@@ -7,8 +7,8 @@ export function DemoSection() {
     <Section id="demo" className="border-b border-line">
       <SectionHeader
         eyebrow="Live demo"
-        title="See a real scrubbed trace"
-        body="This pulls a sanitized trace straight from a running StepStitch service. The same evidence an engineer or an agent would read: timeline, replayability score, privacy posture, and the generated Playwright test."
+        title="See exactly what your team gets"
+        body="A real example, live from a running StepStitch service. Click through the tabs to follow what happened, how reproducible it is, what was kept private, and the test it wrote automatically."
       />
       <div className="mt-12">
         <Bezel>
