@@ -20,7 +20,7 @@ export function MobileMenu({ links }: { links: Link[] }) {
         aria-label={open ? "Close menu" : "Open menu"}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="grid size-9 place-items-center rounded-full border border-line text-fg transition-colors hover:border-fg/30"
+        className="grid size-11 place-items-center rounded-full border border-line text-fg transition-colors hover:border-fg/30"
       >
         {open ? <X size={17} weight="bold" /> : <List size={17} weight="bold" />}
       </button>

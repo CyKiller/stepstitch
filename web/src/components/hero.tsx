@@ -13,7 +13,7 @@ export function Hero() {
       className="relative isolate overflow-hidden border-b border-line"
     >
       <Aurora />
-      <div className="mx-auto grid max-w-7xl gap-12 px-4 pt-16 pb-20 sm:px-6 md:grid-cols-12 md:pt-24 md:pb-28">
+      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-12 px-4 pt-16 pb-20 sm:px-6 md:grid-cols-12 md:pt-24 md:pb-28">
         <div className="flex flex-col justify-center md:col-span-7">
           <Reveal>
             <span className="inline-flex w-fit items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-muted">
