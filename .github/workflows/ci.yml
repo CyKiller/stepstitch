@@ -55,6 +55,42 @@ jobs:
           pip install pip-audit
           pip-audit -r <(pip freeze) || true
 
+  host:
+    name: Host (auth + dashboard + real Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: stepstitch
+          POSTGRES_PASSWORD: stepstitch
+          POSTGRES_DB: stepstitch_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stepstitch"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install host + service (with test extras)
+        run: |
+          pip install "./service[test]"
+          pip install -r server/requirements.txt
+      # Runs the full server/tests suite (auth gating, dashboard XSS regression,
+      # observability) AND the real-Postgres round-trip, which is active because the
+      # DATABASE_URL below is set (it self-skips elsewhere).
+      - name: Host tests + real-Postgres round-trip
+        env:
+          STEPSTITCH_TEST_DATABASE_URL: postgresql://stepstitch:stepstitch@localhost:5432/stepstitch_ci
+        run: pytest server/tests -q
+
   e2e-proof:
     name: E2E (compiler output executes in Chromium)
     runs-on: ubuntu-latest
