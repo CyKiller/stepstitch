@@ -1,4 +1,10 @@
-# @stepstitch/tracker
+# StepStitch
+
+[![CI](https://github.com/CyKiller/stepstitch/actions/workflows/ci.yml/badge.svg)](https://github.com/CyKiller/stepstitch/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/CyKiller/stepstitch/actions/workflows/codeql.yml/badge.svg)](https://github.com/CyKiller/stepstitch/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/CyKiller/stepstitch?sort=semver&color=10b981)](https://github.com/CyKiller/stepstitch/releases)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Website](https://img.shields.io/badge/website-stepstitch.vercel.app-10b981)](https://stepstitch.vercel.app)
 
 **Issue-to-repro infrastructure — not session replay.** When a user reports a problem,
 StepStitch turns that single report into a scrubbed event timeline, structural frontend
