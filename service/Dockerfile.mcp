@@ -12,7 +12,10 @@
 #
 # Transport is stdio (for local/embedded MCP clients). For remote clients (Copilot Studio),
 # front this with the streamable-HTTP MCP transport — see copilot/MCP-SETUP.md.
-FROM python:3.11-slim
+# Base image: python:3.11-slim pinned by digest for reproducible builds.
+# To refresh: `docker buildx imagetools inspect python:3.11-slim` → copy the top-level
+# (multi-arch index) Digest, not a per-platform child digest, so CI keeps a portable pin.
+FROM python:3.11-slim@sha256:ae52c5bef62a6bdd42cd1e8dffef86b9cd284bde9427da79839de7a4b983e7ca
 
 WORKDIR /app
 COPY . /app
@@ -23,5 +26,9 @@ RUN pip install --no-cache-dir ".[mcp]"
 # No secrets baked in; supply at runtime.
 ENV STEPSTITCH_BASE_URL="" \
     STEPSTITCH_TOKEN=""
+
+# Run as an unprivileged user (the install above ran as root; /app stays root-readable).
+RUN useradd --create-home --uid 10001 stepstitch
+USER stepstitch
 
 ENTRYPOINT ["python", "-m", "stepstitch_service.mcp_cli"]
