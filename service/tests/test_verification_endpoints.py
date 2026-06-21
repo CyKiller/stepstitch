@@ -141,3 +141,23 @@ def test_verify_red_then_red_is_not_fixed():
     r = client.post(f"{_PFX}/session/{tid}/verify",
                     json={"pre_passed": False, "post_passed": False})
     assert r.json()["verdict"] == "not_fixed"
+
+
+def test_verify_rejects_non_http_run_url():
+    # Dashboard renders run_url as a link; a javascript: scheme must never be storable.
+    client, _ = _build()
+    tid = _ingest(client)
+    r = client.post(f"{_PFX}/session/{tid}/verify",
+                    json={"pre_passed": False, "post_passed": True,
+                          "run_url": "javascript:alert(document.cookie)"})
+    assert r.status_code == 422
+
+
+def test_verify_accepts_https_run_url():
+    client, db = _build()
+    tid = _ingest(client)
+    r = client.post(f"{_PFX}/session/{tid}/verify",
+                    json={"pre_passed": False, "post_passed": True,
+                          "run_url": "https://ci.example.com/run/42"})
+    assert r.status_code == 200
+    assert db.verifications[-1]["run_url"] == "https://ci.example.com/run/42"
