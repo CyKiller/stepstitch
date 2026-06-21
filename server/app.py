@@ -7,14 +7,31 @@ directly instead.
 """
 from __future__ import annotations
 
+import asyncio
 import os
+import pathlib
 from contextlib import asynccontextmanager
 
 from .audit import make_db_audit
 from .auth import build_auth
-from .db import build_db_callables, ensure_schema
+from .db import build_db_callables
 from .host import build_app
 from .oidc import oidc_auth_from_env
+
+_ALEMBIC_INI = pathlib.Path(__file__).resolve().parent / "alembic.ini"
+
+
+def _run_migrations() -> None:
+    """Apply Alembic ``upgrade head`` over the sync psycopg2 engine.
+
+    env.py reads DATABASE_URL from the environment, so this stays decoupled from the
+    asyncpg runtime pool. Run inside an executor so the sync work never blocks the loop.
+    """
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config(str(_ALEMBIC_INI))
+    command.upgrade(cfg, "head")
 
 
 class _PoolProxy:
@@ -63,7 +80,10 @@ def create_app_from_env():
         import asyncpg
 
         proxy.pool = await asyncpg.create_pool(dsn=database_url, min_size=1, max_size=10)
-        await ensure_schema(proxy.pool)
+        # Bring the schema to head before serving traffic. Migrations run on a sync
+        # psycopg2 engine (env.py reads DATABASE_URL), driven in a thread so the sync
+        # work doesn't block the event loop.
+        await asyncio.get_running_loop().run_in_executor(None, _run_migrations)
         try:
             yield
         finally:

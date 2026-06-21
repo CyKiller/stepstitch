@@ -112,6 +112,13 @@ jobs:
         run: |
           pip install "./service[test]"
           pip install -r server/requirements.txt
+      # Prove migrations apply from an empty database (alembic/psycopg2 come in via
+      # server/requirements.txt above).
+      - name: Apply migrations (alembic upgrade head)
+        working-directory: server
+        env:
+          DATABASE_URL: postgresql://stepstitch:stepstitch@localhost:5432/stepstitch_ci
+        run: alembic upgrade head
       # Runs the full server/tests suite (auth gating, dashboard XSS regression,
       # observability) AND the real-Postgres round-trip, which is active because the
       # DATABASE_URL below is set (it self-skips elsewhere).
