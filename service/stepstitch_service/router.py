@@ -12,12 +12,13 @@ from __future__ import annotations
 import inspect
 import json
 import logging
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .delivery.base import DeliveryError, DeliveryService, RecordWriter
 from .github_bridge.content import branch_name, regression_test_path
@@ -78,6 +79,20 @@ class VerifyPayload(BaseModel):
     post_passed: Optional[bool] = None
     fix_ref: Optional[str] = None
     run_url: Optional[str] = None
+
+    @field_validator("run_url")
+    @classmethod
+    def _http_url_only(cls, v: Optional[str]) -> Optional[str]:
+        # run_url is rendered as a link in the operator dashboard; only http(s) is
+        # storable so a javascript:/data: scheme can never reach the DOM (trust boundary B2).
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            return None
+        if not re.match(r"^https?://", v, re.IGNORECASE):
+            raise ValueError("run_url must be an http(s) URL")
+        return v
 
 
 def _actor_id(actor: Any) -> str:
