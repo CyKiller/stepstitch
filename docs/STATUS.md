@@ -34,7 +34,7 @@ test is `service/tests/test_golden_path.py`.
 | **Compliance evidence (generated)** | `compliance.py` | `test_compliance.py` (drift guard) |
 | **End-to-end golden path** | (all of the above) | `test_golden_path.py` |
 | Supply chain (SBOM, SRI, signed tag) | `scripts/`, `RELEASE.md` | `sbom.cdx.json`, release tag |
-| Marvox reference integration | re-vendored @ v0.3.0 | Marvox `test_stepstitch_*` (incl. real-Postgres proof) |
+| Reference integration | re-vendored @ v0.3.0 | reference app `test_stepstitch_*` (incl. real-Postgres proof) |
 
 Gates: **169 service + 25 host (incl. OIDC/RBAC + real-Postgres) + 22 SDK tests green; type-check clean; executable repro proof green; import-linter contract KEPT.**
 
@@ -69,7 +69,7 @@ workflow docs. It intentionally contains no customer naming or unrelated platfor
 |---|---|---|---|
 | **Stand up the Copilot agent** | The blueprint + connector field map are shipped; building the agent is a Power Platform configuration task in the customer tenant. | Follow `copilot/SETUP.md` in Copilot Studio: import the connector, attach native ServiceNow/Salesforce connectors, apply DLP + approval. | **You** (tenant config) |
 | ~~**OSS split** (public core vs. private adapters)~~ **— DECIDED** | Resolved: the project is **fully Apache-2.0 for now** (incl. the ServiceNow/Salesforce/Genesys adapters). The import boundary is kept as a *layering* rule, not a license one. A commercial edition may return later (`COMMERCIAL.md`). | Done. | **Decided** |
-| **Additional SDK framework packages** (react/vue/angular) | Deliberately deferred — premature breadth with no consumer. The current SDK + Marvox reference is the only proven need. | A real consumer asks for one. | **Pull-driven** |
+| **Additional SDK framework packages** (react/vue/angular) | Deliberately deferred — premature breadth with no consumer. The current SDK + reference app is the only proven need. | A real consumer asks for one. | **Pull-driven** |
 
 ## Definition of 100%
 

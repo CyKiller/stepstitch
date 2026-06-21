@@ -1,7 +1,7 @@
 """Connector enablement-pack guards (docs/PRODUCT-PLAN.md P2).
 
 The connector docs in copilot/ must not drift from the operation SSOT. (The
-declarative/paste-a-trace agent is the StepDesk *competition* entry, not the StepStitch
+declarative/paste-a-trace agent is a separate competition artifact, not the StepStitch
 product, so it is intentionally not part of this repo's surface.)
 """
 import re

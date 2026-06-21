@@ -26,7 +26,7 @@ NPI — but the tenant should still treat it as containing user-correlated metad
 ## Runbook — first actions
 
 1. **Kill capture (org-wide):** flip the tenant kill-switch config flag (the host's
-   `capture_enabled` callable; in Marvox, set `STEPSTITCH_CAPTURE_DISABLED=1`). The
+   `capture_enabled` callable; in the host app, set `STEPSTITCH_CAPTURE_DISABLED=1`). The
    ingestion endpoint then refuses every `POST /session` with 503 — no redeploy needed.
    Optionally also call `tracker.disable()` in the shipped bundle to stop a single
    browser instance. New traces stop immediately.

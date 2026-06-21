@@ -4,8 +4,8 @@ Status: **draft for review** · Created 2026-06-10 · Owner: you
 Companion to [`STATUS.md`](STATUS.md) (acceptance ledger) and [`../contracts/stepstitch.md`](../contracts/stepstitch.md) (frozen contract).
 
 This plan takes StepStitch from a *feature-complete, embedded evidence layer* (today, proven
-inside Marvox) to **its own product** that any agentic network can call — so a Voya-grade
-"StitchDesk" can be stood up against real customers, not just the competition.
+inside the reference app) to **its own product** that any agentic network can call — so a
+financial-services-grade deployment can be stood up against real customers.
 
 ---
 
@@ -18,20 +18,20 @@ human-gated. It never plans, never acts autonomously, never files.
 
 Therefore StepStitch must **never build its own agentic network.** Its "universal connector"
 is to **be the best tool that every agent network can call.** Concretely that means one
-capability contract surfaced three ways:
+capability contract surfaced two ways:
 
 ```
    ONE capability contract  (contracts/stepstitch.md  +  copilot/openapi-v2.json)
    ListRecentTraces · GetTraceSummary · GetReplayabilityScore · GetPrivacyPosture
    · GetDiagnosticSummary · GeneratePlaywrightRepro · Create[FS]ExportPreview
                                    │
-        ┌──────────────────────────┼──────────────────────────┐
-        ▼                          ▼                          ▼
-  ① MCP SERVER (universal)   ② MS Copilot connector    ┊ ③ Declarative-agent
-     write once →               (Copilot Studio /        ┊   (Agent Builder, paste-a-trace)
-     Copilot Studio, OpenAI,    Foundry custom connector)┊   = STEPDESK COMPETITION ENTRY
-     Vertex, LangGraph,         — Microsoft enterprise    ┊   lives in voyacup/, NOT this
-     Bedrock, Claude              path                    ┊   product. Shown for context only.
+        ┌──────────────────────────┴──────────────────────────┐
+        ▼                                                     ▼
+  ① MCP SERVER (universal)                          ② MS Copilot connector
+     write once →                                      (Copilot Studio /
+     Copilot Studio, OpenAI,                           Foundry custom connector)
+     Vertex, LangGraph,                                — Microsoft enterprise
+     Bedrock, Claude                                     path
 ```
 
 **StepStitch the product = the connectors: ① (MCP, the spine) + ② (Microsoft Copilot
@@ -39,10 +39,6 @@ connector, already in [`../copilot/`](../copilot/)).** ① is the only net-new b
 because every major platform is an MCP client in 2026 it unlocks all the others for ~free.
 This satisfies the "not agentic until thought out for each company" principle: the autonomy
 lives in *the customer's* network; StepStitch stays a deterministic, governed tool.
-
-③, the declarative/paste-a-trace agent, is the **StepDesk competition entry** (Microsoft
-Agent Builder, no connector) — it belongs to `voyacup/`, not to the StepStitch product, and
-is out of scope for this plan.
 
 ---
 
@@ -63,14 +59,13 @@ mostly formalization, and the MCP server (P1) is a thin wrapper over the *same* 
 
 ---
 
-## 3. The connector decision — Voya primary, others optional
+## 3. The connector decision — financial-services primary, others optional
 
 Research (June 2026): MCP has ~97M monthly SDK downloads, is adopted by Microsoft, OpenAI,
 Google, AWS, and Anthropic, and is governed under the Linux Foundation (Agentic AI Foundation).
 Copilot Studio consumes MCP servers via its connector infrastructure.
 
-**Primary target = Microsoft (for Voya).**
-- Competition path (③): Microsoft **Agent Builder** declarative agent — the only allowed tool; this is what StitchDesk already is.
+**Primary target = Microsoft (for a regulated financial-services customer).**
 - Enterprise path (②/①): **Copilot Studio** (Microsoft's default enterprise agent platform; DLP/ALM/governance) via custom connector (`openapi-v2.json`) **or** MCP server; **Azure AI Foundry Agent Service** for heavier/long-running orchestration.
 
 **Optional networks — near-zero marginal cost (all are MCP clients → "validate + document," not "engineer"):**
@@ -80,7 +75,7 @@ Copilot Studio consumes MCP servers via its connector infrastructure.
 | 1 | **LangGraph** v1.0 | Default for regulated stateful workflows (durable execution + native HITL; JPMorgan, BlackRock); consumes MCP via adapter | Doc + smoke test |
 | 2 | **AWS Bedrock AgentCore** | Regulated-env controls, Claude-native; AWS-shop clients | Doc + smoke test |
 | 3 | **Google Vertex AI Agent Builder / ADK** | Multimodal; ships Workday/ServiceNow agents; GCP clients | Doc + smoke test |
-| 4 | **OpenAI Agents SDK** | Lowest-lift; the Marvox reference already speaks OpenAI | Trivial |
+| 4 | **OpenAI Agents SDK** | Lowest-lift; the reference app already speaks OpenAI | Trivial |
 
 ---
 
@@ -106,7 +101,6 @@ read-audit stay centralized in the service.
 - **① MCP server (universal connector)** — `copilot/MCP-SETUP.md` (from P1): registration for Claude, OpenAI, LangGraph, Vertex, Bedrock, and Copilot Studio. The product's primary connector.
 - **② Microsoft Copilot connector** — OpenAPI custom connector (`copilot/SETUP.md`, pre-existing): Copilot Studio + native ServiceNow/Salesforce connectors + DLP + human approval per `SETUP.md` §3.
 - **Acceptance (green):** `test_copilot_pack.py` — the MCP doc can't drift from the tool SSOT, and `SETUP.md` links the MCP path. A tenant stands up either connector from docs alone. (Live tenant config remains customer-gated — see §6.)
-- **Out of scope (competition):** the declarative/paste-a-trace Agent Builder agent is the **StepDesk** entry in `voyacup/`, not the StepStitch product.
 
 ### P3 — Productization & packaging  ✅ **SHIPPED (open core)**  *(publish steps credential-gated)*
 Open-core boundary is now real and **enforced**, not just declared:
@@ -137,7 +131,7 @@ strong > weak (monotonicity). Wired as the `release-gate:evidence` npm script.
 ### P6 — GTM wedge  *(no new code)*
 README already nails the wedge (issue→repro, not session replay; privacy-safe; regulated/self-host).
 Motion: **land via the MCP server** (drops into whatever agent stack the customer already runs —
-zero migration) → **expand via the compliance pack**. Voya is the lighthouse, reached through Microsoft.
+zero migration) → **expand via the compliance pack**. A regulated financial-services customer is the lighthouse, reached through Microsoft.
 
 ---
 
@@ -168,8 +162,7 @@ retention. Same omissions as `openapi-v2.json`. Reuse `copilot/system-prompt.md`
 **Critical path (the spine):** P0 → P1 (MCP) → P2 (connectors) → P3 (open core) → P4 (compliance) → P5 (eval). **P0–P5 shipped (2026-06-10).**
 **Remaining:** P6 (GTM — no code). All engineering-completable scope is done; the rest is credential-gated (publish) or a product decision (the P5 grade-band tightening).
 
-For the **competition specifically you need none of P0–P6** — StitchDesk already is path ③.
-P0–P6 is the **product** play (StepStitch "for all"). Confirm scope before sequencing.
+P0–P6 is the **product** play (StepStitch "for all").
 
 ### Decision-gated / customer-gated (not engineering) — mirrors STATUS.md
 | Item | Unblocker | Owner |
@@ -183,6 +176,6 @@ P0–P6 is the **product** play (StepStitch "for all"). Confirm scope before seq
 ---
 
 ## 7. Open questions for you
-1. **Scope now:** product spine (P0–P2) vs. just polish StitchDesk for the competition?
-2. **Canonical Marvox** for the reference integration: `Downloads/marvoxmain` was confirmed as main — keep using it as the proof app?
+1. **Scope now:** product spine (P0–P2) vs. just polish the reference integration?
+2. **Canonical reference app** for the reference integration: keep using the confirmed main app as the proof app?
 3. **OSS/licensing** direction (gates P3) — open core, or closed commercial?

@@ -82,23 +82,23 @@ the MCP connector at `…/api/stepstitch/v1` with `STEPSTITCH_TOKEN=$STEPSTITCH_
 > separate Reg S-P clock; under SSO each record carries the **real operator identity**, not a
 > shared `admin`.
 
-### Operator SSO (OIDC / Entra ID) + RBAC
+### Operator SSO (OIDC) + RBAC
 
 Set `STEPSTITCH_OIDC_ISSUER` to switch the operator surface from the shared admin token to
-**per-operator OIDC** (RS256, validated against the IdP's JWKS). **Entra ID** is the reference
-IdP; any OIDC issuer works. The SDK keeps using `STEPSTITCH_INGEST_TOKEN` (machine auth) —
-only the human operator/admin surface uses SSO.
+**per-operator OIDC** (RS256, validated against the IdP's JWKS). Any standards-compliant OIDC
+issuer works. The SDK keeps using `STEPSTITCH_INGEST_TOKEN` (machine auth) — only the human
+operator/admin surface uses SSO.
 
 | Variable | Required (SSO) | Notes |
 |---|---|---|
-| `STEPSTITCH_OIDC_ISSUER` | yes | enables SSO; e.g. `https://login.microsoftonline.com/<tenant>/v2.0` |
+| `STEPSTITCH_OIDC_ISSUER` | yes | enables SSO; your IdP's issuer URL, e.g. `https://<your-oidc-issuer>/<tenant>` |
 | `STEPSTITCH_OIDC_AUDIENCE` | yes | the API app-registration audience, e.g. `api://stepstitch` |
 | `STEPSTITCH_OIDC_JWKS_URI` | no | discovered from the issuer's OpenID config if unset |
 | `STEPSTITCH_OIDC_OPERATOR_ROLES` | no (default `stepstitch-operator`) | roles allowed on the read surface |
 | `STEPSTITCH_OIDC_ADMIN_ROLES` | no (default `stepstitch-admin`) | roles allowed to deliver / delete / purge (least privilege) |
-| `STEPSTITCH_OIDC_ROLES_CLAIM` | no (default `roles`) | JWT claim carrying roles (Entra **app roles**) |
+| `STEPSTITCH_OIDC_ROLES_CLAIM` | no (default `roles`) | JWT claim carrying the issuer's roles |
 
-With SSO on, `STEPSTITCH_ADMIN_TOKEN` is not required. Map Entra app roles
+With SSO on, `STEPSTITCH_ADMIN_TOKEN` is not required. Map the issuer's roles
 `stepstitch-operator` (read) and `stepstitch-admin` (destructive) to the relevant operator
 groups; an operator without `stepstitch-admin` is denied deliver/delete/purge (403).
 
