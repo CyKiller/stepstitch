@@ -60,7 +60,7 @@ root `Dockerfile` builds it and `railway.json` health-checks `/healthz`.
 |---|---|---|---|
 | `DATABASE_URL` | yes | **Railway Postgres** (auto) | added when you attach the Postgres plugin |
 | `PORT` | — | **Railway** (auto) | the Dockerfile binds uvicorn to `$PORT` |
-| `STEPSTITCH_ADMIN_TOKEN` | yes | you | bearer for operator reads/exports; also the MCP connector's `STEPSTITCH_TOKEN` |
+| `STEPSTITCH_ADMIN_TOKEN` | yes (unless SSO) | you | bearer for operator reads/exports; also the MCP connector's `STEPSTITCH_TOKEN`. Not required when OIDC SSO is enabled (below) |
 | `STEPSTITCH_INGEST_TOKEN` | yes | you | bearer the SDK/clients use to POST traces |
 | `STEPSTITCH_PROFILE` | no (default FS) | you | `financial-services-enterprise` / `healthcare-strict` / `internal-enterprise` / `open-source-default` |
 | `RETENTION_DAYS` | no (default 30) | you | trace-body retention window |
@@ -76,9 +76,31 @@ railway variables \
 Then point the SDK at `https://<your-app>.up.railway.app/api/stepstitch/v1/session` and
 the MCP connector at `…/api/stepstitch/v1` with `STEPSTITCH_TOKEN=$STEPSTITCH_ADMIN_TOKEN`.
 
-> Demo-grade auth: two shared bearer tokens. For production, replace `server/auth.py`'s
-> `build_auth` with a real JWT/OIDC verifier — no change to StepStitch core. Audit events
-> are logged in the demo host; persist them to a separate 5-year store for Reg S-P.
+> Demo-grade default: two shared bearer tokens (above). For FI / multi-operator
+> deployments, enable **per-operator SSO** below — StepStitch core is unchanged (auth is
+> host-injected). Audit events persist to the `stepstitch_audit` table (`make_db_audit`) on a
+> separate Reg S-P clock; under SSO each record carries the **real operator identity**, not a
+> shared `admin`.
+
+### Operator SSO (OIDC / Entra ID) + RBAC
+
+Set `STEPSTITCH_OIDC_ISSUER` to switch the operator surface from the shared admin token to
+**per-operator OIDC** (RS256, validated against the IdP's JWKS). **Entra ID** is the reference
+IdP; any OIDC issuer works. The SDK keeps using `STEPSTITCH_INGEST_TOKEN` (machine auth) —
+only the human operator/admin surface uses SSO.
+
+| Variable | Required (SSO) | Notes |
+|---|---|---|
+| `STEPSTITCH_OIDC_ISSUER` | yes | enables SSO; e.g. `https://login.microsoftonline.com/<tenant>/v2.0` |
+| `STEPSTITCH_OIDC_AUDIENCE` | yes | the API app-registration audience, e.g. `api://stepstitch` |
+| `STEPSTITCH_OIDC_JWKS_URI` | no | discovered from the issuer's OpenID config if unset |
+| `STEPSTITCH_OIDC_OPERATOR_ROLES` | no (default `stepstitch-operator`) | roles allowed on the read surface |
+| `STEPSTITCH_OIDC_ADMIN_ROLES` | no (default `stepstitch-admin`) | roles allowed to deliver / delete / purge (least privilege) |
+| `STEPSTITCH_OIDC_ROLES_CLAIM` | no (default `roles`) | JWT claim carrying roles (Entra **app roles**) |
+
+With SSO on, `STEPSTITCH_ADMIN_TOKEN` is not required. Map Entra app roles
+`stepstitch-operator` (read) and `stepstitch-admin` (destructive) to the relevant operator
+groups; an operator without `stepstitch-admin` is denied deliver/delete/purge (403).
 
 ## 2. Deployment posture — the `STEPSTITCH_PROFILE` knob
 
