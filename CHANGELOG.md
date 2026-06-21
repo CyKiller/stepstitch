@@ -4,6 +4,13 @@ All notable changes to StepStitch are recorded here. Versions are repo-wide tags
 SDK (`@stepstitch/tracker`) and the backend (`stepstitch_service`) are versioned in
 lockstep per `RELEASE.md`.
 
+## v0.4.2 — First public npm release
+
+- **Published to npm as `@stepstitch/tracker`**, provenance-signed and built by CI.
+- **Added `repository`, `homepage`, and `bugs` metadata** to `package.json` — required for
+  npm provenance attestation (sigstore verifies the declared repo) and surfaced on the
+  npm package page. (v0.4.1's publish was rejected for the missing `repository` field.)
+
 ## v0.4.1 — First public npm release
 
 - **Published to npm as `@stepstitch/tracker`.** First release available on the public
