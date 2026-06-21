@@ -1,11 +1,8 @@
-# Deploying StepStitch for a Voya pilot
+# Deploying StepStitch for a financial-services pilot
 
-This is the enablement runbook for a Voya (via Microsoft) design-partner pilot. StepStitch is
-open-source (Apache-2.0) and self-hosted; nothing here is Voya-specific in the product — it is
-a configuration guide for a regulated financial-services tenant.
-
-> Scope note: this is the **product** pilot. The Copilot World Cup competition entry
-> (StepDesk/StitchDesk) is a separate artifact and stays out of this repository.
+This is the enablement runbook for a regulated financial-services customer (via Microsoft)
+design-partner pilot. StepStitch is open-source (Apache-2.0) and self-hosted; nothing here is
+customer-specific in the product — it is a configuration guide for a regulated financial-services tenant.
 
 ## What StepStitch delivers in the pilot
 

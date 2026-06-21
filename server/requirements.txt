@@ -3,5 +3,5 @@
 fastapi>=0.104
 uvicorn[standard]>=0.30
 asyncpg>=0.29
-# Operator SSO: RS256 JWT verification against the IdP's JWKS (Entra ID reference).
+# Operator SSO: RS256 JWT verification against the OIDC issuer's JWKS.
 PyJWT[crypto]>=2.8

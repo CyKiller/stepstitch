@@ -62,7 +62,7 @@ def test_write_then_compile_roundtrip():
     client = TestClient(app)
 
     payload = {
-        "app_id": "marvox",
+        "app_id": "demo-app",
         "footsteps": [
             {"timestamp": "2026-06-02T00:00:00Z", "type": "click",
              "route": "/dashboard", "target": "#go", "label": "[masked]"}
