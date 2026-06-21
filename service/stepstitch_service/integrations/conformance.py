@@ -9,7 +9,7 @@ prove it respects the privacy seam: a draft must be flat, identity-safe, and det
 """
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from .base import (
     FORBIDDEN_DRAFT_KEYS,
@@ -25,7 +25,7 @@ _NPI_MARKERS = ("123-45-6789", "8675309", "data-testid")
 
 def sample_trace_summary() -> TraceSummary:
     """A representative, already-sanitized summary for conformance checks."""
-    footsteps = [
+    footsteps: List[Dict[str, Any]] = [
         {"timestamp": "t", "type": "navigation",
          "route": "/accounts/:id/distributions", "label": "[masked]"},
         {"timestamp": "t", "type": "api_error",

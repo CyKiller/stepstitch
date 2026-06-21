@@ -147,13 +147,13 @@ def generate_playwright_test(
         metadata = step.get("metadata") or {}
 
         nxt = footsteps[i + 1] if i + 1 < n else None
-        nxt_is_api = bool(nxt) and str(nxt.get("type", "")).lower() == "api_error"
+        nxt_is_api = nxt is not None and str(nxt.get("type", "")).lower() == "api_error"
 
         lines.append(f"  // [{step_type.upper()}] {_comment(route)}")
 
         # An interaction immediately followed by an API error: arm the response
         # wait BEFORE the action, then assert on the response after it.
-        if step_type in ("navigation", "click", "input") and nxt_is_api:
+        if step_type in ("navigation", "click", "input") and nxt_is_api and nxt is not None:
             api_meta = nxt.get("metadata") or {}
             endpoint = str(api_meta.get("endpoint", ""))
             status = _coerce_status(api_meta.get("status"))
@@ -162,7 +162,8 @@ def generate_playwright_test(
             lines += _arm_wait(var, _url_prefix(endpoint), method)
             emit_action(step_type, route, target, label)
             lines.append(
-                f"  // expected API failure: {_comment(endpoint)} (HTTP {api_meta.get('status', '?')})"
+                f"  // expected API failure: {_comment(endpoint)} "
+                f"(HTTP {api_meta.get('status', '?')})"
             )
             lines.append(f"  const res{resp_n} = await {var};")
             lines.append(_status_assertion(f"res{resp_n}", status, endpoint))
@@ -187,7 +188,8 @@ def generate_playwright_test(
                 else ""
             )
             lines.append(
-                f"  // expected API failure: {_comment(endpoint)} (HTTP {metadata.get('status', '?')})"
+                f"  // expected API failure: {_comment(endpoint)} "
+                f"(HTTP {metadata.get('status', '?')})"
             )
             lines.append(
                 f"  const res{resp_n} = await page.waitForResponse("

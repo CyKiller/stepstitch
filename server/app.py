@@ -7,14 +7,33 @@ directly instead.
 """
 from __future__ import annotations
 
+import asyncio
 import os
+import pathlib
 from contextlib import asynccontextmanager
 
 from .audit import make_db_audit
 from .auth import build_auth
-from .db import build_db_callables, ensure_schema
+from .db import build_db_callables
 from .host import build_app
 from .oidc import oidc_auth_from_env
+from .retention_job import logger as retention_logger
+from .retention_job import purge_interval_from_env, run_purge_loop
+
+_ALEMBIC_INI = pathlib.Path(__file__).resolve().parent / "alembic.ini"
+
+
+def _run_migrations() -> None:
+    """Apply Alembic ``upgrade head`` over the sync psycopg2 engine.
+
+    env.py reads DATABASE_URL from the environment, so this stays decoupled from the
+    asyncpg runtime pool. Run inside an executor so the sync work never blocks the loop.
+    """
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config(str(_ALEMBIC_INI))
+    command.upgrade(cfg, "head")
 
 
 class _PoolProxy:
@@ -58,15 +77,46 @@ def create_app_from_env():
         from stepstitch_service.integrations.bundle import default_draft_adapters
         draft_adapters = default_draft_adapters()
 
+    purge_interval = purge_interval_from_env()
+
     @asynccontextmanager
     async def lifespan(app):
         import asyncpg
 
         proxy.pool = await asyncpg.create_pool(dsn=database_url, min_size=1, max_size=10)
-        await ensure_schema(proxy.pool)
+        # Bring the schema to head before serving traffic. Migrations run on a sync
+        # psycopg2 engine (env.py reads DATABASE_URL), driven in a thread so the sync
+        # work doesn't block the event loop.
+        await asyncio.get_running_loop().run_in_executor(None, _run_migrations)
+        # Automatic retention enforcement: spawn the periodic body-purge loop after the
+        # schema is at head. RETENTION_PURGE_INTERVAL_SECONDS=0 disables it (operators
+        # who prefer the admin-triggered endpoint only).
+        purge_task = None
+        if purge_interval > 0:
+            purge_task = asyncio.create_task(
+                run_purge_loop(
+                    execute=execute,
+                    fetchone=fetchone,
+                    interval_seconds=purge_interval,
+                )
+            )
+        else:
+            retention_logger.info(
+                "stepstitch retention auto-purge disabled "
+                "(RETENTION_PURGE_INTERVAL_SECONDS=0)"
+            )
         try:
             yield
         finally:
+            # Cancel/await the purge task BEFORE closing the pool so an in-flight purge
+            # isn't cut off mid-query by a closed pool. The loop re-raises CancelledError,
+            # which we swallow here so shutdown stays clean.
+            if purge_task is not None:
+                purge_task.cancel()
+                try:
+                    await purge_task
+                except asyncio.CancelledError:
+                    pass
             await proxy.pool.close()
 
     return build_app(

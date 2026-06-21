@@ -62,7 +62,7 @@ def discovered_draft_adapters() -> List[DraftAdapter]:
     if hasattr(eps, "select"):  # Python 3.10+
         selected = eps.select(group=_ADAPTER_ENTRY_POINT_GROUP)
     else:  # Python 3.9 returns a dict keyed by group
-        selected = eps.get(_ADAPTER_ENTRY_POINT_GROUP, [])  # type: ignore[attr-defined]
+        selected = eps.get(_ADAPTER_ENTRY_POINT_GROUP, [])  # type: ignore[attr-defined,arg-type]
 
     for ep in selected:
         try:
