@@ -56,7 +56,7 @@ export function Nav() {
               target="_blank"
               rel="noreferrer"
               aria-label="StepStitch on GitHub"
-              className="hidden size-9 place-items-center rounded-full border border-line text-muted transition-colors hover:border-fg/30 hover:text-fg sm:grid"
+              className="hidden size-11 place-items-center rounded-full border border-line text-muted transition-colors hover:border-fg/30 hover:text-fg sm:grid"
             >
               <GithubLogo size={17} weight="bold" />
             </a>
