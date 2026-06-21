@@ -25,7 +25,12 @@ from .github_bridge.content import branch_name, regression_test_path
 from .integrations.base import DraftAdapter, build_trace_summary, export_preview
 from .replayability import score_trace
 from .retention import purge_expired_traces
-from .scrubber import FINANCIAL_SERVICES_ENTERPRISE, ScrubPolicy, ScrubRejection, scrub_trace_payload
+from .scrubber import (
+    FINANCIAL_SERVICES_ENTERPRISE,
+    ScrubPolicy,
+    ScrubRejection,
+    scrub_trace_payload,
+)
 from .verification.verdict import ALL_VERDICTS, derive_verdict
 
 logger = logging.getLogger("stepstitch")

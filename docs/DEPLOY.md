@@ -102,6 +102,47 @@ With SSO on, `STEPSTITCH_ADMIN_TOKEN` is not required. Map the issuer's roles
 `stepstitch-operator` (read) and `stepstitch-admin` (destructive) to the relevant operator
 groups; an operator without `stepstitch-admin` is denied deliver/delete/purge (403).
 
+### Database migrations
+
+The schema is managed by **Alembic** (`server/migrations/`). The ingest host runs
+`alembic upgrade head` automatically at startup (in the FastAPI `lifespan`, before it
+serves traffic), so a fresh `DATABASE_URL` is provisioned on first deploy with no manual
+step. Migrations run on a sync psycopg2 engine and are independent of the asyncpg runtime
+pool.
+
+To apply migrations manually (e.g. against a new environment):
+
+```bash
+cd server
+DATABASE_URL=postgresql://user:pass@host:5432/db alembic upgrade head
+```
+
+To author a new revision:
+
+```bash
+cd server
+DATABASE_URL=... alembic revision -m "describe the change"   # creates versions/<rev>.py
+# edit the generated upgrade()/downgrade(), then:
+DATABASE_URL=... alembic upgrade head
+```
+
+The baseline revision `0001` applies `server.db.SCHEMA_SQL` verbatim, so the migrated
+schema is identical to the idempotent `ensure_schema` used by the test harness.
+
+**Adopting Alembic on an existing (pre-Alembic) database.** A database created by an
+earlier release already has the three tables but no `alembic_version` row. The baseline is
+written with `CREATE TABLE IF NOT EXISTS`, so the first boot on this release stamps the DB
+to `0001` cleanly with no data loss. To keep the version table honest, **ship this
+baseline-bearing release on its own and let every environment boot on it once (so each DB
+is stamped to `0001`) before introducing any `0002`.** For a live DB you can pre-stamp
+without running DDL: `cd server && DATABASE_URL=... alembic stamp head`.
+
+**Multiple instances starting at once.** The baseline is fully idempotent, so concurrent
+startups are safe. A *future non-idempotent* migration (e.g. an `ALTER TABLE` or a
+backfill) is not — two instances racing `upgrade head` could both attempt it. For such
+migrations, run them as a one-shot job / init step (not in every instance's `lifespan`),
+or guard `command.upgrade` with a Postgres advisory lock.
+
 ## 2. Deployment posture — the `STEPSTITCH_PROFILE` knob
 
 A profile is a named scrub posture; it may only *tighten* the privacy boundary, never

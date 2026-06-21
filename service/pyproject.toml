@@ -25,7 +25,8 @@ delivery = ["httpx>=0.27"]
 github = ["httpx>=0.27"]
 # Architecture/layering boundary enforcement (docs/PRODUCT-PLAN.md P3). The boundary is also
 # proven dependency-free by tests/test_open_core_boundary.py; this is for CI `lint-imports`.
-lint = ["import-linter>=2.0"]
+# ruff/mypy are pinned-floor here so CI installs blocking-gate versions (no ad-hoc installs).
+lint = ["import-linter>=2.0", "ruff>=0.6", "mypy>=1.8"]
 
 [tool.setuptools]
 # All Apache-2.0. The concrete adapters (integrations.bundle + servicenow/salesforce/genesys)
@@ -76,3 +77,25 @@ forbidden_modules = [
     "stepstitch_service.integrations.genesys",
     "stepstitch_service.integrations.bundle",
 ]
+
+# Lint gate (blocking in CI). Intentionally small + stable rule set: pycodestyle errors (E),
+# pyflakes (F), and isort import ordering (I). Not a style crusade — just correctness + order.
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# workflow.py is a single raw-string literal: the verbatim GitHub Actions YAML we emit into
+# customers' repos. Its long lines (curl/python one-liners) cannot be reflowed without changing
+# the generated workflow, so E501 is intentionally not enforced on this template file.
+"stepstitch_service/github_bridge/workflow.py" = ["E501"]
+
+# Type gate (blocking in CI), scoped to the service package only. Non-strict baseline:
+# we do NOT enable disallow_untyped_defs etc. — the goal is a real, green floor we can ratchet up.
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = false
