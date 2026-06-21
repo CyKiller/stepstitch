@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from jwt.algorithms import RSAAlgorithm
 
 from server.host import build_app
-from server.oidc import OidcVerifier, build_oidc_auth
+from server.oidc import OidcVerifier, build_oidc_auth, require_roles
 
 ISS = "https://login.microsoftonline.com/voya/v2.0"
 AUD = "api://stepstitch"
@@ -166,3 +166,40 @@ def test_two_operators_recorded_as_distinct_audit_actors():
         assert r.status_code == 200
 
     assert {"alice@voya.com", "bob@voya.com"} <= set(actors)
+
+
+def test_rbac_operator_can_read_but_not_delete_admin_can():
+    priv, jwks = _keypair()
+    verifier = OidcVerifier(issuer=ISS, audience=AUD, jwks=jwks)
+    # Read surface accepts operator+admin; destructive ops require admin only.
+    get_user_id, require_admin = build_oidc_auth(
+        verifier, admin_roles=["stepstitch-operator", "stepstitch-admin"], ingest_token="ing")
+    require_destructive = require_roles(verifier, ["stepstitch-admin"])
+    db = _DB()
+
+    async def audit(action, actor, detail):
+        pass
+
+    app = build_app(
+        get_user_id=get_user_id, require_admin=require_admin,
+        require_destructive=require_destructive,
+        execute=db.execute, fetchone=db.fetchone, fetchall=db.fetchall, audit=audit)
+    client = TestClient(app)
+
+    operator = "Bearer " + _token(priv, sub="op", email="op@voya.com",
+                                  roles=["stepstitch-operator"])
+    admin = "Bearer " + _token(priv, sub="ad", email="ad@voya.com",
+                               roles=["stepstitch-admin"])
+
+    tid = client.post(f"{_PFX}/session", json=_PAYLOAD,
+                      headers={"Authorization": "Bearer ing"}).json()["trace_id"]
+
+    # Operator can read the trace...
+    assert client.get(f"{_PFX}/session/{tid}/summary",
+                      headers={"Authorization": operator}).status_code == 200
+    # ...but cannot delete (least privilege)...
+    assert client.delete(f"{_PFX}/session/by-user/someone",
+                         headers={"Authorization": operator}).status_code == 403
+    # ...while an admin can.
+    assert client.delete(f"{_PFX}/session/by-user/someone",
+                         headers={"Authorization": admin}).status_code == 200

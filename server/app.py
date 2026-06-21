@@ -44,8 +44,9 @@ def create_app_from_env():
     proxy = _PoolProxy()
     # FI-grade deployments set STEPSTITCH_OIDC_ISSUER -> per-operator SSO (Entra ID is the
     # reference IdP); otherwise fall back to the demo shared-bearer admin token.
+    require_destructive = None
     if os.environ.get("STEPSTITCH_OIDC_ISSUER"):
-        get_user_id, require_admin = oidc_auth_from_env(ingest_token)
+        get_user_id, require_admin, require_destructive = oidc_auth_from_env(ingest_token)
     else:
         get_user_id, require_admin = build_auth(
             os.environ["STEPSTITCH_ADMIN_TOKEN"], ingest_token)
@@ -71,6 +72,7 @@ def create_app_from_env():
     return build_app(
         get_user_id=get_user_id,
         require_admin=require_admin,
+        require_destructive=require_destructive,
         execute=execute,
         fetchone=fetchone,
         fetchall=fetchall,

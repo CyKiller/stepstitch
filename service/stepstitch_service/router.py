@@ -109,6 +109,7 @@ def create_stepstitch_router(
     *,
     get_user_id: Callable[..., Any],
     require_admin: Callable[..., Any],
+    require_destructive: Optional[Callable[..., Any]] = None,
     execute: ExecuteFn,
     fetchone: FetchOneFn,
     fetchall: FetchAllFn,
@@ -155,6 +156,10 @@ def create_stepstitch_router(
     adapters: List[DraftAdapter] = list(draft_adapters or [])
     # Optional governed direct-write. Disabled unless the host injects writers.
     delivery = DeliveryService(record_writers)
+    # Destructive ops (deliver / delete-by-user / purge) may require a stricter gate than
+    # the read surface (least privilege). A host injects require_destructive — e.g. an
+    # admin-role check — and it falls back to require_admin (unchanged single-tier behavior).
+    require_destructive = require_destructive or require_admin
 
     async def _audit(action: str, actor_id: str, detail: Dict[str, Any]) -> None:
         if audit is not None:
@@ -458,7 +463,7 @@ def create_stepstitch_router(
     async def post_deliver(
         trace_id: str,
         payload: DeliverPayload,
-        admin: Any = Depends(require_admin),
+        admin: Any = Depends(require_destructive),
         dry_run: bool = Query(True),
     ) -> Dict[str, Any]:
         # OPTIONAL governed direct-write. NOT an agent tool. Sends only the sanitized
@@ -679,7 +684,7 @@ def create_stepstitch_router(
     @router.delete("/session/by-user/{target_user_id}")
     async def delete_user_traces(
         target_user_id: str,
-        admin: Any = Depends(require_admin),
+        admin: Any = Depends(require_destructive),
     ) -> Dict[str, Any]:
         # Right-to-delete: remove trace bodies; the deletion itself is audit-logged.
         await execute("DELETE FROM stepstitch_traces WHERE user_id = ?", (target_user_id,))
@@ -689,7 +694,7 @@ def create_stepstitch_router(
 
     @router.post("/maintenance/purge-expired")
     async def purge_expired(
-        admin: Any = Depends(require_admin),
+        admin: Any = Depends(require_destructive),
     ) -> Dict[str, Any]:
         # Split-retention cleanup: purge trace BODIES past their window. The audit
         # record of this purge is retained on the separate 5-year clock.
