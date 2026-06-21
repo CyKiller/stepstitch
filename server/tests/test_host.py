@@ -94,6 +94,17 @@ def test_dashboard_served_readonly():
     assert "read-only operator view" in body
 
 
+def test_dashboard_links_scheme_gated_and_no_inline_onclick():
+    # Defense-in-depth for the operator UI: links are scheme-gated + attribute-escaped,
+    # and no trace_id is interpolated into inline onclick markup.
+    client, _ = _client()
+    body = client.get("/dashboard").text
+    assert "safeUrl(" in body and "escAttr(runUrl)" in body
+    # Old sinks must stay gone: unescaped run_url href + trace_id in inline onclick.
+    assert "esc(v.run_url)" not in body
+    assert 'onclick="ssRepro' not in body
+
+
 def test_ingest_requires_bearer():
     client, _ = _client()
     assert client.post(f"{_PFX}/session", json=_PAYLOAD).status_code == 401

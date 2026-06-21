@@ -57,6 +57,7 @@ DASHBOARD_HTML = r"""<!doctype html>
   <input id="token" type="password" placeholder="admin bearer token" size="28" autocomplete="off">
   <button id="save">Use token</button>
   <button id="reload" class="primary">Load traces</button>
+  <button id="corpus">Show Corpus</button>
 </header>
 <div class="wrap">
   <div class="list" id="list"><div class="row muted">Paste the admin token, then “Load traces”.</div></div>
@@ -75,10 +76,17 @@ DASHBOARD_HTML = r"""<!doctype html>
     sessionStorage.setItem("ss_token", tokenEl.value.trim());
   };
   document.getElementById("reload").onclick = loadTraces;
+  document.getElementById("corpus").onclick = loadCorpus;
 
   function hdr() { return { "Authorization": "Bearer " + (tokenEl.value.trim()) }; }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>]/g, function (c) {
     return { "&":"&amp;", "<":"&lt;", ">":"&gt;" }[c]; }); }
+  // esc() is HTML-text-only. Use escAttr() for any value placed inside a quoted attribute,
+  // and safeUrl() to gate hrefs to http(s) so a javascript:/data: scheme can never execute.
+  function escAttr(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+    return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]; }); }
+  function safeUrl(u) { u = String(u == null ? "" : u).trim();
+    return /^https?:\/\//i.test(u) ? u : ""; }
 
   async function api(path, opts) {
     var r = await fetch(API + path, Object.assign({ headers: hdr() }, opts || {}));
@@ -105,6 +113,25 @@ DASHBOARD_HTML = r"""<!doctype html>
     } catch (e) { listEl.innerHTML = '<div class="row err">' + esc(e.message) + '</div>'; }
   }
 
+  async function loadCorpus() {
+    listEl.innerHTML = '<div class="row muted">Loading Corpus…</div>';
+    try {
+      var data = await api("/corpus?limit=100");
+      var items = data.entries || [];
+      if (!items.length) { listEl.innerHTML = '<div class="row muted">No verified fixes in corpus.</div>'; return; }
+      listEl.innerHTML = "";
+      items.forEach(function (it) {
+        var d = document.createElement("div");
+        d.className = "row";
+        var fixText = it.fix_ref ? ' · Fix: ' + it.fix_ref : '';
+        d.innerHTML = '<div class="id">' + esc(it.trace_id) + '</div>' +
+          '<div class="meta"><span style="color:var(--ok)">' + esc(it.verdict) + '</span>' + esc(fixText) + '</div>';
+        d.onclick = function () { select(it.trace_id, d); };
+        listEl.appendChild(d);
+      });
+    } catch (e) { listEl.innerHTML = '<div class="row err">' + esc(e.message) + '</div>'; }
+  }
+
   function card(title, bodyHtml) {
     return '<div class="card"><h3>' + esc(title) + '</h3>' + bodyHtml + '</div>';
   }
@@ -118,18 +145,39 @@ DASHBOARD_HTML = r"""<!doctype html>
       var rep = await api("/session/" + id + "/replayability");
       var pp = await api("/session/" + id + "/privacy-posture");
       var diag = await api("/session/" + id + "/diagnostic-summary");
+      var verif = await api("/session/" + id + "/verifications").catch(function() { return { verifications: [] }; });
       var sm = s.summary || {};
       var rr = rep.replayability || {};
       var html = "";
       html += '<div class="actions">' +
-        '<button onclick="ssRepro(\'' + id + '\')">View Playwright repro</button>' +
-        '<button onclick="ssDrafts(\'' + id + '\')">Preview drafts</button>' +
-        '<button onclick="ssDeliver(\'' + id + '\')">Dry-run deliver</button>' +
+        '<button id="act-repro">View Playwright repro</button>' +
+        '<button id="act-drafts">Preview drafts</button>' +
+        '<button id="act-deliver">Dry-run deliver</button>' +
         '</div>';
       html += card("Summary",
         '<div>' + esc(sm.headline || "") + '</div>' +
         '<div class="muted">route ' + esc(sm.route) + ' · steps ' + esc(sm.step_count) +
         ' · ' + esc(sm.privacy_status || "") + '</div>');
+
+      var vhtml = "";
+      var vlist = verif.verifications || [];
+      if (vlist.length) {
+        var current = vlist[0];
+        var color = current.verdict === "confirmed_fixed" ? "var(--ok)" : "var(--warn)";
+        vhtml += '<div>Status: <span style="font-weight:700;color:' + color + '">' + esc(current.verdict) + '</span></div>';
+        vhtml += '<ul style="margin:8px 0 0;padding-left:20px;font-size:12px;color:var(--mut)">';
+        vlist.forEach(function (v) {
+          var ref = v.fix_ref ? ' (Fix: ' + v.fix_ref + ')' : '';
+          var runUrl = safeUrl(v.run_url);
+          var link = runUrl ? ' · <a href="' + escAttr(runUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--acc)">CI Run</a>' : '';
+          vhtml += '<li style="margin-bottom:4px"><strong>' + esc(v.verdict) + '</strong>' + esc(ref) + link + ' · ' + esc(v.created_at || "") + '</li>';
+        });
+        vhtml += '</ul>';
+      } else {
+        vhtml += '<div class="muted">No verification runs recorded yet. Run the Playwright test in CI to report results.</div>';
+      }
+      html += card("Verification & Fix Status", vhtml);
+
       html += card("Replayability",
         '<span class="grade">' + esc(rr.grade) + '</span> · score ' + esc(rr.score) +
         (rr.warnings && rr.warnings.length ? '<pre>' + esc(JSON.stringify(rr.warnings, null, 2)) + '</pre>' : ''));
@@ -138,6 +186,10 @@ DASHBOARD_HTML = r"""<!doctype html>
       html += card("Privacy posture",
         '<pre>' + esc(JSON.stringify(pp.never_captured || [], null, 2)) + '</pre>');
       detailEl.innerHTML = html;
+      // Wire actions via closures (no trace_id interpolated into inline onclick markup).
+      document.getElementById("act-repro").onclick = function () { ssRepro(id); };
+      document.getElementById("act-drafts").onclick = function () { ssDrafts(id); };
+      document.getElementById("act-deliver").onclick = function () { ssDeliver(id); };
     } catch (e) { detailEl.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
   }
 
