@@ -1,5 +1,6 @@
 # StepStitch
 
+[![npm](https://img.shields.io/npm/v/@stepstitch/tracker?color=cb3837&logo=npm)](https://www.npmjs.com/package/@stepstitch/tracker)
 [![CI](https://github.com/CyKiller/stepstitch/actions/workflows/ci.yml/badge.svg)](https://github.com/CyKiller/stepstitch/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/CyKiller/stepstitch/actions/workflows/codeql.yml/badge.svg)](https://github.com/CyKiller/stepstitch/actions/workflows/codeql.yml)
 [![Release](https://img.shields.io/github/v/release/CyKiller/stepstitch?sort=semver&color=10b981)](https://github.com/CyKiller/stepstitch/releases)
