@@ -63,7 +63,7 @@ DASHBOARD_HTML = r"""<!doctype html>
   <div class="list" id="list"><div class="row muted">Paste the admin token, then “Load traces”.</div></div>
   <div class="detail" id="detail"><p class="muted">Select a trace to inspect its sanitized evidence.</p></div>
 </div>
-<script>
+<script nonce="__CSP_NONCE__">
 (function () {
   var API = "/api/stepstitch/v1";
   var tokenEl = document.getElementById("token");

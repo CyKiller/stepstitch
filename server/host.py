@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import secrets
 import time
 from typing import Any, Awaitable, Callable, List, Optional
 
@@ -84,6 +85,11 @@ def build_app(
             "evt": "http", "method": request.method, "route": route_path,
             "status": response.status_code, "ms": round(elapsed * 1000, 2),
         }))
+        # Baseline hardening on every response (a route may set stricter ones, e.g. the
+        # dashboard's CSP). setdefault so a handler-supplied header is never clobbered.
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("X-Frame-Options", "DENY")
         return response
 
     @app.get("/healthz")
@@ -94,10 +100,24 @@ def build_app(
     async def metrics_endpoint() -> str:
         return metrics.render()
 
-    @app.get("/dashboard", response_class=HTMLResponse)
-    async def dashboard() -> str:
+    @app.get("/dashboard")
+    async def dashboard() -> HTMLResponse:
         # Read-only operator UI; calls only the read/draft endpoints with the admin token
-        # the operator supplies in the browser. No data is embedded server-side.
-        return DASHBOARD_HTML
+        # the operator supplies in the browser. No data is embedded server-side. A per-
+        # request nonce gates the single inline <script>; default-src 'none' blocks every
+        # other resource load, shrinking the blast radius of any markup-injection bug.
+        nonce = secrets.token_urlsafe(16)
+        html = DASHBOARD_HTML.replace("__CSP_NONCE__", nonce)
+        csp = (
+            "default-src 'none'; "
+            f"script-src 'nonce-{nonce}'; "
+            "style-src 'unsafe-inline'; "
+            "connect-src 'self'; "
+            "img-src 'self' data:; "
+            "base-uri 'none'; "
+            "frame-ancestors 'none'; "
+            "form-action 'none'"
+        )
+        return HTMLResponse(content=html, headers={"Content-Security-Policy": csp})
 
     return app
