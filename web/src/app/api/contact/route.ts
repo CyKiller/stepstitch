@@ -8,6 +8,11 @@ type ContactBody = {
 };
 
 function valid(email: string): boolean {
+  // Bound the input before the regex runs. The pattern has adjacent `[^\s@]+`
+  // groups around the literal dot, so an unbounded adversarial string could
+  // trigger polynomial backtracking (ReDoS, CWE-1333). 320 is the RFC 5321
+  // maximum address length, so this rejects nothing a real email needs.
+  if (email.length > 320) return false;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
