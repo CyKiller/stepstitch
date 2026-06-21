@@ -44,7 +44,7 @@ export function Agentic() {
         body="StepStitch is a capability provider, not an agent orchestrator. One MCP server surfaces eight read-only and draft tools. Any agent network consumes them. The autonomy lives in your stack."
       />
 
-      <div className="mt-12 grid gap-5 lg:grid-cols-2">
+      <div className="mt-12 grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Reveal>
           <div className="h-full rounded-2xl border border-line bg-surface p-6">
             <div className="flex items-center gap-2.5">
