@@ -94,6 +94,35 @@ def test_dashboard_served_readonly():
     assert "read-only operator view" in body
 
 
+def test_dashboard_sets_csp_with_per_request_nonce_and_security_headers():
+    import re
+
+    client, _ = _client()
+    r = client.get("/dashboard")
+    csp = r.headers.get("content-security-policy", "")
+    assert "default-src 'none'" in csp
+    m = re.search(r"script-src 'nonce-([^']+)'", csp)
+    assert m, "CSP must pin the inline script to a nonce"
+    # The served HTML carries that exact nonce on its single <script>, and the
+    # placeholder is fully substituted.
+    assert 'nonce="' + m.group(1) + '"' in r.text
+    assert "__CSP_NONCE__" not in r.text
+    # Baseline hardening headers are present on the response.
+    assert r.headers.get("x-content-type-options") == "nosniff"
+    assert r.headers.get("x-frame-options") == "DENY"
+    assert r.headers.get("referrer-policy") == "no-referrer"
+    # Nonce is per-request (not a fixed constant).
+    r2 = client.get("/dashboard")
+    assert r2.headers["content-security-policy"] != csp
+
+
+def test_security_headers_on_non_dashboard_response():
+    client, _ = _client()
+    r = client.get("/healthz")
+    assert r.headers.get("x-content-type-options") == "nosniff"
+    assert r.headers.get("x-frame-options") == "DENY"
+
+
 def test_dashboard_links_scheme_gated_and_no_inline_onclick():
     # Defense-in-depth for the operator UI: links are scheme-gated + attribute-escaped,
     # and no trace_id is interpolated into inline onclick markup.
