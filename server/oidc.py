@@ -99,6 +99,36 @@ class OidcVerifier:
         return [raw] if isinstance(raw, str) else list(raw)
 
 
+def require_roles(
+    verifier: OidcVerifier, roles: Iterable[str]
+) -> Callable[..., Dict[str, Any]]:
+    """A FastAPI dependency that verifies the JWT and requires one of ``roles``.
+
+    Returns the rich actor dict ``{user_id, sub, email, roles}`` so the router's
+    ``_actor_id`` records the real operator on every audited action.
+    """
+    allowed = {r for r in roles if r}
+    if not allowed:
+        raise ValueError("roles must be non-empty")
+
+    def dependency(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
+        token = _bearer(authorization)
+        if not token:
+            raise HTTPException(status_code=401, detail="bearer token required")
+        claims = verifier.verify(token)
+        granted = verifier.roles(claims)
+        if not (allowed & set(granted)):
+            raise HTTPException(status_code=403, detail="insufficient role")
+        return {
+            "user_id": verifier.identity(claims),
+            "sub": claims.get("sub"),
+            "email": claims.get("email"),
+            "roles": granted,
+        }
+
+    return dependency
+
+
 def build_oidc_auth(
     verifier: OidcVerifier,
     *,
@@ -107,30 +137,13 @@ def build_oidc_auth(
 ) -> Tuple[Callable[..., Any], Callable[..., Any]]:
     """Return ``(get_user_id, require_admin)`` — OIDC operators, machine-token ingest.
 
-    ``require_admin`` returns a rich actor dict ``{user_id, sub, email, roles}``; the
-    router's ``_actor_id`` records ``user_id`` (the real operator) on every audited action.
-    The ``roles`` it carries are what WS-B's RBAC step gates destructive ops on.
+    ``require_admin`` gates the operator/read surface on ``admin_roles``. For least-privilege
+    on destructive ops, build a narrower ``require_roles(verifier, admin_only)`` and inject it
+    as the router's ``require_destructive`` (``oidc_auth_from_env`` does this).
     """
     if not ingest_token:
         raise ValueError("ingest_token must be set (machine auth for trace ingestion)")
-    admin_role_set = {r for r in admin_roles if r}
-    if not admin_role_set:
-        raise ValueError("admin_roles must be non-empty")
-
-    def require_admin(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
-        token = _bearer(authorization)
-        if not token:
-            raise HTTPException(status_code=401, detail="bearer token required")
-        claims = verifier.verify(token)
-        roles = verifier.roles(claims)
-        if not (admin_role_set & set(roles)):
-            raise HTTPException(status_code=403, detail="insufficient role")
-        return {
-            "user_id": verifier.identity(claims),
-            "sub": claims.get("sub"),
-            "email": claims.get("email"),
-            "roles": roles,
-        }
+    require_admin = require_roles(verifier, admin_roles)
 
     def get_user_id(authorization: Optional[str] = Header(default=None)) -> str:
         if _bearer(authorization) != ingest_token:
@@ -145,12 +158,22 @@ def _fetch_json(url: str) -> Dict[str, Any]:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def oidc_auth_from_env(ingest_token: str) -> Tuple[Callable[..., Any], Callable[..., Any]]:
+def _roles_env(name: str, default: str) -> List[str]:
+    return [r.strip() for r in os.environ.get(name, default).split(",") if r.strip()]
+
+
+def oidc_auth_from_env(
+    ingest_token: str,
+) -> Tuple[Callable[..., Any], Callable[..., Any], Callable[..., Any]]:
     """Build OIDC auth from environment (deployment wiring; does the one-time JWKS fetch).
+
+    Returns ``(get_user_id, require_admin, require_destructive)`` — least-privilege RBAC:
+    operators read; only admins deliver/delete/purge.
 
     Env: ``STEPSTITCH_OIDC_ISSUER`` (required), ``STEPSTITCH_OIDC_AUDIENCE`` (required),
     ``STEPSTITCH_OIDC_JWKS_URI`` (optional; else discovered from the issuer),
-    ``STEPSTITCH_OIDC_ADMIN_ROLES`` (comma-list; default ``stepstitch-operator``),
+    ``STEPSTITCH_OIDC_OPERATOR_ROLES`` (read surface; default ``stepstitch-operator``),
+    ``STEPSTITCH_OIDC_ADMIN_ROLES`` (destructive ops; default ``stepstitch-admin``),
     ``STEPSTITCH_OIDC_ROLES_CLAIM`` (default ``roles``).
     """
     issuer = os.environ["STEPSTITCH_OIDC_ISSUER"]
@@ -159,15 +182,18 @@ def oidc_auth_from_env(ingest_token: str) -> Tuple[Callable[..., Any], Callable[
     if not jwks_uri:
         disco = _fetch_json(issuer.rstrip("/") + "/.well-known/openid-configuration")
         jwks_uri = disco["jwks_uri"]
-    admin_roles = [
-        r.strip()
-        for r in os.environ.get("STEPSTITCH_OIDC_ADMIN_ROLES", "stepstitch-operator").split(",")
-        if r.strip()
-    ]
+    operator_roles = _roles_env("STEPSTITCH_OIDC_OPERATOR_ROLES", "stepstitch-operator")
+    admin_roles = _roles_env("STEPSTITCH_OIDC_ADMIN_ROLES", "stepstitch-admin")
     verifier = OidcVerifier(
         issuer=issuer,
         audience=audience,
         jwks=_fetch_json(jwks_uri),
         roles_claim=os.environ.get("STEPSTITCH_OIDC_ROLES_CLAIM", "roles"),
     )
-    return build_oidc_auth(verifier, admin_roles=admin_roles, ingest_token=ingest_token)
+    # Admins can also read, so the read gate accepts both role sets; destructive ops
+    # require an admin role only.
+    get_user_id, require_admin = build_oidc_auth(
+        verifier, admin_roles=set(operator_roles) | set(admin_roles), ingest_token=ingest_token
+    )
+    require_destructive = require_roles(verifier, admin_roles)
+    return get_user_id, require_admin, require_destructive
