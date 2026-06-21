@@ -28,6 +28,7 @@ def build_app(
     *,
     get_user_id: Callable[..., Any],
     require_admin: Callable[..., Any],
+    require_destructive: Optional[Callable[..., Any]] = None,
     execute: Callable[..., Awaitable[Any]],
     fetchone: Callable[..., Awaitable[Any]],
     fetchall: Callable[..., Awaitable[Any]],
@@ -53,6 +54,7 @@ def build_app(
     router = create_stepstitch_router(
         get_user_id=get_user_id,
         require_admin=require_admin,
+        require_destructive=require_destructive,
         execute=execute,
         fetchone=fetchone,
         fetchall=fetchall,
