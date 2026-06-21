@@ -84,7 +84,7 @@ def _build():
 
 def _ingest(client):
     payload = {
-        "app_id": "marvox",
+        "app_id": "demo-app",
         "project_id": "proj-1",
         "explanation": "Submit failed, my SSN 123-45-6789",
         "footsteps": [

@@ -80,7 +80,7 @@ def test_golden_path_end_to_end():
 
     # 1. INGEST a hostile report — raw NPI in free text, raw id in route.
     ingest = client.post(f"{_PFX}/session", json={
-        "app_id": "marvox",
+        "app_id": "demo-app",
         "project_id": "proj-1",
         "explanation": "checkout broke; my SSN 123-45-6789, email me@bank.com",
         "footsteps": [

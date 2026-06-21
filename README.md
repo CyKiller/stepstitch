@@ -145,4 +145,4 @@ for the self-host incident-response notes.
 - **System-of-record integrations** — `docs/integrations/servicenow.md`,
   `docs/integrations/salesforce.md` (incl. the optional governed direct-write)
 - **Deploy & release** — `docs/DEPLOY.md`, `RELEASE.md` (automated via release-please + publish-on-tag)
-- **Pilot** — `docs/targets/voya.md`; status ledger `docs/STATUS.md`; plan `docs/PRODUCT-PLAN.md`
+- **Pilot** — `docs/targets/financial-services-pilot.md`; status ledger `docs/STATUS.md`; plan `docs/PRODUCT-PLAN.md`

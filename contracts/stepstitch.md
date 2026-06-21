@@ -48,7 +48,7 @@ Redaction rules (enforced in `src/redaction.ts`, proven in
 ```jsonc
 // request
 {
-  "app_id": "marvox",
+  "app_id": "demo-app",
   "project_id": "proj-1 | null",
   "explanation": "user-authored bug text | null",
   "footsteps": [ /* UserFootstep[] */ ],
@@ -218,7 +218,7 @@ and purge stay available so operators can still respond. This complements the SD
 - **Trace bodies** (`footsteps`, `explanation`): short TTL via `retention_expires_at`,
   purged by the `purge_expired_traces` cleanup path — exposed as the admin
   `POST /maintenance/purge-expired` endpoint and runnable from a periodic host job
-  (Marvox mirrors its job-cleanup loop). Minimizes NPI exposure.
+  (a host app can mirror its job-cleanup loop). Minimizes NPI exposure.
 - **Access/audit records:** retained 5 years (SEC Reg S-P 2024), stored separately so
   erasing a body never destroys the record of who touched it.
 - **Right-to-delete:** delete-by-user removes bodies; the deletion audit record is kept.

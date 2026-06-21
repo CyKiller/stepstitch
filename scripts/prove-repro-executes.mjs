@@ -3,7 +3,7 @@
  * End-to-end executable-repro proof (plan §7: "run the generated Playwright locally
  * and confirm it executes").
  *
- * Hermetic — no Postgres, no auth, no Marvox stack:
+ * Hermetic — no Postgres, no auth, no host-app stack:
  *   1. Serve a tiny DOM fixture (a page with the selectors a real trace would target).
  *   2. Run the REAL Python compiler (pure stdlib) on a structural footstep set.
  *   3. Execute the generated Playwright spec in headless Chromium against the fixture.
