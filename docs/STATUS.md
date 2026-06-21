@@ -18,6 +18,7 @@ test is `service/tests/test_golden_path.py`.
 | Privacy-by-default SDK + redaction | `src/` | `tests/redaction-proof.test.ts` |
 | Deterministic Playwright compiler | `service/.../compiler.py` | `service/tests/test_compiler.py`, `scripts/prove-repro-executes.mjs` |
 | Decoupled router (host injects auth/DB) | `service/.../router.py` | `service/tests/test_router_smoke.py` |
+| **Per-operator OIDC SSO + RBAC (host)** | `server/oidc.py` (RS256/JWKS verifier + `require_roles`); `router.py` injected `require_destructive` | `server/tests/test_oidc.py` (real audit actor per operator; operator denied destructive, admin allowed) + `server/tests/test_pg_integration.py` (real Postgres) |
 | Consent / GPC / DNT, kill switch, split retention | SDK + `router.py` + `retention.py` | router + retention tests |
 | **Server-side scrubber (NPI trust boundary)** | `scrubber.py` | `test_scrubber.py` |
 | **Replayability score** | `replayability.py` | `test_replayability.py` |
@@ -35,7 +36,7 @@ test is `service/tests/test_golden_path.py`.
 | Supply chain (SBOM, SRI, signed tag) | `scripts/`, `RELEASE.md` | `sbom.cdx.json`, release tag |
 | Marvox reference integration | re-vendored @ v0.3.0 | Marvox `test_stepstitch_*` (incl. real-Postgres proof) |
 
-Gates: **99 service + 22 SDK tests green; type-check clean; executable repro proof green; import-linter contract KEPT.**
+Gates: **169 service + 25 host (incl. OIDC/RBAC + real-Postgres) + 22 SDK tests green; type-check clean; executable repro proof green; import-linter contract KEPT.**
 
 ## Architecture decision: StepStitch core, integrations via Copilot
 
