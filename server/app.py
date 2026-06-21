@@ -14,6 +14,7 @@ from .audit import make_db_audit
 from .auth import build_auth
 from .db import build_db_callables, ensure_schema
 from .host import build_app
+from .oidc import oidc_auth_from_env
 
 
 class _PoolProxy:
@@ -33,7 +34,6 @@ class _PoolProxy:
 
 def create_app_from_env():
     database_url = os.environ["DATABASE_URL"]
-    admin_token = os.environ["STEPSTITCH_ADMIN_TOKEN"]
     ingest_token = os.environ["STEPSTITCH_INGEST_TOKEN"]
     profile = os.environ.get("STEPSTITCH_PROFILE", "financial-services-enterprise")
     retention_days = int(os.environ.get("RETENTION_DAYS", "30"))
@@ -42,7 +42,13 @@ def create_app_from_env():
     )
 
     proxy = _PoolProxy()
-    get_user_id, require_admin = build_auth(admin_token, ingest_token)
+    # FI-grade deployments set STEPSTITCH_OIDC_ISSUER -> per-operator SSO (Entra ID is the
+    # reference IdP); otherwise fall back to the demo shared-bearer admin token.
+    if os.environ.get("STEPSTITCH_OIDC_ISSUER"):
+        get_user_id, require_admin = oidc_auth_from_env(ingest_token)
+    else:
+        get_user_id, require_admin = build_auth(
+            os.environ["STEPSTITCH_ADMIN_TOKEN"], ingest_token)
     execute, fetchone, fetchall = build_db_callables(proxy)
     audit = make_db_audit(execute)  # durable audit trail (stepstitch_audit table)
 
