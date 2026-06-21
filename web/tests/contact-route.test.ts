@@ -61,6 +61,22 @@ describe("POST /api/contact validation", () => {
     expect(await res.json()).toEqual({ error: "invalid_email" });
   });
 
+  it("rejects an over-long email quickly without ReDoS backtracking", async () => {
+    // Adversarial input for the email regex: tens of thousands of `[^\s@]`
+    // chars with no final match. Before the length guard this triggered
+    // polynomial backtracking (CWE-1333); it must now short-circuit to 400.
+    const pathological = "a".repeat(50_000) + "!";
+    const started = performance.now();
+    const res = await POST(
+      makeJsonRequest({ name: "A", email: pathological, message: "hi" }),
+    );
+    const elapsedMs = performance.now() - started;
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_email" });
+    expect(elapsedMs).toBeLessThan(100);
+  });
+
   it("returns 400 too_long when a field exceeds its cap", async () => {
     const res = await POST(
       makeJsonRequest({
