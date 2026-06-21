@@ -16,7 +16,7 @@ from jwt.algorithms import RSAAlgorithm
 from server.host import build_app
 from server.oidc import OidcVerifier, build_oidc_auth, require_roles
 
-ISS = "https://login.microsoftonline.com/voya/v2.0"
+ISS = "https://login.example.com/tenant/v2.0"
 AUD = "api://stepstitch"
 _PFX = "/api/stepstitch/v1"
 
@@ -50,8 +50,8 @@ def test_valid_token_yields_real_operator_identity():
     priv, jwks = _keypair()
     _, require_admin = _auth(jwks)
     actor = require_admin(authorization="Bearer " + _token(
-        priv, sub="op1", email="alice@voya.com", roles=["stepstitch-operator"]))
-    assert actor["user_id"] == "alice@voya.com"
+        priv, sub="op1", email="alice@example.com", roles=["stepstitch-operator"]))
+    assert actor["user_id"] == "alice@example.com"
     assert "stepstitch-operator" in actor["roles"]
 
 
@@ -159,13 +159,13 @@ def test_two_operators_recorded_as_distinct_audit_actors():
     tid = client.post(f"{_PFX}/session", json=_PAYLOAD,
                       headers={"Authorization": "Bearer ing"}).json()["trace_id"]
 
-    for sub, email in [("op1", "alice@voya.com"), ("op2", "bob@voya.com")]:
+    for sub, email in [("op1", "alice@example.com"), ("op2", "bob@example.com")]:
         tok = _token(priv, sub=sub, email=email, roles=["stepstitch-operator"])
         r = client.get(f"{_PFX}/session/{tid}/summary",
                        headers={"Authorization": "Bearer " + tok})
         assert r.status_code == 200
 
-    assert {"alice@voya.com", "bob@voya.com"} <= set(actors)
+    assert {"alice@example.com", "bob@example.com"} <= set(actors)
 
 
 def test_rbac_operator_can_read_but_not_delete_admin_can():
@@ -186,9 +186,9 @@ def test_rbac_operator_can_read_but_not_delete_admin_can():
         execute=db.execute, fetchone=db.fetchone, fetchall=db.fetchall, audit=audit)
     client = TestClient(app)
 
-    operator = "Bearer " + _token(priv, sub="op", email="op@voya.com",
+    operator = "Bearer " + _token(priv, sub="op", email="op@example.com",
                                   roles=["stepstitch-operator"])
-    admin = "Bearer " + _token(priv, sub="ad", email="ad@voya.com",
+    admin = "Bearer " + _token(priv, sub="ad", email="ad@example.com",
                                roles=["stepstitch-admin"])
 
     tid = client.post(f"{_PFX}/session", json=_PAYLOAD,

@@ -81,8 +81,8 @@ git tag -s v<x.y.z> -m "StepStitch v<x.y.z>"
 | Compliance evidence | `COMPLIANCE-EVIDENCE.md` | Capture/never-capture matrix from live policy (`npm run evidence`) |
 | Incident-response boundary | `INCIDENT-RESPONSE.md` | Kill switch + service-provider boundary |
 
-## Marvox (reference integration) re-vendor
+## Reference integration re-vendor
 
-Marvox pins the **compiled** SDK and the service `.py` under `lib/vendor/` and
+The reference app pins the **compiled** SDK and the service `.py` under `lib/vendor/` and
 `services/vendor/`. After cutting a release, regenerate those per the `VENDOR.md` in
 each location and bump the recorded version.

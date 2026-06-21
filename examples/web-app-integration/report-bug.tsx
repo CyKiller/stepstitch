@@ -2,7 +2,7 @@
 
 /**
  * Reference integration: a consent-gated "Report Bug" control for a Next.js host
- * (Marvox is the reference app). Drop this into the host, mount <StepStitchReporter />
+ * (the host app is the reference app). Drop this into the host, mount <StepStitchReporter />
  * once near the root, and gate grantConsent() on the host's existing consent manager.
  *
  * The host imports the SDK as a normal dependency:
@@ -31,7 +31,7 @@ export function StepStitchReporter({
   // One tracker instance for the app lifetime; same-origin ingest via the rewrite.
   useEffect(() => {
     const tracker = new StepStitchTracker({
-      appId: "marvox",
+      appId: "host-app",
       ingestEndpoint: "/api/stepstitch/v1/session",
     })
     trackerRef.current = tracker

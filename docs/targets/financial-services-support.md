@@ -38,9 +38,9 @@ values, user ids in drafts, or full URLs.
 StepStitch itself does not create tickets, write cases, route conversations, or call
 systems of record. It produces auditable, sanitized evidence and draft payloads.
 
-## Marvox Relationship
+## Reference App Relationship
 
-Marvox is a dogfood/reference tenant only. Product logic, contracts, adapters, Copilot
-tooling, and compliance evidence live in StepStitch. Marvox can re-vendor a released
+The reference app is a dogfood/reference tenant only. Product logic, contracts, adapters, Copilot
+tooling, and compliance evidence live in StepStitch. The reference app can re-vendor a released
 StepStitch version later to demonstrate the same troubleshooting loop in a creative
 production product, without financial-services language.

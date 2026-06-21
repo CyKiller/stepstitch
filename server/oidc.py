@@ -2,8 +2,8 @@
 
 The host's auth is injected into ``create_stepstitch_router``; StepStitch core stays
 auth-agnostic. This is the production swap-in for the demo shared-bearer ``build_auth``:
-it validates RS256 JWTs from an enterprise IdP (Entra ID is the reference, but any OIDC
-issuer works via config), enforces issuer/audience/expiry, and maps the token's roles
+it validates RS256 JWTs from any standards-compliant enterprise OIDC issuer (config-driven),
+enforces issuer/audience/expiry, and maps the token's roles
 claim onto StepStitch's admin gate. Because ``require_admin`` returns the real identity
 (``email``/``sub``), every audited operator action records the actual person — not a
 shared ``"admin"`` — which is what Reg S-P recordkeeping needs.
