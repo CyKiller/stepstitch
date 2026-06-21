@@ -4,6 +4,15 @@ All notable changes to StepStitch are recorded here. Versions are repo-wide tags
 SDK (`@stepstitch/tracker`) and the backend (`stepstitch_service`) are versioned in
 lockstep per `RELEASE.md`.
 
+## v0.4.1 — First public npm release
+
+- **Published to npm as `@stepstitch/tracker`.** First release available on the public
+  registry, provenance-signed and built by CI from a clean, gated pipeline.
+- **Correct ESM resolution.** SDK barrel exports now use explicit `.js` specifiers so the
+  published ESM build resolves correctly under Node's native module resolution.
+- **Project-branded README.** npm-facing README leads with the StepStitch header, status
+  badges (CI, CodeQL, release, license, website), and StepStitch-only branding.
+
 ## v0.4.0 — Financial-services support pack
 
 - **Positioning sharpened: issue-to-repro infrastructure, not session replay.** README +
