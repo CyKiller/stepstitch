@@ -17,6 +17,8 @@ from .auth import build_auth
 from .db import build_db_callables
 from .host import build_app
 from .oidc import oidc_auth_from_env
+from .retention_job import logger as retention_logger
+from .retention_job import purge_interval_from_env, run_purge_loop
 
 _ALEMBIC_INI = pathlib.Path(__file__).resolve().parent / "alembic.ini"
 
@@ -75,6 +77,8 @@ def create_app_from_env():
         from stepstitch_service.integrations.bundle import default_draft_adapters
         draft_adapters = default_draft_adapters()
 
+    purge_interval = purge_interval_from_env()
+
     @asynccontextmanager
     async def lifespan(app):
         import asyncpg
@@ -84,9 +88,35 @@ def create_app_from_env():
         # psycopg2 engine (env.py reads DATABASE_URL), driven in a thread so the sync
         # work doesn't block the event loop.
         await asyncio.get_running_loop().run_in_executor(None, _run_migrations)
+        # Automatic retention enforcement: spawn the periodic body-purge loop after the
+        # schema is at head. RETENTION_PURGE_INTERVAL_SECONDS=0 disables it (operators
+        # who prefer the admin-triggered endpoint only).
+        purge_task = None
+        if purge_interval > 0:
+            purge_task = asyncio.create_task(
+                run_purge_loop(
+                    execute=execute,
+                    fetchone=fetchone,
+                    interval_seconds=purge_interval,
+                )
+            )
+        else:
+            retention_logger.info(
+                "stepstitch retention auto-purge disabled "
+                "(RETENTION_PURGE_INTERVAL_SECONDS=0)"
+            )
         try:
             yield
         finally:
+            # Cancel/await the purge task BEFORE closing the pool so an in-flight purge
+            # isn't cut off mid-query by a closed pool. The loop re-raises CancelledError,
+            # which we swallow here so shutdown stays clean.
+            if purge_task is not None:
+                purge_task.cancel()
+                try:
+                    await purge_task
+                except asyncio.CancelledError:
+                    pass
             await proxy.pool.close()
 
     return build_app(
