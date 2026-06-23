@@ -203,7 +203,7 @@ def generate_playwright_test(
             resp_n += 1
 
         elif step_type == "exception":
-            name = str(metadata.get("name", "Error"))
+            name = str(metadata.get("error_type") or metadata.get("name") or "Error")
             lines.append(
                 f"  expect(pageErrors.some((m) => m.includes('{_ts_str(_comment(name))}')), "
                 f"'the reported {_comment(name)} must not reproduce').toBe(false);"

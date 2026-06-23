@@ -44,7 +44,7 @@ def test_structural_selector_warns_and_drops_grade():
     steps = [
         _step("navigation"),
         _step("click", target="div > button:nth-of-type(2)"),
-        _step("exception", metadata={"name": "TypeError"}),
+        _step("exception", metadata={"error_type": "TypeError"}),
     ]
     r = score_trace(steps)
     assert any(w["code"] == "unstable_selector" for w in r["warnings"])

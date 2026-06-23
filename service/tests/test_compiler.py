@@ -8,7 +8,7 @@ TRACE = [
     {"type": "input", "route": "/dashboard", "target": "#memo", "label": "[masked]"},
     {"type": "navigation", "route": "/accounts/:id", "label": "[masked]"},
     {"type": "api_error", "route": "/accounts/:id", "metadata": {"status": 500, "endpoint": "/api/pay"}},
-    {"type": "exception", "route": "/accounts/:id", "metadata": {"name": "TypeError"}},
+    {"type": "exception", "route": "/accounts/:id", "metadata": {"error_type": "TypeError"}},
 ]
 
 
@@ -67,3 +67,23 @@ def test_exception_becomes_a_pageerror_assertion():
     assert "page.on('pageerror'" in code
     assert "pageErrors.some((m) => m.includes('TypeError'))" in code
     assert ".toBe(false);" in code
+
+
+def test_exception_reads_error_type_key():
+    # The real SDK writes the exception class under `error_type` (see
+    # src/tracker.ts) and the scrubber allowlist drops any `name` key, so the
+    # compiler must read `error_type`.
+    trace = [
+        {"type": "exception", "route": "/x", "metadata": {"error_type": "RangeError"}},
+    ]
+    code = generate_playwright_test("t_1", trace)
+    assert "pageErrors.some((m) => m.includes('RangeError'))" in code
+
+
+def test_exception_without_error_type_degrades_to_generic_error():
+    # No error_type/name present → assertion falls back to the generic 'Error'.
+    trace = [
+        {"type": "exception", "route": "/x", "metadata": {}},
+    ]
+    code = generate_playwright_test("t_1", trace)
+    assert "pageErrors.some((m) => m.includes('Error'))" in code
