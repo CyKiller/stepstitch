@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+  # Callable as a unit so release.yml can run the full gate set via one reusable
+  # `uses: ./.github/workflows/ci.yml` — no gate duplication, no drift by construction.
+  workflow_call:
 
 jobs:
   sdk:
@@ -108,10 +111,18 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
-      - name: Install host + service (with test extras)
+      - name: Install host + service (with test extras) + lint/type tools
         run: |
           pip install "./service[test]"
           pip install -r server/requirements.txt
+          pip install ruff mypy
+      # server/ is not covered by the `service` job's ruff/mypy (those are scoped to
+      # service/stepstitch_service). Gate it here, where server deps are already installed.
+      # ruff resolves config per-file: server/ uses the repo-root pyproject.toml.
+      - name: Lint server (ruff)
+        run: ruff check server
+      - name: Type-check server (mypy)
+        run: mypy server
       # Prove migrations apply from an empty database (alembic/psycopg2 come in via
       # server/requirements.txt above).
       - name: Apply migrations (alembic upgrade head)
@@ -146,3 +157,24 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Prove generated reproduction executes
         run: npm run test:e2e-proof
+
+  compliance:
+    name: Compliance evidence (no drift)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install service (generator imports it)
+        run: pip install ./service
+      # Regenerate COMPLIANCE-EVIDENCE.md from source and fail if it drifts from the
+      # committed copy. Previously this only ran in release.yml; gating it here means it
+      # fires on every PR AND is included when release.yml calls this workflow.
+      - name: Compliance evidence has no drift
+        run: |
+          cp COMPLIANCE-EVIDENCE.md /tmp/ce.md
+          PYTHONPATH=service python scripts/generate_compliance_evidence.py
+          diff /tmp/ce.md COMPLIANCE-EVIDENCE.md
