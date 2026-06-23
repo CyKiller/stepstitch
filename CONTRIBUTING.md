@@ -35,7 +35,23 @@ npm run test:e2e-proof  # compiles a trace and runs the Playwright repro in Chro
 python -m venv .venv && source .venv/bin/activate
 pip install -e "service[test,mcp,lint]"
 python -m pytest service/tests -q
+
+# Ingest host (FastAPI). Copy the env template, point it at a Postgres, then:
+cp server/.env.example server/.env   # fill in DATABASE_URL + tokens
+pip install -r server/requirements.txt
+# migrations run automatically on startup; or apply manually:
+cd server && alembic upgrade head && cd ..
+uvicorn server.app:app --reload
 ```
+
+### Authorship & git hooks
+
+All commit history is **CyKiller <cykiller@msn.com>** only — no AI co-author or
+"Generated with" trailers. `npm install` runs `scripts/setup-githooks.mjs`, which points
+git at `.githooks/` so this is enforced locally (`commit-msg` strips AI trailers,
+`pre-push` rejects any commit not authored *and* committed by CyKiller). If you skip the
+SDK install, enable it manually: `git config core.hooksPath .githooks` (see
+[.githooks/README.md](.githooks/README.md)).
 
 ## Definition of Done (house rule)
 
