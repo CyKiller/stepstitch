@@ -7,6 +7,12 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
+    groups:
+      npm-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "pip"
     directory: "/service"
@@ -15,6 +21,12 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
+    groups:
+      pip-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -22,3 +34,8 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "chore(ci)"
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
