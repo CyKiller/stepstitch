@@ -1,9 +1,11 @@
 name: release (publish on tag)
 
-# Triggered by the version tag release-please creates on merge. Runs all gates, then
-# publishes npm + PyPI + Docker (GHCR, multi-arch) and attaches SBOM + SRI to the release.
-# Token-gated steps skip cleanly when their secret is not configured, so a tag never
-# hard-fails a half-configured project.
+# Triggered by the version tag release-please creates on merge. The `verify` job runs the
+# FULL CI gate set by calling .github/workflows/ci.yml as a reusable workflow (same jobs as
+# a PR — sdk/web/service/host/e2e-proof/compliance), so a release can never publish past a
+# gate that CI would fail. Only after those gates pass does it publish npm + PyPI + Docker
+# (GHCR, multi-arch) and attach SBOM + SRI to the release. Token-gated steps skip cleanly
+# when their secret is not configured, so a tag never hard-fails a half-configured project.
 on:
   push:
     tags: [ "v*.*.*" ]
@@ -15,28 +17,12 @@ permissions:
   packages: write      # push images to GHCR
 
 jobs:
+  # Run the entire CI workflow as the release gate. This is the single source of truth for
+  # "what must pass" — adding/removing a gate in ci.yml automatically applies here too, so
+  # release gates can never drift from PR gates. CI's jobs use no secrets (the host job's
+  # Postgres is a self-contained service container), so `secrets: inherit` is not needed.
   verify:
-    name: gates
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: "18", cache: "npm" }
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11", cache: "pip" }
-      - run: npm ci
-      - run: npm run type-check
-      - run: npm test
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e-proof
-      - run: pip install "./service[test,lint,mcp]"
-      - run: pytest service/tests -q
-      - name: Compliance evidence has no drift
-        run: |
-          cp COMPLIANCE-EVIDENCE.md /tmp/ce.md
-          PYTHONPATH=service python scripts/generate_compliance_evidence.py
-          diff /tmp/ce.md COMPLIANCE-EVIDENCE.md
+    uses: ./.github/workflows/ci.yml
 
   npm:
     name: publish npm + release assets

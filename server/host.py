@@ -14,7 +14,6 @@ from typing import Any, Awaitable, Callable, List, Optional
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, PlainTextResponse
-
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
 from stepstitch_service.profiles import load_profile
 

@@ -16,12 +16,12 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Dict
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 AuditFn = Callable[[str, str, Dict[str, Any]], Awaitable[None]]
 
 
-def make_logging_audit(logger: logging.Logger = None) -> AuditFn:
+def make_logging_audit(logger: Optional[logging.Logger] = None) -> AuditFn:
     log = logger or logging.getLogger("stepstitch.audit")
 
     async def audit(action: str, actor: str, detail: Dict[str, Any]) -> None:
