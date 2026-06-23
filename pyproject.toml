@@ -1,0 +1,34 @@
+# Repo-root tool config — applies to top-level Python that lives OUTSIDE service/
+# (notably the host app under server/). It intentionally contains ONLY tool-config
+# tables: NO [project] and NO [build-system], so this file does NOT turn the repo
+# root into an installable Python package and does NOT affect the npm build.
+#
+# Ruff resolves config per-file by walking up from each file to the nearest
+# pyproject.toml. Files under service/ therefore keep using service/pyproject.toml
+# (the closer config); server/ and other root-level files use this one. The settings
+# below are kept identical to service/pyproject.toml's lint config so the gate is
+# consistent across the repo regardless of which file a given path resolves to.
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# dashboard.py is a single verbatim r"""...""" literal: the self-contained operator
+# dashboard HTML/JS we serve at GET /dashboard. Its long lines are inline JS/HTML that
+# cannot be reflowed without changing the emitted page, so E501 is not enforced here
+# (mirrors service/pyproject.toml's treatment of github_bridge/workflow.py).
+"server/dashboard.py" = ["E501"]
+# db.py's SCHEMA_SQL is a verbatim SQL DDL string literal; one CREATE INDEX line exceeds
+# 100 cols and cannot be wrapped without altering the SQL, so E501 is not enforced here.
+"server/db.py" = ["E501"]
+
+# Type gate for server/ (blocking in CI). Non-strict baseline, identical knobs to
+# service/pyproject.toml: a real, green floor we can ratchet up later.
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = false
