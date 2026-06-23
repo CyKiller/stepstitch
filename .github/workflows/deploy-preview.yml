@@ -34,7 +34,7 @@ jobs:
         run: railway up --ci --service stepstitch-api --environment "pr-${PR}"
       - name: Comment preview info
         if: steps.tok.outputs.has == 'true'
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           message: |
             🚀 Preview deployed to Railway environment `pr-${{ github.event.pull_request.number }}`.
