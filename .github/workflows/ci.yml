@@ -19,7 +19,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          # vitest 4 (rolldown) needs node:util styleText, added in Node 20.12. The published
+          # SDK still targets node >=18.18 (its engines claim); this only affects the dev/test run.
+          node-version: "20"
           cache: "npm"
       - name: Install (runs prepare/build)
         run: npm ci
