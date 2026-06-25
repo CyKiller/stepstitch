@@ -9,18 +9,20 @@ import { GITHUB_URL, DOCS_URL } from "@/lib/links";
 // Anchors are absolute (/#id) so they work from sub-pages too.
 const desktopLinks = [
   { href: "/#how", label: "How it works" },
-  { href: "/#demo", label: "Live demo" },
-  { href: "/#compare", label: "Comparison" },
+  { href: "/demo", label: "Demo" },
+  { href: "/privacy-vs-replay", label: "vs. replay" },
+  { href: "/agents", label: "Agents" },
   { href: "/security", label: "Security" },
   { href: DOCS_URL, label: "Docs", external: true },
 ];
 
 const mobileLinks = [
   { href: "/#how", label: "How it works" },
-  { href: "/#workflow", label: "Workflow" },
-  { href: "/#demo", label: "Live demo" },
-  { href: "/#compare", label: "Comparison" },
-  { href: "/#agents", label: "Agents" },
+  { href: "/demo", label: "Red-to-green demo" },
+  { href: "/quickstart", label: "Quickstart" },
+  { href: "/privacy-vs-replay", label: "Privacy vs. replay" },
+  { href: "/agents", label: "Agents" },
+  { href: "/financial-services-pilot", label: "Financial-services pilot" },
   { href: "/security", label: "Security" },
   { href: "/self-host", label: "Self-host" },
   { href: DOCS_URL, label: "Docs", external: true },

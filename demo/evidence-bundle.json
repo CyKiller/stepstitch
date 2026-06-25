@@ -1,0 +1,311 @@
+{
+  "demo": true,
+  "delivery": "dry-run — nothing sent",
+  "title": "StepStitch red-to-green evidence bundle",
+  "generated_by": "scripts/demo_red_to_green.py",
+  "note": "Every artifact below is produced by the real StepStitch service modules, with no credentials and no database. Drafts and the PR are dry-run previews; nothing is ever sent. Verdict derives only from red→green CI.",
+  "story": [
+    "1. User reports a bug",
+    "2. StepStitch captures structural footsteps only",
+    "3. The server scrubber proves no NPI persisted",
+    "4. A replayability score tells engineering if the bug is reproducible",
+    "5. StepStitch generates a Playwright repro",
+    "6. A ticket/PR draft is created (dry-run — never sent)",
+    "7. CI reports pre-fix failed and post-fix passed",
+    "8. StepStitch records confirmed_fixed in the regression corpus"
+  ],
+  "trace_id": "trc_demo_red_to_green_0001",
+  "steps": {
+    "1_bug_report": {
+      "headline": "User-reported issue: HTTP 500 on /accounts/:id/transfer",
+      "raw_unsafe_input": {
+        "note": "Synthetic placeholders ONLY (no real NPI). Present to demonstrate the scrubber dropping forbidden fields and redacting PII-shaped text.",
+        "explanation": "Transfer to account 000000 failed; reach me at user@example.test or 000-00-0000.",
+        "forbidden_fields_sent": [
+          "metadata.headers",
+          "metadata.raw_url",
+          "footsteps[5].metadata.cookies",
+          "footsteps[5].metadata.request_body",
+          "footsteps[5].metadata.url"
+        ]
+      }
+    },
+    "2_structural_capture": {
+      "footsteps": [
+        {
+          "timestamp": "2026-06-02T08:00:00.000Z",
+          "type": "navigation",
+          "route": "/accounts/:id",
+          "label": "Account overview"
+        },
+        {
+          "timestamp": "2026-06-02T08:00:03.000Z",
+          "type": "navigation",
+          "route": "/accounts/:id/transfer",
+          "label": "Transfer form"
+        },
+        {
+          "timestamp": "2026-06-02T08:00:06.000Z",
+          "type": "click",
+          "route": "/accounts/:id/transfer",
+          "target": "[data-testid=payee-select]",
+          "label": "[masked]"
+        },
+        {
+          "timestamp": "2026-06-02T08:00:08.000Z",
+          "type": "click",
+          "route": "/accounts/:id/transfer",
+          "target": "[data-testid=amount-input]",
+          "label": "[masked]"
+        },
+        {
+          "timestamp": "2026-06-02T08:00:09.000Z",
+          "type": "click",
+          "route": "/accounts/:id/transfer",
+          "target": "[data-testid=review-transfer]",
+          "label": "[masked]"
+        },
+        {
+          "timestamp": "2026-06-02T08:00:11.400Z",
+          "type": "api_error",
+          "route": "/accounts/:id/transfer",
+          "metadata": {
+            "status": 500,
+            "method": "POST",
+            "endpoint": "/api/accounts/:id/transfers"
+          }
+        }
+      ],
+      "timeline": [
+        {
+          "index": 0,
+          "kind": "nav",
+          "label": "Visited route",
+          "selector": "/accounts/:id",
+          "detail": null
+        },
+        {
+          "index": 1,
+          "kind": "nav",
+          "label": "Visited route",
+          "selector": "/accounts/:id/transfer",
+          "detail": null
+        },
+        {
+          "index": 2,
+          "kind": "click",
+          "label": "Interaction",
+          "selector": "[data-testid=payee-select]",
+          "detail": null
+        },
+        {
+          "index": 3,
+          "kind": "click",
+          "label": "Interaction",
+          "selector": "[data-testid=amount-input]",
+          "detail": null
+        },
+        {
+          "index": 4,
+          "kind": "click",
+          "label": "Interaction",
+          "selector": "[data-testid=review-transfer]",
+          "detail": null
+        },
+        {
+          "index": 5,
+          "kind": "api_error",
+          "label": "API error",
+          "selector": "/accounts/:id/transfer",
+          "detail": "status 500 · POST /api/accounts/:id/transfers"
+        }
+      ],
+      "always_structural": [
+        "Route templates (e.g. /accounts/:id)",
+        "Stable selectors (data-testid preferred)",
+        "API status codes",
+        "Endpoint templates and source-path templates",
+        "Exception types",
+        "SDK/build/release metadata",
+        "Masked labels"
+      ]
+    },
+    "3_privacy_scrub": {
+      "scrub_status": "scrubbed",
+      "scrubbed_fields": [
+        "explanation",
+        "footsteps[0].route",
+        "footsteps[1].route",
+        "footsteps[5].metadata.endpoint",
+        "footsteps[5].metadata.cookies",
+        "footsteps[5].metadata.request_body",
+        "footsteps[5].metadata.url",
+        "metadata.headers",
+        "metadata.raw_url"
+      ],
+      "policy": "financial-services-enterprise",
+      "explanation_after_scrub": "Transfer to account [redacted:number] failed; reach me at [redacted:email] or [redacted:ssn].",
+      "never_captured": [
+        "Screenshots / video",
+        "Input values (what a user typed)",
+        "Page text / DOM content",
+        "Raw URLs (templated to routes)",
+        "Request / response bodies",
+        "Raw frontend logs / console messages / stack traces",
+        "Network headers / cookies",
+        "SSNs, account/card numbers, emails, phone numbers (redacted from free text)"
+      ]
+    },
+    "4_replayability": {
+      "score": 0.76,
+      "grade": "B",
+      "warnings": [
+        {
+          "code": "templated_route_needs_fixture",
+          "detail": "Route '/accounts/:id' is templated; supply a concrete fixture id.",
+          "step_index": 0
+        },
+        {
+          "code": "templated_route_needs_fixture",
+          "detail": "Route '/accounts/:id/transfer' is templated; supply a concrete fixture id.",
+          "step_index": 1
+        },
+        {
+          "code": "templated_route_needs_fixture",
+          "detail": "Route '/accounts/:id/transfer' is templated; supply a concrete fixture id.",
+          "step_index": 2
+        },
+        {
+          "code": "templated_route_needs_fixture",
+          "detail": "Route '/accounts/:id/transfer' is templated; supply a concrete fixture id.",
+          "step_index": 3
+        },
+        {
+          "code": "templated_route_needs_fixture",
+          "detail": "Route '/accounts/:id/transfer' is templated; supply a concrete fixture id.",
+          "step_index": 4
+        },
+        {
+          "code": "templated_route_needs_fixture",
+          "detail": "Route '/accounts/:id/transfer' is templated; supply a concrete fixture id.",
+          "step_index": 5
+        }
+      ],
+      "signals": {
+        "steps": 6,
+        "interactive": 3,
+        "stable_selectors": 3
+      }
+    },
+    "5_playwright_repro": {
+      "playwright_code": "import { test, expect } from '@playwright/test';\n\n// StepStitch autogenerated reproduction (trace: trc_demo_red_to_green_0001)\n// Replayability: 0.76 (grade B)\n//   ⚠ templated_route_needs_fixture [step 0]: Route '/accounts/:id' is templated; supply a concrete fixture id.\n//   ⚠ templated_route_needs_fixture [step 1]: Route '/accounts/:id/transfer' is templated; supply a concrete fixture id.\n//   ⚠ templated_route_needs_fixture [step 2]: Route '/accounts/:id/transfer' is templated; supply a concrete fixture id.\n//   ⚠ templated_route_needs_fixture [step 3]: Route '/accounts/:id/transfer' is templated; supply a concrete fixture id.\n//   ⚠ templated_route_needs_fixture [step 4]: Route '/accounts/:id/transfer' is templated; supply a concrete fixture id.\n//   ⚠ templated_route_needs_fixture [step 5]: Route '/accounts/:id/transfer' is templated; supply a concrete fixture id.\n// NOTE: no credentials are embedded. Wire authentication to a synthetic\n// test account before running against a protected route.\ntest('StepStitch reproduction', async ({ page }) => {\n  // TODO: authenticate as a synthetic test user if the flow requires it.\n\n  // [NAVIGATION] /accounts/:id\n  // TODO: substitute id(s) in templated route '/accounts/:id'\n  await page.goto('http://localhost:3000/accounts/:id');\n\n  // [NAVIGATION] /accounts/:id/transfer\n  // TODO: substitute id(s) in templated route '/accounts/:id/transfer'\n  await page.goto('http://localhost:3000/accounts/:id/transfer');\n\n  // [CLICK] /accounts/:id/transfer\n  await page.locator('[data-testid=payee-select]').click();\n\n  // [CLICK] /accounts/:id/transfer\n  await page.locator('[data-testid=amount-input]').click();\n\n  // [CLICK] /accounts/:id/transfer\n  const response0 = page.waitForResponse(\n    (r) => r.url().includes('/api/accounts/') && r.request().method() === 'POST',\n  );\n  await page.locator('[data-testid=review-transfer]').click();\n  // expected API failure: /api/accounts/:id/transfers (HTTP 500)\n  const res0 = await response0;\n  expect(res0.status(), 'no server error from /api/accounts/:id/transfers').toBeLessThan(500);\n\n});\n",
+      "note": "Deterministic; fails while the bug exists, passes once fixed."
+    },
+    "6_drafts": {
+      "delivery": "dry-run — nothing sent",
+      "servicenow": {
+        "short_description": "User-reported issue: HTTP 500 on /accounts/:id/transfer",
+        "description": "User-reported issue: HTTP 500 on /accounts/:id/transfer. Sanitized StepStitch summary only — no screens, field values, raw URLs, or page text. Route template: /accounts/:id/transfer. Steps captured: 6.",
+        "category": "software",
+        "subcategory": "portal",
+        "impact": "3",
+        "urgency": "3",
+        "correlation_id": "stepstitch:trc_demo_red_to_green_0001",
+        "work_notes": "Replayability score: 0.76 (grade B). Playwright repro available internally. Privacy: Scrubbed / No NPI."
+      },
+      "salesforce": {
+        "Subject": "User-reported issue: HTTP 500 on /accounts/:id/transfer",
+        "Origin": "StepStitch",
+        "Status": "New",
+        "Priority": "High",
+        "StepStitchTraceId__c": "trc_demo_red_to_green_0001",
+        "RouteTemplate__c": "/accounts/:id/transfer",
+        "ReplayabilityScore__c": 0.76,
+        "ReplayabilityGrade__c": "B",
+        "PrivacyStatus__c": "Scrubbed / No NPI",
+        "PlaywrightReproLink__c": "internal-link-only"
+      },
+      "genesys": {
+        "origin": "StepStitch",
+        "trace_correlation_id": "stepstitch:trc_demo_red_to_green_0001",
+        "issue_headline": "User-reported issue: HTTP 500 on /accounts/:id/transfer",
+        "route_template": "/accounts/:id/transfer",
+        "diagnostic_type": "api_error",
+        "diagnostic_endpoint": "/api/accounts/:id/transfers",
+        "failing_status": 500,
+        "exception_type": "",
+        "replayability_score": 0.76,
+        "replayability_grade": "B",
+        "suggested_queue": "digital-platform-escalation",
+        "privacy_status": "Scrubbed / No NPI",
+        "playwright_repro": "internal-link-only"
+      },
+      "github": {
+        "issue": {
+          "title": "[StepStitch] User-reported issue: HTTP 500 on /accounts/:id/transfer",
+          "body": "Reported issue reproduced by StepStitch (privacy-safe; no NPI captured).\n\n- **Route:** `/accounts/:id/transfer`\n- **Replayability:** 0.76 (grade B)\n- **Steps:** 6\n- **Privacy:** Scrubbed / No NPI\n- **Trace correlation id:** `stepstitch:trc_demo_red_to_green_0001`\n\nA deterministic Playwright reproduction is available from StepStitch and can be committed as a regression test. StepStitch never merges — a human reviews and merges.",
+          "labels": [
+            "stepstitch",
+            "privacy-safe",
+            "stepstitch:needs-fix",
+            "stepstitch:repro-ready"
+          ]
+        },
+        "pull_request": {
+          "would_open": {
+            "branch": "stepstitch/trace-trc_demo_red_to_green_0001",
+            "test_path": "tests/stepstitch/repro_trc_demo_red_to_green_0001.spec.ts",
+            "title": "[StepStitch] regression test for /accounts/:id/transfer"
+          },
+          "note": "dry-run: StepStitch never merges — a human reviews and merges."
+        }
+      }
+    },
+    "7_ci_verification": {
+      "trace_id": "trc_demo_red_to_green_0001",
+      "pre_passed": false,
+      "post_passed": true,
+      "verdict": "confirmed_fixed",
+      "fix_ref": "demo-pr-1",
+      "run_url": "https://ci.example.test/runs/stepstitch-demo",
+      "note": "confirmed_fixed derives only from pre_passed=false + post_passed=true."
+    },
+    "8_regression_corpus": {
+      "verdict": "confirmed_fixed",
+      "entries": [
+        {
+          "trace_id": "trc_demo_red_to_green_0001",
+          "pre_passed": false,
+          "post_passed": true,
+          "verdict": "confirmed_fixed",
+          "fix_ref": "demo-pr-1",
+          "run_url": "https://ci.example.test/runs/stepstitch-demo"
+        }
+      ]
+    }
+  },
+  "trace_summary": {
+    "trace_id": "trc_demo_red_to_green_0001",
+    "route": "/accounts/:id/transfer",
+    "headline": "User-reported issue: HTTP 500 on /accounts/:id/transfer",
+    "replayability_score": 0.76,
+    "replayability_grade": "B",
+    "privacy_status": "Scrubbed / No NPI",
+    "step_count": 6,
+    "failing_status": 500,
+    "exception_type": null,
+    "diagnostic_type": "api_error",
+    "diagnostic_endpoint": "/api/accounts/:id/transfers",
+    "project_id": "demo"
+  },
+  "never_captured": [
+    "Screenshots / video",
+    "Input values (what a user typed)",
+    "Page text / DOM content",
+    "Raw URLs (templated to routes)",
+    "Request / response bodies",
+    "Raw frontend logs / console messages / stack traces",
+    "Network headers / cookies",
+    "SSNs, account/card numbers, emails, phone numbers (redacted from free text)"
+  ]
+}

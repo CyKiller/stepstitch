@@ -3,6 +3,20 @@
 How to install and run StepStitch as a product. Companion to
 [PRODUCT-PLAN.md](PRODUCT-PLAN.md) (P3) and [../COMMERCIAL.md](../COMMERCIAL.md).
 
+## Try it in one command (no credentials)
+
+Before deploying anything, see the whole product loop offline:
+
+```bash
+npm run demo     # generate demo/evidence-bundle.json from the real service modules
+npm run smoke    # assert no forbidden field/value survived the scrub
+```
+
+This needs the service package importable (`pip install -e ./service` or the repo `.venv`) —
+the same precondition as `npm run release-gate:evidence` — and **no** database or
+ServiceNow/Salesforce/GitHub/cloud credentials. See [`../demo/README.md`](../demo/README.md)
+for the eight-step walk-through and the optional local-Postgres live path.
+
 ## The deployable units
 
 StepStitch ships as three things, not one monolith:

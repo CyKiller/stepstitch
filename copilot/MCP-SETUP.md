@@ -76,3 +76,8 @@ code required.
   [action-policy.md](action-policy.md) as its guardrail — both are transport-independent.
 - Keep StepStitch and the system-of-record connectors in one DLP group so a draft can feed
   a create but a summary cannot be exfiltrated to an unmanaged connector.
+
+## See also
+- The agent capability story for buyers: the site's **/agents** page (what agents can and
+  cannot do) and **/quickstart** (10-minute wire-up).
+- The end-to-end evidence an agent reads/drafts: **/demo** and [`../demo/README.md`](../demo/README.md).

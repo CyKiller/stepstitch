@@ -43,6 +43,8 @@
     "evidence": "PYTHONPATH=service python3 scripts/generate_compliance_evidence.py",
     "release": "npm run build && npm run stamp && npm run sbom",
     "test:e2e-proof": "node scripts/prove-repro-executes.mjs",
+    "demo": "PYTHONPATH=service python3 scripts/demo_red_to_green.py",
+    "smoke": "npm run demo && node scripts/smoke-check.mjs",
     "release-gate:evidence": "python3 -m pytest service/tests/test_repro_eval.py service/tests/test_compliance.py service/tests/test_golden_path.py -q"
   },
   "dependencies": {},

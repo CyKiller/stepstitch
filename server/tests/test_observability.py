@@ -15,7 +15,10 @@ INGEST = "ingest-secret"
 
 
 def run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    # asyncio.run creates and tears down a fresh loop per call, so these helpers are
+    # order-independent. (The older get_event_loop().run_until_complete pattern raises on
+    # Python 3.12 when no loop is current — e.g. after another test closes it.)
+    return asyncio.run(coro)
 
 
 class _DB:

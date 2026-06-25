@@ -52,6 +52,7 @@ npm run release            # = stamp-build (git short SHA → BUILD_HASH) + tsc 
 # 3. Verify gates are green:
 npm run type-check
 npm test                   # unit + redaction-proof (the compliance-proving suite)
+npm run smoke              # regenerate demo bundle + assert no forbidden field survives
 npm run test:e2e-proof     # compiles a trace and runs the output in Chromium (§7)
 (cd service && PYTHONPATH=. pytest tests -q)
 
@@ -66,6 +67,31 @@ git tag -s v<x.y.z> -m "StepStitch v<x.y.z>"
 #      cosign sign-blob --yes dist/index.js > dist/index.js.sig
 #    npm publishes carry provenance attestation:
 #      npm publish --provenance --access restricted
+```
+
+## Publish-ready checklist (one screen)
+
+Run before tagging. Every box maps to a command above; nothing publishes until the tag
+workflow runs (or you run the manual publish lines).
+
+- [ ] Versions bumped in lockstep (`package.json`, `src/tracker.ts`, `service/pyproject.toml`).
+- [ ] `npm run type-check` clean.
+- [ ] `npm test` green (SDK + redaction-proof).
+- [ ] `npm run smoke` green (demo bundle regenerated; privacy gate holds).
+- [ ] `npm run release-gate:evidence` green (repro eval + compliance drift + golden path).
+- [ ] `(cd service && PYTHONPATH=. pytest tests -q)` green.
+- [ ] `(cd web && npm run build && npm test)` green.
+- [ ] `npm run evidence` regenerated `COMPLIANCE-EVIDENCE.md` with no diff.
+- [ ] `.env.example` still lists every consumed variable.
+
+Exact publish commands (run only when credentials are configured — see "Required repository
+secrets" above; the tag workflow does this automatically):
+
+```bash
+npm publish --provenance --access public        # @stepstitch/tracker
+(cd service && python -m build && twine upload dist/*)   # stepstitch-service → PyPI
+docker build -f Dockerfile     -t <registry>/stepstitch-api:vX.Y.Z .   # ingest host
+docker build -f service/Dockerfile.mcp -t <registry>/stepstitch-mcp:vX.Y.Z .  # MCP connector
 ```
 
 ## Artifacts handed to the tenant security review

@@ -5,6 +5,11 @@ coverage/
 *.log
 .DS_Store
 
+# Local secrets — the .env.example template is committed, real .env files are not.
+.env
+.env.*
+!.env.example
+
 __pycache__/
 *.pyc
 *.egg-info/

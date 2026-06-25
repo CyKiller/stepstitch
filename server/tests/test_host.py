@@ -134,6 +134,29 @@ def test_dashboard_links_scheme_gated_and_no_inline_onclick():
     assert 'onclick="ssRepro' not in body
 
 
+def test_dashboard_is_non_destructive_and_carries_audit_labels():
+    # The operator cockpit is read-only/draft-only. It must explain its guarantees and must
+    # never reach for a destructive verb (delete, purge, retention, or a non-dry-run deliver).
+    client, _ = _client()
+    body = client.get("/dashboard").text
+    # Flow narrative + audit footer make the product legible and the guardrails explicit.
+    for stage in ("Customer bug", "privacy scrub", "replayability score",
+                  "Playwright repro", "draft ticket/PR", "verified fix"):
+        assert stage in body, f"flow banner missing stage: {stage}"
+    assert "every read is audited" in body
+    assert "drafts are previews, nothing is sent" in body
+    assert "no destructive action is exposed here" in body
+    # Privacy posture surfaces the scrub report (status + scrubbed field names).
+    assert "scrubbed_fields" in body and "Scrub status" in body
+    # No destructive operation is wired into the UI.
+    assert "/maintenance/purge" not in body
+    assert "/by-user/" not in body
+    assert 'method: "DELETE"' not in body
+    # Any deliver/PR action the UI exposes is dry-run only.
+    assert "/deliver?dry_run=true" in body
+    assert "/github/pr?dry_run=true" in body
+
+
 def test_ingest_requires_bearer():
     client, _ = _client()
     assert client.post(f"{_PFX}/session", json=_PAYLOAD).status_code == 401

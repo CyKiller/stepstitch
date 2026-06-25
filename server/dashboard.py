@@ -47,6 +47,15 @@ DASHBOARD_HTML = r"""<!doctype html>
   .muted { color:var(--mut); }
   .err { color:#f85149; }
   .actions { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  .flow { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:8px 16px;
+          border-bottom:1px solid var(--line); font-size:12px; color:var(--mut);
+          background:var(--panel); }
+  .flow b { color:var(--fg); font-weight:600; }
+  .flow .arr { color:var(--acc); }
+  .footer { padding:8px 16px; border-top:1px solid var(--line); font-size:11px;
+            color:var(--mut); background:var(--panel); }
+  .label { font-size:11px; color:var(--mut); margin-top:6px; font-style:italic; }
+  .kv { color:var(--fg); }
 </style>
 </head>
 <body>
@@ -59,10 +68,19 @@ DASHBOARD_HTML = r"""<!doctype html>
   <button id="reload" class="primary">Load traces</button>
   <button id="corpus">Show Corpus</button>
 </header>
+<div class="flow">
+  <b>Customer bug</b><span class="arr">→</span>
+  <b>privacy scrub</b><span class="arr">→</span>
+  <b>replayability score</b><span class="arr">→</span>
+  <b>Playwright repro</b><span class="arr">→</span>
+  <b>draft ticket/PR</b><span class="arr">→</span>
+  <b>verified fix</b>
+</div>
 <div class="wrap">
   <div class="list" id="list"><div class="row muted">Paste the admin token, then “Load traces”.</div></div>
   <div class="detail" id="detail"><p class="muted">Select a trace to inspect its sanitized evidence.</p></div>
 </div>
+<div class="footer">Read-only operator view · every read is audited · all records are scrubbed server-side before storage · drafts are previews, nothing is sent · no destructive action is exposed here.</div>
 <script nonce="__CSP_NONCE__">
 (function () {
   var API = "/api/stepstitch/v1";
@@ -152,6 +170,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       html += '<div class="actions">' +
         '<button id="act-repro">View Playwright repro</button>' +
         '<button id="act-drafts">Preview drafts</button>' +
+        '<button id="act-github">Dry-run GitHub PR</button>' +
         '<button id="act-deliver">Dry-run deliver</button>' +
         '</div>';
       html += card("Summary",
@@ -181,14 +200,31 @@ DASHBOARD_HTML = r"""<!doctype html>
       html += card("Replayability",
         '<span class="grade">' + esc(rr.grade) + '</span> · score ' + esc(rr.score) +
         (rr.warnings && rr.warnings.length ? '<pre>' + esc(JSON.stringify(rr.warnings, null, 2)) + '</pre>' : ''));
-      html += card("Diagnostic — recommended next step",
-        '<div>' + esc((diag.diagnostic || {}).recommended_next_step || "") + '</div>');
+      var diagBits = [];
+      if (sm.failing_status != null) diagBits.push('HTTP <span class="kv">' + esc(sm.failing_status) + '</span>');
+      if (sm.exception_type) diagBits.push('exception <span class="kv">' + esc(sm.exception_type) + '</span>');
+      if (sm.diagnostic_endpoint) diagBits.push('endpoint <span class="kv">' + esc(sm.diagnostic_endpoint) + '</span>');
+      html += card("Diagnostic — sanitized",
+        (diagBits.length ? '<div class="muted">' + diagBits.join(' · ') + '</div>' : '') +
+        '<div style="margin-top:6px">' + esc((diag.diagnostic || {}).recommended_next_step || "") + '</div>');
+
+      var scrub = pp.scrub || {};
+      var fields = scrub.scrubbed_fields || [];
+      var scrubStatus = scrub.scrub_status || "—";
+      var fieldsHtml = fields.length
+        ? '<div class="muted" style="margin-top:6px">Fields scrubbed before storage:</div><pre>' + esc(JSON.stringify(fields, null, 2)) + '</pre>'
+        : '<div class="muted" style="margin-top:6px">No fields required scrubbing on this trace.</div>';
       html += card("Privacy posture",
-        '<pre>' + esc(JSON.stringify(pp.never_captured || [], null, 2)) + '</pre>');
+        '<div>Scrub status: <span class="grade" style="color:var(--ok)">' + esc(scrubStatus) + '</span></div>' +
+        fieldsHtml +
+        '<div class="muted" style="margin-top:8px">Never captured:</div>' +
+        '<pre>' + esc(JSON.stringify(pp.never_captured || [], null, 2)) + '</pre>' +
+        '<div class="label">All records are scrubbed server-side before storage — only field names are kept, never the values.</div>');
       detailEl.innerHTML = html;
       // Wire actions via closures (no trace_id interpolated into inline onclick markup).
       document.getElementById("act-repro").onclick = function () { ssRepro(id); };
       document.getElementById("act-drafts").onclick = function () { ssDrafts(id); };
+      document.getElementById("act-github").onclick = function () { ssGithub(id); };
       document.getElementById("act-deliver").onclick = function () { ssDeliver(id); };
     } catch (e) { detailEl.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
   }
@@ -202,6 +238,13 @@ DASHBOARD_HTML = r"""<!doctype html>
     try { var r = await api("/session/" + id + "/export-preview", { method: "POST" });
       show("Export preview (drafts — nothing sent)", JSON.stringify(r.drafts || {}, null, 2));
     } catch (e) { show("Error", e.message); }
+  };
+  window.ssGithub = async function (id) {
+    try { var r = await api("/session/" + id + "/github/pr?dry_run=true",
+        { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, hdr()),
+          body: JSON.stringify({ approved_by: "dashboard-preview", idempotency_key: "preview-pr-" + id, dry_run: true }) });
+      show("Dry-run GitHub PR (nothing opened)", JSON.stringify(r.would_open || r, null, 2));
+    } catch (e) { show("Dry-run GitHub PR", e.message + "  (GitHub bridge not configured — that is expected)"); }
   };
   window.ssDeliver = async function (id) {
     try { var r = await api("/session/" + id + "/deliver?dry_run=true",
