@@ -21,7 +21,7 @@ export function Button({
 }) {
   const ext = external ? { target: "_blank", rel: "noreferrer" } : {};
   const base =
-    "group inline-flex min-h-11 items-center gap-2.5 rounded-full py-2 pl-5 pr-2 text-sm font-semibold transition-[transform,box-shadow,border-color] duration-300 ease-[var(--ease-spring)] active:scale-[0.98]";
+    "group inline-flex min-h-11 items-center gap-2.5 rounded-full py-2 pl-5 pr-2 text-sm font-semibold transition-[transform,box-shadow,border-color] duration-300 ease-[var(--ease-spring)] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-solid focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
   const skin =
     variant === "primary"
       ? "bg-accent-solid text-accent-fg shadow-[var(--shadow-brand)] hover:shadow-[0_28px_80px_-28px_color-mix(in_oklab,var(--accent)_70%,transparent)]"

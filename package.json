@@ -3,6 +3,24 @@
   "version": "0.4.2",
   "description": "StepStitch — issue-to-repro infrastructure (not session replay): turns a user-reported problem into scrubbed diagnostics, a replayability score, and a copyable Playwright reproduction, without capturing screens, input values, or page text. Zero runtime dependencies.",
   "license": "Apache-2.0",
+  "keywords": [
+    "playwright",
+    "session-replay",
+    "bug-reproduction",
+    "regression-testing",
+    "reproducibility",
+    "privacy",
+    "redaction",
+    "pii",
+    "mcp",
+    "model-context-protocol",
+    "self-hosted",
+    "observability",
+    "qa",
+    "evidence",
+    "typescript",
+    "zero-dependencies"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/CyKiller/stepstitch.git"

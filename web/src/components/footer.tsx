@@ -7,14 +7,15 @@ const columns = [
     title: "Product",
     links: [
       { href: "/#how", label: "How it works" },
-      { href: "/#workflow", label: "Workflow" },
       { href: "/#demo", label: "Live demo" },
-      { href: "/#compare", label: "Comparison" },
+      { href: "/#pricing", label: "Pricing" },
+      { href: "/financial-services-pilot", label: "Financial-services pilot" },
     ],
   },
   {
     title: "Developers",
     links: [
+      { href: "/quickstart", label: "Quickstart" },
       { href: "/self-host", label: "Self-host" },
       { href: DOCS_URL, label: "Docs", external: true },
       { href: GITHUB_URL, label: "GitHub", external: true },
@@ -25,6 +26,7 @@ const columns = [
     title: "Trust",
     links: [
       { href: "/security", label: "Security & compliance" },
+      { href: "/privacy-vs-replay", label: "Privacy vs. replay" },
       {
         href: `${GITHUB_URL}/blob/main/COMPLIANCE-EVIDENCE.md`,
         label: "Compliance evidence",

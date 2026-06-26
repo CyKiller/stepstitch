@@ -19,6 +19,18 @@ need another recording to watch — they need a user-reported bug that can becom
 **regression test**. StepStitch leads with privacy-safe *debugging evidence and
 reproducibility*, not analytics.
 
+| | Session-replay / observability | **StepStitch** |
+|---|---|---|
+| Records the user's screen / session | Yes | **No, never** |
+| Captures input values, page text, PII | By default (can be configured to reduce) | **No — structural evidence only** |
+| What you get out | A session to watch | **A runnable Playwright regression test** |
+| Self-hosted, data stays in your boundary | Varies / mostly SaaS | **Yes — Apache-2.0, self-hostable** |
+| SDK runtime dependencies | Several | **Zero** |
+| Posture for regulated / PII-sensitive teams | Privacy is an opt-in configuration | **Privacy is the default and the boundary is the code** |
+
+> See it: the [red-to-green demo](https://stepstitch.vercel.app/demo) — a real bug
+> becomes a failing Playwright test that turns green once the fix lands.
+
 ## Privacy posture
 
 Borrows the strongest privacy model in the category (Sentry Session Replay's "private by
@@ -146,6 +158,7 @@ for the self-host incident-response notes.
 
 ## Documentation
 
+- **Getting started** — [`docs/getting-started.md`](docs/getting-started.md) (install → ingest host → first repro)
 - **Contributing & governance** — `CONTRIBUTING.md`, `GOVERNANCE.md`, `SECURITY.md`
 - **Build a connector** — `docs/connectors.md` (the public `DraftAdapter` SDK + conformance kit)
 - **Agent networks** — `docs/AGENTS.md` (MCP, function specs for Hermes/OpenAI, the repro→PR loop)

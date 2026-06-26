@@ -22,32 +22,43 @@ const steps = [
 export function PlainExplainer() {
   return (
     <section className="border-b border-line bg-surface/40">
-      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 md:py-20">
-        <Reveal>
-          <p className="text-center text-sm font-medium uppercase tracking-[0.16em] text-accent">
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 md:grid-cols-12 md:gap-12 md:py-20">
+        {/* Left: a real heading instead of an uppercase eyebrow, kept to the
+            side so the steps read as a vertical sequence, not a card row. */}
+        <Reveal className="md:col-span-4">
+          <h2 className="text-2xl font-semibold tracking-tight text-fg md:text-3xl">
             In plain words
+          </h2>
+          <p className="mt-4 text-[15px] leading-relaxed text-muted">
+            No jargon. Three steps from a customer&rsquo;s bad moment to a fix
+            that stays fixed.
           </p>
         </Reveal>
-        <div className="mt-10 grid gap-6 md:grid-cols-3">
+
+        {/* Right: divided vertical list — a distinct layout family from the
+            analogy cards and the pipeline that follow it. */}
+        <div className="divide-y divide-line border-y border-line md:col-span-8">
           {steps.map((s, i) => {
             const Glyph = s.icon;
             return (
               <Reveal key={s.title} delay={i * 0.08}>
-                <div className="relative h-full">
-                  <div className="flex items-center gap-3">
-                    <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-line bg-surface text-accent">
-                      <Glyph size={22} weight="bold" />
-                    </span>
-                    <span className="font-mono text-sm text-muted">
-                      {i + 1}
-                    </span>
+                <div className="flex gap-5 py-6">
+                  <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-line bg-surface text-accent">
+                    <Glyph size={22} weight="bold" />
+                  </span>
+                  <div>
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="font-mono text-sm text-muted">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <h3 className="text-lg font-semibold tracking-tight text-fg">
+                        {s.title}
+                      </h3>
+                    </div>
+                    <p className="mt-2 text-[15px] leading-relaxed text-muted">
+                      {s.body}
+                    </p>
                   </div>
-                  <h3 className="mt-4 text-lg font-semibold tracking-tight text-fg">
-                    {s.title}
-                  </h3>
-                  <p className="mt-2 text-[15px] leading-relaxed text-muted">
-                    {s.body}
-                  </p>
                 </div>
               </Reveal>
             );

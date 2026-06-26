@@ -7,10 +7,12 @@ import { MobileMenu } from "./mobile-menu";
 import { GITHUB_URL, DOCS_URL } from "@/lib/links";
 
 // Anchors are absolute (/#id) so they work from sub-pages too.
+// Kept to six items so the bar stays on a single line at lg. Pricing earns a
+// slot now that there's an open-core section; the rest live in the footer.
 const desktopLinks = [
   { href: "/#how", label: "How it works" },
   { href: "/demo", label: "Demo" },
-  { href: "/privacy-vs-replay", label: "vs. replay" },
+  { href: "/#pricing", label: "Pricing" },
   { href: "/agents", label: "Agents" },
   { href: "/security", label: "Security" },
   { href: DOCS_URL, label: "Docs", external: true },
@@ -20,6 +22,7 @@ const mobileLinks = [
   { href: "/#how", label: "How it works" },
   { href: "/demo", label: "Red-to-green demo" },
   { href: "/quickstart", label: "Quickstart" },
+  { href: "/#pricing", label: "Pricing" },
   { href: "/privacy-vs-replay", label: "Privacy vs. replay" },
   { href: "/agents", label: "Agents" },
   { href: "/financial-services-pilot", label: "Financial-services pilot" },
