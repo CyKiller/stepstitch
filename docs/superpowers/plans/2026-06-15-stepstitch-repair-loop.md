@@ -1,5 +1,11 @@
 # StepStitch Repair Loop (GitHub Bridge) Implementation Plan
 
+> **✅ Shipped — historical plan.** This work is complete: see `service/stepstitch_service/github_bridge/`
+> (`content.py`, `client.py`, `bridge.py`, `workflow.py`), the governed router endpoints
+> `POST /session/{id}/github/issue` and `/github/pr` in `service/stepstitch_service/router.py`, the
+> tests `service/tests/test_github_{content,client,bridge,endpoints}.py`, and `docs/integrations/github.md`.
+> The checkbox tasks below are kept for provenance, not as open work.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add an optional, governed "Repair Loop" that turns a reproduced StepStitch trace into a labeled GitHub issue and a regression-test pull request in the customer's repo — privacy-safe, human-merged, never auto-merged.

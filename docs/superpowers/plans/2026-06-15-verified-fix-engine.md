@@ -1,5 +1,12 @@
 # Verified-Fix Engine Implementation Plan
 
+> **✅ Shipped — historical plan.** This work is complete: see
+> `service/stepstitch_service/verification/verdict.py`, the endpoints
+> `POST /session/{id}/verify`, `GET /session/{id}/verifications`, and `GET /corpus` in
+> `service/stepstitch_service/router.py`, the `stepstitch_verifications` table in `server/db.py`,
+> the tests `service/tests/test_verification_endpoints.py`, and `docs/integrations/verified-fix.md`.
+> The checkbox tasks below are kept for provenance, not as open work.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Make StepStitch the neutral oracle that certifies a candidate fix actually resolves a reproduced bug (red→green) and accumulates every reproduced failure + its certified fix as a queryable **regression corpus**.

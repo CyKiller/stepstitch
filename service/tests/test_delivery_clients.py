@@ -14,7 +14,9 @@ from stepstitch_service.delivery.clients import (
 
 
 def run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    # Fresh loop per call → order-independent (asyncio.get_event_loop() raises on 3.12+
+    # when no loop is current).
+    return asyncio.run(coro)
 
 
 def test_success_returns_json_once():

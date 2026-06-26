@@ -6,7 +6,9 @@ from stepstitch_service.integrations.base import build_trace_summary
 
 
 def run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    # Fresh loop per call → order-independent (asyncio.get_event_loop() raises on 3.12+
+    # when no loop is current).
+    return asyncio.run(coro)
 
 
 class FakeClient:
