@@ -5,6 +5,8 @@ web/
 dist/
 .venv/
 .git/
+.env
+.env.*
 coverage/
 test-results/
 playwright-report/

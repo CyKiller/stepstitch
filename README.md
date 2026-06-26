@@ -82,7 +82,7 @@ support-to-engineering evidence:
 - **Compliance evidence** — `COMPLIANCE-EVIDENCE.md` is generated from the live scrub
   policy (`npm run evidence`); a drift guard keeps it equal to the code.
 
-Each is proven in `service/tests/` (99 service tests; 22 SDK tests). See
+Each is proven by the test suite (183 service + 31 host + 22 SDK tests). See
 `contracts/stepstitch.md` for the frozen contracts and `COMPLIANCE-EVIDENCE.md` for the
 reviewer packet.
 

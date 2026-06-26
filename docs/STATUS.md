@@ -36,7 +36,7 @@ test is `service/tests/test_golden_path.py`.
 | Supply chain (SBOM, SRI, signed tag) | `scripts/`, `RELEASE.md` | `sbom.cdx.json`, release tag |
 | Reference integration | re-vendored @ v0.3.0 | reference app `test_stepstitch_*` (incl. real-Postgres proof) |
 
-Gates: **169 service + 25 host (incl. OIDC/RBAC + real-Postgres) + 22 SDK tests green; type-check clean; executable repro proof green; import-linter contract KEPT.**
+Gates: **183 service + 31 host (incl. OIDC/RBAC + real-Postgres) + 22 SDK tests green; type-check clean; executable repro proof green; import-linter contract KEPT.**
 
 ## Architecture decision: StepStitch core, integrations via Copilot
 

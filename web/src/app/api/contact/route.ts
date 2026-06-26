@@ -71,8 +71,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "relay_failed" }, { status: 502 });
     }
   } else {
-    // No relay configured yet: log so the submission is at least captured.
-    console.log("[contact]", { name, email, org, message });
+    // No relay configured: record that a submission arrived, but never write
+    // the submitter's name/email/message to server logs (PII stays out of logs).
+    console.warn(
+      "[contact] submission received but CONTACT_WEBHOOK_URL is not set; not relayed",
+    );
   }
 
   return NextResponse.json({ ok: true });
