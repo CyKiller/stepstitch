@@ -11,7 +11,7 @@ Instead, report privately via one of:
 
 - GitHub **Security Advisories**: use the *"Report a vulnerability"* button under the
   repository's **Security** tab (preferred — creates a private advisory).
-- Email the maintainer: **devway83@gmail.com** with subject `SECURITY: StepStitch`.
+- Email the maintainer: **cykiller@msn.com** with subject `SECURITY: StepStitch`.
 
 Please include: affected version/commit, a description, reproduction steps, and the impact
 (especially any path that could cause NPI to be captured, stored, logged, or returned).
