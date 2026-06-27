@@ -49,7 +49,15 @@ jobs:
         run: echo "has=${{ secrets.NPM_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
       - name: Publish to npm (provenance)
         if: steps.tok.outputs.has == 'true'
-        run: npm publish --provenance --access public
+        # Idempotent: skip cleanly if this version is already on npm so a re-run
+        # of an existing tag does not hard-fail with E403 "cannot publish over".
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if npm view "@stepstitch/tracker@${VERSION}" version >/dev/null 2>&1; then
+            echo "npm: @stepstitch/tracker@${VERSION} already published — skipping."
+          else
+            npm publish --provenance --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Attach SBOM + SRI to the GitHub release
@@ -76,6 +84,7 @@ jobs:
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
           packages-dir: dist
+          skip-existing: true
 
   docker:
     name: build + push images (GHCR, multi-arch)
