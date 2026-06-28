@@ -156,6 +156,15 @@ COPILOT_SAFE_OPERATIONS: Tuple[CopilotSafeOperation, ...] = (
         params=(_TRACE_ID,),
     ),
     CopilotSafeOperation(
+        operation_id="MatchVerifiedFixes",
+        tool_name="match_verified_fixes",
+        method="GET",
+        path="/session/{trace_id}/similar-fixes",
+        description="Match this trace against the verified-fix corpus by structure — surfaces "
+                    "'you've fixed this shape before' with the prior fix ref. Structural, no NPI.",
+        params=(_TRACE_ID,),
+    ),
+    CopilotSafeOperation(
         operation_id="CreateExportPreview",
         tool_name="create_export_preview",
         method="POST",

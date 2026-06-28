@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS stepstitch_verifications (
     verdict      TEXT NOT NULL,
     fix_ref      TEXT,
     run_url      TEXT,
+    fingerprint  TEXT,
     created_at   TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_stepstitch_verif_trace   ON stepstitch_verifications (trace_id);

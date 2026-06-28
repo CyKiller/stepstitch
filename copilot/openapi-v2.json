@@ -61,6 +61,14 @@
         "responses": { "200": { "description": "Playwright code" }, "404": { "description": "Not found" } }
       }
     },
+    "/session/{trace_id}/similar-fixes": {
+      "get": {
+        "operationId": "MatchVerifiedFixes",
+        "summary": "Match this trace against the verified-fix corpus by structure (no NPI).",
+        "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Similar verified fixes" }, "404": { "description": "Not found" } }
+      }
+    },
     "/session/{trace_id}/export-preview": {
       "post": {
         "operationId": "CreateExportPreview",

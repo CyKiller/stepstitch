@@ -22,6 +22,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from .delivery.base import DeliveryError, DeliveryService, RecordWriter
 from .github_bridge.content import branch_name, regression_test_path
+from .fix_memory import fingerprint as fix_fingerprint
+from .fix_memory import match as fix_match
 from .integrations.base import DraftAdapter, build_trace_summary, export_preview
 from .replayability import score_trace
 from .retention import purge_expired_traces
@@ -663,12 +665,19 @@ def create_stepstitch_router(
         if not row:
             raise HTTPException(status_code=404, detail="Trace not found")
         verdict = derive_verdict(payload.pre_passed, payload.post_passed)
+        # Fix Memory: persist the trace's structural fingerprint now, while the body still
+        # exists, so a confirmed fix stays matchable after the body is purged. NPI-free.
+        footsteps = _loads(row[0])
+        summary = build_trace_summary(trace_id, footsteps, project_id=row[1])
+        fp_json = json.dumps(fix_fingerprint(summary.as_dict(), footsteps))
         await execute(
             "INSERT INTO stepstitch_verifications (id, trace_id, pre_passed, post_passed, "
-            "verdict, fix_ref, run_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "verdict, fix_ref, run_url, fingerprint, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 str(uuid.uuid4()), trace_id, payload.pre_passed, payload.post_passed,
-                verdict, payload.fix_ref, payload.run_url, datetime.now(timezone.utc),
+                verdict, payload.fix_ref, payload.run_url, fp_json,
+                datetime.now(timezone.utc),
             ),
         )
         await _audit("stepstitch.verify", _actor_id(admin), {
@@ -699,6 +708,41 @@ def create_stepstitch_router(
         await _audit("stepstitch.verifications", _actor_id(admin), {"trace_id": trace_id})
         return {"status": "ok", "trace_id": trace_id,
                 "verifications": [_verification_row(r) for r in rows]}
+
+    @router.get("/session/{trace_id}/similar-fixes")
+    async def get_similar_fixes(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+        limit: int = Query(5, ge=1, le=50),
+    ) -> Dict[str, Any]:
+        # Fix Memory: match this trace's structural fingerprint against the verified-fix corpus
+        # ("you've fixed this shape before"). Read-only, audited. Fingerprints are NPI-free
+        # (templated routes + structural selectors), so this is safe on the agent surface.
+        row = await fetchone(
+            "SELECT footsteps, project_id FROM stepstitch_traces WHERE id = ?", (trace_id,))
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        footsteps = _loads(row[0])
+        summary = build_trace_summary(trace_id, footsteps, project_id=row[1])
+        new_fp = fix_fingerprint(summary.as_dict(), footsteps)
+        rows = await fetchall(
+            "SELECT trace_id, fix_ref, run_url, fingerprint FROM stepstitch_verifications "
+            "WHERE verdict = ? AND fingerprint IS NOT NULL ORDER BY created_at DESC LIMIT ?",
+            ("confirmed_fixed", 500),
+        )
+        candidates: List[Dict[str, Any]] = []
+        for r in rows:
+            try:
+                fp = _loads(r[3])
+            except Exception:
+                continue
+            candidates.append(
+                {"trace_id": r[0], "fix_ref": r[1], "run_url": r[2], "fingerprint": fp})
+        matches = fix_match(new_fp, candidates, top_k=limit, exclude_trace_id=trace_id)
+        await _audit("stepstitch.similar_fixes", _actor_id(admin),
+                     {"trace_id": trace_id, "matches": len(matches)})
+        return {"status": "ok", "trace_id": trace_id, "fingerprint": new_fp,
+                "similar_fixes": matches}
 
     @router.get("/corpus")
     async def get_corpus(

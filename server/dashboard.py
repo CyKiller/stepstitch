@@ -435,6 +435,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       var pp = await api("/session/" + id + "/privacy-posture");
       var diag = await api("/session/" + id + "/diagnostic-summary");
       var verif = await api("/session/" + id + "/verifications").catch(function() { return { verifications: [] }; });
+      var similar = await api("/session/" + id + "/similar-fixes").catch(function() { return { similar_fixes: [] }; });
       var sm = s.summary || {};
       var rr = rep.replayability || {};
       var html = "";
@@ -468,6 +469,24 @@ DASHBOARD_HTML = r"""<!doctype html>
         vhtml += '<div class="muted">No verification runs recorded yet. Run the Playwright test in CI to report results.</div>';
       }
       html += card("Verification & Fix Status", vhtml);
+
+      var simList = similar.similar_fixes || [];
+      if (simList.length) {
+        var simHtml = '<div class="muted" style="margin-bottom:6px">This bug matches ' +
+          simList.length + ' previously verified fix' + (simList.length > 1 ? 'es' : '') +
+          ' by structure:</div><ul style="margin:0;padding-left:18px;font-size:12px;color:var(--mut)">';
+        simList.forEach(function (m) {
+          var pct = Math.round((m.similarity || 0) * 100);
+          var run = safeUrl(m.run_url);
+          var link = run ? ' · <a href="' + escAttr(run) +
+            '" target="_blank" rel="noopener noreferrer" style="color:var(--acc)">CI</a>' : '';
+          simHtml += '<li style="margin-bottom:4px"><strong>' + pct + '%</strong> · ' +
+            esc(m.fix_ref || m.trace_id) + ' <span class="muted">(' +
+            esc((m.reasons || []).join(", ")) + ')</span>' + link + '</li>';
+        });
+        simHtml += '</ul>';
+        html += card("Seen before? — Fix Memory", simHtml);
+      }
 
       html += card("Replayability",
         '<span class="grade">' + esc(rr.grade) + '</span> · score ' + esc(rr.score) +
