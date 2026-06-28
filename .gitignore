@@ -25,3 +25,6 @@ service/build/
 skills-lock.json
 .claude/*
 !.claude/settings.json
+
+# Superpowers brainstorm scratch (visual companion mockups)
+.superpowers/

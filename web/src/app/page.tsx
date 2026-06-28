@@ -17,19 +17,33 @@ import { Contact } from "@/components/contact";
 export default function Home() {
   return (
     <main id="main" className="flex-1">
+      {/* Progressive depth: every audience gets the plain outcome first, then
+          self-selects into proof → build → compliance. Order matters more than
+          copy here — see the "Stays Fixed" campaign plan. */}
+
+      {/* Tier 1 — Outcome (everyone) */}
       <Hero />
       <PlainExplainer />
       <Problem />
+
+      {/* Tier 2 — Proof (engineering leader): proof lands while a skimmer is
+          still reading, so CaseStudies sits high, not buried at the bottom. */}
       <HowItWorks />
-      <WorkflowSection />
-      <DemoSection />
       <Comparison />
-      <Features />
-      <Enterprise />
-      <Agentic />
-      <Trust />
-      <OpenCore />
       <CaseStudies />
+      <WorkflowSection />
+
+      {/* Tier 3 — Build (developer) */}
+      <DemoSection />
+      <Features />
+      <Agentic />
+      <OpenCore />
+
+      {/* Tier 4 — Trust (regulated enterprise) */}
+      <Enterprise />
+      <Trust />
+
+      {/* Close (everyone) */}
       <Faq />
       <Contact />
     </main>
