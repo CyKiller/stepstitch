@@ -64,11 +64,12 @@ def create_app_from_env():
     # FI-grade deployments set STEPSTITCH_OIDC_ISSUER -> per-operator SSO (any standards-
     # compliant OIDC issuer); otherwise fall back to the demo shared-bearer admin token.
     require_destructive = None
+    admin_token = None  # set only in shared-token mode; enables agent-scope enforcement
     if os.environ.get("STEPSTITCH_OIDC_ISSUER"):
         get_user_id, require_admin, require_destructive = oidc_auth_from_env(ingest_token)
     else:
-        get_user_id, require_admin = build_auth(
-            os.environ["STEPSTITCH_ADMIN_TOKEN"], ingest_token)
+        admin_token = os.environ["STEPSTITCH_ADMIN_TOKEN"]
+        get_user_id, require_admin = build_auth(admin_token, ingest_token)
     execute, fetchone, fetchall = build_db_callables(proxy)
     audit = make_db_audit(execute)  # durable audit trail (stepstitch_audit table)
 
@@ -131,6 +132,8 @@ def create_app_from_env():
         draft_adapters=draft_adapters,
         audit=audit,
         lifespan=lifespan,
+        admin_token=admin_token,
+        ingest_token=ingest_token,
     )
 
 

@@ -91,7 +91,7 @@ def test_dashboard_served_readonly():
     body = r.text
     # It is the operator UI and targets the read-only API base; no embedded data/secrets.
     assert "StepStitch" in body and "/api/stepstitch/v1" in body
-    assert "read-only operator view" in body
+    assert "operator console" in body
 
 
 def test_dashboard_sets_csp_with_per_request_nonce_and_security_headers():
@@ -135,17 +135,18 @@ def test_dashboard_links_scheme_gated_and_no_inline_onclick():
 
 
 def test_dashboard_is_non_destructive_and_carries_audit_labels():
-    # The operator cockpit is read-only/draft-only. It must explain its guarantees and must
-    # never reach for a destructive verb (delete, purge, retention, or a non-dry-run deliver).
+    # The operator console exposes reads, dry-run drafts, and GOVERNED config (agent
+    # connections) — but never a destructive verb against evidence (delete, purge, retention,
+    # or a non-dry-run deliver). It must explain its guarantees explicitly.
     client, _ = _client()
     body = client.get("/dashboard").text
     # Flow narrative + audit footer make the product legible and the guardrails explicit.
     for stage in ("Customer bug", "privacy scrub", "replayability score",
                   "Playwright repro", "draft ticket/PR", "verified fix"):
         assert stage in body, f"flow banner missing stage: {stage}"
-    assert "every read is audited" in body
+    assert "every read and config change is audited" in body
     assert "drafts are previews, nothing is sent" in body
-    assert "no destructive action is exposed here" in body
+    assert "evidence is never edited or deleted here" in body
     # Privacy posture surfaces the scrub report (status + scrubbed field names).
     assert "scrubbed_fields" in body and "Scrub status" in body
     # No destructive operation is wired into the UI.

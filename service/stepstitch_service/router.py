@@ -124,6 +124,7 @@ def create_stepstitch_router(
     retention_days: int = 30,
     capture_enabled: Optional[CaptureEnabledFn] = None,
     scrub_policy: ScrubPolicy = FINANCIAL_SERVICES_ENTERPRISE,
+    scrub_policy_provider: Optional[Callable[[], Any]] = None,
     draft_adapters: Optional[List[DraftAdapter]] = None,
     record_writers: Optional[List[RecordWriter]] = None,
     github_bridge: Optional[Any] = None,
@@ -200,11 +201,21 @@ def create_stepstitch_router(
             "footsteps": [f.model_dump() for f in payload.footsteps],
             "metadata": dict(payload.metadata),
         }
+        # Resolve the active policy per-ingest: the base profile, optionally TIGHTENED by
+        # operator overrides (dashboard scrub editor). A broken provider falls back to the
+        # base policy so the trust boundary never weakens or fails open.
+        policy = scrub_policy
+        if scrub_policy_provider is not None:
+            try:
+                policy = await scrub_policy_provider()
+            except Exception:
+                logger.exception("stepstitch scrub_policy_provider failed; using base policy")
+                policy = scrub_policy
         try:
-            scrubbed, scrub_report = scrub_trace_payload(raw, scrub_policy)
+            scrubbed, scrub_report = scrub_trace_payload(raw, policy)
         except ScrubRejection as exc:
             await _audit("stepstitch.scrub_reject", str(user_id),
-                         {"fields": exc.fields, "policy": scrub_policy.name})
+                         {"fields": exc.fields, "policy": policy.name})
             raise HTTPException(
                 status_code=422,
                 detail={"error": "payload rejected by scrub policy", "fields": exc.fields},
@@ -281,6 +292,46 @@ def create_stepstitch_router(
             for r in rows
         ]
         return {"status": "ok", "sessions": items}
+
+    @router.get("/audit")
+    async def list_audit(
+        admin: Any = Depends(require_admin),
+        action: Optional[str] = Query(None),
+        trace_id: Optional[str] = Query(None),
+        limit: int = Query(100, ge=1, le=500),
+    ) -> Dict[str, Any]:
+        # Operator-only governance read of the durable audit trail. NOT an MCP/Copilot tool —
+        # the audit log is for humans proving who/what accessed evidence, never for agents.
+        # The detail column carries only structural ids (trace/correlation), never NPI.
+        clauses: List[str] = []
+        params: List[Any] = []
+        if action:
+            clauses.append("action = ?")
+            params.append(action)
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        params.append(limit)
+        rows = await fetchall(
+            "SELECT id, action, actor, detail, created_at "
+            f"FROM stepstitch_audit{where} ORDER BY created_at DESC LIMIT ?",
+            tuple(params),
+        )
+        entries = []
+        for r in rows:
+            detail = _loads(r[3]) if r[3] else None
+            # Optional client-side-style filter by trace_id without a JSON query dependency.
+            if trace_id and not (isinstance(detail, dict) and detail.get("trace_id") == trace_id):
+                continue
+            entries.append({
+                "id": r[0],
+                "action": r[1],
+                "actor": r[2],
+                "detail": detail,
+                "created_at": r[4].isoformat() if hasattr(r[4], "isoformat") else r[4],
+            })
+        # Reading the audit log is itself an audited admin action.
+        await _audit("stepstitch.audit_read", _actor_id(admin),
+                     {"action_filter": action, "trace_id": trace_id, "returned": len(entries)})
+        return {"status": "ok", "entries": entries}
 
     @router.get("/session/{trace_id}")
     async def get_session(

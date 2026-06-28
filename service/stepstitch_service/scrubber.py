@@ -83,11 +83,17 @@ _PII_PATTERNS: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (
 )
 
 
-def redact_text(text: Optional[str]) -> Tuple[Optional[str], List[str]]:
+def redact_text(
+    text: Optional[str],
+    extra: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (),
+) -> Tuple[Optional[str], List[str]]:
     """Redact PII from a free-text string.
 
     Returns ``(scrubbed_text, kinds)`` where ``kinds`` lists the distinct PII
     categories that fired (e.g. ``["ssn", "email"]``). ``None`` passes through.
+
+    ``extra`` is an optional tuple of ``(label, compiled-pattern)`` applied AFTER the
+    built-in passes — operator-configured additions that can only ADD redaction.
     """
     if text is None:
         return None, []
@@ -97,7 +103,28 @@ def redact_text(text: Optional[str]) -> Tuple[Optional[str], List[str]]:
         if pattern.search(out):
             out = pattern.sub(f"[redacted:{kind}]", out)
             kinds.append(kind)
+    for kind, pattern in extra:
+        if pattern.search(out):
+            out = pattern.sub(f"[redacted:{kind}]", out)
+            kinds.append(kind)
     return out, kinds
+
+
+def compile_extra_redactions(
+    policy: "ScrubPolicy",
+) -> Tuple[Tuple[str, "re.Pattern[str]"], ...]:
+    """Compile a policy's operator-supplied ``extra_redactions`` to ``(label, pattern)``.
+
+    An un-compilable pattern is skipped (it is validated/rejected at config-save time, but
+    we never let a bad stored pattern break ingestion)."""
+    compiled: List[Tuple[str, "re.Pattern[str]"]] = []
+    for item in policy.extra_redactions:
+        try:
+            label, raw = item[0], item[1]
+            compiled.append((f"custom:{label}", re.compile(raw)))
+        except (re.error, IndexError, TypeError):
+            continue
+    return tuple(compiled)
 
 
 # --- Policy -------------------------------------------------------------------
@@ -178,6 +205,17 @@ class ScrubPolicy:
     # When True, a forbidden key (or disallowed free text under "disabled") makes
     # the whole payload invalid → router returns 422 instead of silently dropping.
     reject_on_forbidden: bool = False
+    # Operator additions from the dashboard scrub editor. Both can only TIGHTEN: extra
+    # patterns add redaction, extra keys add drops. Neither can remove a built-in rule, so
+    # the floor (``_PII_PATTERNS`` + ``_DEFAULT_FORBIDDEN_KEYS``) always holds regardless of
+    # config. ``extra_redactions`` is a tuple of ``(label, regex-string)``.
+    extra_redactions: Tuple[Tuple[str, str], ...] = ()
+    extra_forbidden_keys: frozenset = frozenset()
+
+    @property
+    def all_forbidden_keys(self) -> frozenset:
+        """Built-in forbidden keys UNION operator additions — never fewer than the built-ins."""
+        return self.forbidden_keys | self.extra_forbidden_keys
 
 
 FINANCIAL_SERVICES_ENTERPRISE = ScrubPolicy()
@@ -201,6 +239,7 @@ def _scrub_metadata(
     prefix: str,
     scrubbed: List[str],
     rejected: List[str],
+    extra: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (),
 ) -> Dict[str, Any]:
     """Drop forbidden + non-allowlisted keys; PII-scrub remaining string values."""
     if not isinstance(meta, dict):
@@ -208,7 +247,7 @@ def _scrub_metadata(
     clean: Dict[str, Any] = {}
     for key, value in meta.items():
         field_path = f"{prefix}.{key}"
-        if key in policy.forbidden_keys:
+        if key in policy.all_forbidden_keys:
             scrubbed.append(field_path)
             rejected.append(field_path)
             continue
@@ -223,7 +262,7 @@ def _scrub_metadata(
                     scrubbed.append(field_path)
                 clean[key] = templated[: policy.max_text_len]
                 continue
-            redacted, kinds = redact_text(value)
+            redacted, kinds = redact_text(value, extra)
             if redacted is not None and len(redacted) > policy.max_text_len:
                 redacted = redacted[: policy.max_text_len]
             if kinds or redacted != value:
@@ -257,6 +296,7 @@ def scrub_trace_payload(
     scrubbed_fields: List[str] = []
     rejected_fields: List[str] = []
     result = dict(payload)
+    extra = compile_extra_redactions(policy)  # operator additions; () for the base policy
 
     # 1. Free-text explanation — the single biggest NPI carrier.
     explanation = result.get("explanation")
@@ -266,7 +306,7 @@ def scrub_trace_payload(
             rejected_fields.append("explanation")
         result["explanation"] = None
     else:
-        redacted, kinds = redact_text(explanation)
+        redacted, kinds = redact_text(explanation, extra)
         if redacted is not None and len(redacted) > policy.max_text_len:
             redacted = redacted[: policy.max_text_len]
             if "explanation" not in scrubbed_fields:
@@ -291,7 +331,7 @@ def scrub_trace_payload(
         for text_key in ("label", "target"):
             val = step.get(text_key)
             if isinstance(val, str):
-                redacted, kinds = redact_text(val)
+                redacted, kinds = redact_text(val, extra)
                 if redacted is not None and len(redacted) > policy.max_text_len:
                     redacted = redacted[: policy.max_text_len]
                 if kinds or (redacted != val):
@@ -307,6 +347,7 @@ def scrub_trace_payload(
                 f"footsteps[{i}].metadata",
                 scrubbed_fields,
                 rejected_fields,
+                extra,
             )
         clean_steps.append(step)
     result["footsteps"] = clean_steps
@@ -320,6 +361,7 @@ def scrub_trace_payload(
             "metadata",
             scrubbed_fields,
             rejected_fields,
+            extra,
         )
 
     if policy.reject_on_forbidden and rejected_fields:
@@ -353,4 +395,5 @@ __all__ = [
     "redact_text",
     "route_template",
     "derive_policy",
+    "compile_extra_redactions",
 ]

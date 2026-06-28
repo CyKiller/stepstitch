@@ -53,6 +53,30 @@ CREATE TABLE IF NOT EXISTS stepstitch_verifications (
 );
 CREATE INDEX IF NOT EXISTS ix_stepstitch_verif_trace   ON stepstitch_verifications (trace_id);
 CREATE INDEX IF NOT EXISTS ix_stepstitch_verif_verdict ON stepstitch_verifications (verdict, created_at DESC);
+
+-- Agent connections: named, scoped bearer tokens for AI/MCP consumers. Only the token
+-- HASH is stored (never the token) + a scope tier; enforcement lives in the host
+-- (server/agents.py). Carries no NPI.
+CREATE TABLE IF NOT EXISTS stepstitch_agents (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    token_hash  TEXT NOT NULL UNIQUE,
+    scope       TEXT NOT NULL,
+    revoked     BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMPTZ NOT NULL,
+    created_by  TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_stepstitch_agents_token ON stepstitch_agents (token_hash);
+
+-- Operator config (dashboard). A small per-key JSON store; today holds the scrub overrides
+-- (custom redaction patterns + extra forbidden keys) that only ever TIGHTEN the base
+-- profile. Carries no NPI.
+CREATE TABLE IF NOT EXISTS stepstitch_config (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  TIMESTAMPTZ NOT NULL,
+    updated_by  TEXT
+);
 """
 
 
