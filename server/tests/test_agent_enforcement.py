@@ -105,11 +105,14 @@ def test_scoped_token_gates_reads_by_tier():
     repros = _register(client, "Claude repros", "repros")["token"]
 
     # summaries tier: summary OK, playwright denied.
-    assert client.get(f"{_PFX}/session/{tid}/summary", headers=_bearer(summaries)).status_code == 200
-    assert client.get(f"{_PFX}/session/{tid}/playwright", headers=_bearer(summaries)).status_code == 403
+    ok = client.get(f"{_PFX}/session/{tid}/summary", headers=_bearer(summaries))
+    assert ok.status_code == 200
+    denied = client.get(f"{_PFX}/session/{tid}/playwright", headers=_bearer(summaries))
+    assert denied.status_code == 403
 
     # repros tier: playwright OK.
-    assert client.get(f"{_PFX}/session/{tid}/playwright", headers=_bearer(repros)).status_code == 200
+    allowed = client.get(f"{_PFX}/session/{tid}/playwright", headers=_bearer(repros))
+    assert allowed.status_code == 200
 
     # No agent tier reaches the raw trace or the audit log.
     assert client.get(f"{_PFX}/session/{tid}", headers=_bearer(repros)).status_code == 403
@@ -137,7 +140,8 @@ def test_revoked_token_stops_working():
     tok = agent["token"]
 
     assert client.get(f"{_PFX}/session/{tid}/summary", headers=_bearer(tok)).status_code == 200
-    assert client.post(f"/admin/agents/{agent['id']}/revoke", headers=_bearer(ADMIN)).status_code == 200
+    rev = client.post(f"/admin/agents/{agent['id']}/revoke", headers=_bearer(ADMIN))
+    assert rev.status_code == 200
     # Revoked → no longer resolves as an agent → normal auth rejects it.
     assert client.get(f"{_PFX}/session/{tid}/summary", headers=_bearer(tok)).status_code == 401
 

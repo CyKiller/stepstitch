@@ -4,14 +4,13 @@ The dashboard can ADD custom redaction patterns; the host resolves the active po
 ingest as (base profile + overrides). Overrides can only tighten — built-in PII redaction
 always still fires. Uses in-memory fakes.
 """
-import json
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from stepstitch_service.scrubber import FINANCIAL_SERVICES_ENTERPRISE as BASE
 
 from server.auth import build_auth
 from server.host import apply_scrub_overrides, build_app
-from stepstitch_service.scrubber import FINANCIAL_SERVICES_ENTERPRISE as BASE
 
 ADMIN = "admin-secret"
 INGEST = "ingest-secret"
@@ -123,6 +122,8 @@ def test_builtins_still_fire_with_overrides_active():
 
 def test_preview_uses_candidate_patterns():
     client, _ = _client()
-    out = client.post("/admin/scrub/preview", headers=_h(ADMIN),
-                      json={"text": "ref EMP-7", "extra_redactions": [["empid", r"EMP-\d+"]]}).json()
+    resp = client.post("/admin/scrub/preview", headers=_h(ADMIN),
+                       json={"text": "ref EMP-7",
+                             "extra_redactions": [["empid", r"EMP-\d+"]]})
+    out = resp.json()
     assert "EMP-7" not in out["redacted"] and "custom:empid" in out["kinds"]
