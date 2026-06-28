@@ -20,10 +20,17 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
+from .attestation import (
+    build_attestation,
+    bundle_sha256,
+    canonical_bytes,
+    verify_recipe,
+)
 from .delivery.base import DeliveryError, DeliveryService, RecordWriter
-from .github_bridge.content import branch_name, regression_test_path
 from .fix_memory import fingerprint as fix_fingerprint
 from .fix_memory import match as fix_match
+from .fragility import compute_fragility_map, minimal_repro
+from .github_bridge.content import branch_name, regression_test_path
 from .integrations.base import DraftAdapter, build_trace_summary, export_preview
 from .replayability import score_trace
 from .retention import purge_expired_traces
@@ -127,6 +134,7 @@ def create_stepstitch_router(
     capture_enabled: Optional[CaptureEnabledFn] = None,
     scrub_policy: ScrubPolicy = FINANCIAL_SERVICES_ENTERPRISE,
     scrub_policy_provider: Optional[Callable[[], Any]] = None,
+    sign_blob: Optional[Callable[[bytes], Any]] = None,
     draft_adapters: Optional[List[DraftAdapter]] = None,
     record_writers: Optional[List[RecordWriter]] = None,
     github_bridge: Optional[Any] = None,
@@ -743,6 +751,92 @@ def create_stepstitch_router(
                      {"trace_id": trace_id, "matches": len(matches)})
         return {"status": "ok", "trace_id": trace_id, "fingerprint": new_fp,
                 "similar_fixes": matches}
+
+    @router.get("/session/{trace_id}/attestation")
+    async def get_attestation(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        # Evidence Attestation: a canonical, tamper-evident bundle (scrub report + replayability
+        # + verdict + sdk build) anyone can verify INDEPENDENTLY (recompute the hash; if signed,
+        # cosign verify-blob with the tenant's key). Optionally signed by a host-injected signer
+        # bound to the tenant's key — the service never holds a key. Read-only, audited, NPI-free.
+        row = await fetchone(
+            "SELECT footsteps, project_id, trace_metadata FROM stepstitch_traces WHERE id = ?",
+            (trace_id,))
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        footsteps = _loads(row[0])
+        summary = build_trace_summary(trace_id, footsteps, project_id=row[1])
+        meta = _loads(row[2]) or {}
+        scrub = meta.get("_scrub") if isinstance(meta, dict) else None
+        sdk_build = meta.get("sdk_build") if isinstance(meta, dict) else None
+        vrow = await fetchone(
+            "SELECT verdict, fix_ref, run_url FROM stepstitch_verifications "
+            "WHERE trace_id = ? ORDER BY created_at DESC LIMIT 1", (trace_id,))
+        latest = ({"verdict": vrow[0], "fix_ref": vrow[1], "run_url": vrow[2]} if vrow else None)
+        bundle = build_attestation(
+            trace_id,
+            summary=summary.as_dict(),
+            replayability=score_trace(footsteps),
+            scrub=scrub,
+            never_captured=[
+                "screenshots", "video", "input values", "raw URLs", "page text",
+                "request/response bodies", "console messages", "network headers",
+            ],
+            sdk_build=sdk_build,
+            latest_verification=latest,
+        )
+        digest = bundle_sha256(bundle)
+        signature = None
+        if sign_blob is not None:
+            try:
+                result = sign_blob(canonical_bytes(bundle))
+                signature = await result if inspect.isawaitable(result) else result
+            except Exception:
+                logger.exception("stepstitch attestation signing failed")
+                signature = None
+        await _audit("stepstitch.attestation", _actor_id(admin),
+                     {"trace_id": trace_id, "signed": signature is not None})
+        return {
+            "status": "ok", "trace_id": trace_id, "bundle": bundle,
+            "bundle_sha256": digest, "signature": signature,
+            "signed": signature is not None, "verify_recipe": verify_recipe(trace_id),
+        }
+
+    @router.get("/session/{trace_id}/fragility")
+    async def get_fragility(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        # Fragility Radar: which steps are most likely to break (selector brittleness +
+        # templated routes), ranked worst-first. Read-only, audited, NPI-free.
+        row = await fetchone(
+            "SELECT footsteps FROM stepstitch_traces WHERE id = ?", (trace_id,))
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        await _audit("stepstitch.fragility", _actor_id(admin), {"trace_id": trace_id})
+        return {"status": "ok", "trace_id": trace_id, **compute_fragility_map(_loads(row[0]))}
+
+    @router.get("/session/{trace_id}/minimal-repro")
+    async def get_minimal_repro(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        # The smallest failing path (drops unrelated-route detours), compiled to Playwright.
+        row = await fetchone(
+            "SELECT footsteps FROM stepstitch_traces WHERE id = ?", (trace_id,))
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        mr = minimal_repro(_loads(row[0]))
+        code = generate_playwright_test(trace_id, mr["footsteps"], base_url=base_url)
+        await _audit("stepstitch.minimal_repro", _actor_id(admin),
+                     {"trace_id": trace_id, "reduced_steps": mr["reduced_steps"]})
+        return {
+            "status": "ok", "trace_id": trace_id,
+            "original_steps": mr["original_steps"], "reduced_steps": mr["reduced_steps"],
+            "reduction_ratio": mr["reduction_ratio"], "playwright_code": code,
+        }
 
     @router.get("/corpus")
     async def get_corpus(

@@ -13,7 +13,7 @@ read-only/draft surface with no bespoke adapter. The server is
 > network; the trust boundary (server-side scrubber), admin auth, and `stepstitch.*`
 > read-audit all stay in the StepStitch service behind the connector.
 
-## The nine tools (identical to the OpenAPI pack)
+## The twelve tools (identical to the OpenAPI pack)
 
 | MCP tool | Service route | Returns |
 |---|---|---|
@@ -24,6 +24,9 @@ read-only/draft surface with no bespoke adapter. The server is
 | `get_diagnostic_summary` | `GET /session/{id}/diagnostic-summary` | sanitized diagnostics + next step |
 | `generate_playwright_repro` | `GET /session/{id}/playwright` | runnable Playwright code (text) |
 | `match_verified_fixes` | `GET /session/{id}/similar-fixes` | structural matches to prior verified fixes (no NPI) |
+| `get_attestation` | `GET /session/{id}/attestation` | signed, independently-verifiable evidence bundle (no NPI) |
+| `get_fragility_map` | `GET /session/{id}/fragility` | per-step fragility ranking, worst-first (no NPI) |
+| `generate_minimal_repro` | `GET /session/{id}/minimal-repro` | smallest failing path compiled to Playwright (no NPI) |
 | `create_export_preview` | `POST /session/{id}/export-preview` | ServiceNow/Salesforce/Genesys **drafts** |
 | `create_fs_export_preview` | `POST /session/{id}/financial-services-export-preview` | named FS support **draft** pack |
 

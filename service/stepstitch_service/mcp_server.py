@@ -165,6 +165,33 @@ COPILOT_SAFE_OPERATIONS: Tuple[CopilotSafeOperation, ...] = (
         params=(_TRACE_ID,),
     ),
     CopilotSafeOperation(
+        operation_id="GetAttestation",
+        tool_name="get_attestation",
+        method="GET",
+        path="/session/{trace_id}/attestation",
+        description="Signed, independently-verifiable evidence bundle (scrub report + "
+                    "replayability + verdict + SDK build) with a tamper-evident hash. No NPI.",
+        params=(_TRACE_ID,),
+    ),
+    CopilotSafeOperation(
+        operation_id="GetFragilityMap",
+        tool_name="get_fragility_map",
+        method="GET",
+        path="/session/{trace_id}/fragility",
+        description="Per-step fragility ranking (selector brittleness + templated routes), "
+                    "worst-first — predicts what will break. No NPI.",
+        params=(_TRACE_ID,),
+    ),
+    CopilotSafeOperation(
+        operation_id="GenerateMinimalRepro",
+        tool_name="generate_minimal_repro",
+        method="GET",
+        path="/session/{trace_id}/minimal-repro",
+        description="The smallest failing path compiled to Playwright (drops unrelated-route "
+                    "detours). No NPI.",
+        params=(_TRACE_ID,),
+    ),
+    CopilotSafeOperation(
         operation_id="CreateExportPreview",
         tool_name="create_export_preview",
         method="POST",

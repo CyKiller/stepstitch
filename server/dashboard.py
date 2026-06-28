@@ -441,6 +441,9 @@ DASHBOARD_HTML = r"""<!doctype html>
       var html = "";
       html += '<div class="actions">' +
         '<button id="act-modelview" class="primary">What the model sees</button>' +
+        '<button id="act-attest">Signed evidence</button>' +
+        '<button id="act-fragility">Fragility</button>' +
+        '<button id="act-minrepro">Minimal repro</button>' +
         '<button id="act-repro">View Playwright repro</button>' +
         '<button id="act-drafts">Preview drafts</button>' +
         '<button id="act-github">Dry-run GitHub PR</button>' +
@@ -514,6 +517,9 @@ DASHBOARD_HTML = r"""<!doctype html>
       detailEl.innerHTML = html;
       // Wire actions via closures (no trace_id interpolated into inline onclick markup).
       document.getElementById("act-modelview").onclick = function () { ssModelView(id); };
+      document.getElementById("act-attest").onclick = function () { ssAttest(id); };
+      document.getElementById("act-fragility").onclick = function () { ssFragility(id); };
+      document.getElementById("act-minrepro").onclick = function () { ssMinRepro(id); };
       document.getElementById("act-repro").onclick = function () { ssRepro(id); };
       document.getElementById("act-drafts").onclick = function () { ssDrafts(id); };
       document.getElementById("act-github").onclick = function () { ssGithub(id); };
@@ -579,6 +585,58 @@ DASHBOARD_HTML = r"""<!doctype html>
         '<pre>' + esc(JSON.stringify(never, null, 2)) + '</pre></div>';
     }
     showHtml("What an AI agent receives (MCP payload)", body);
+  };
+
+  // Evidence Attestation: a canonical, tamper-evident bundle anyone can verify independently.
+  window.ssAttest = async function (id) {
+    show("Signed evidence attestation", "Composing the attestation…");
+    try {
+      var r = await api("/session/" + id + "/attestation");
+      var body = '<div class="label" style="font-style:normal;margin:0 0 8px">A canonical, ' +
+        'tamper-evident evidence bundle' +
+        (r.signed ? ' <strong>signed with the tenant key</strong>' : ' (unsigned — hash only)') +
+        '. Anyone can verify it independently — recompute the hash, and (if signed) ' +
+        '<code>cosign verify-blob</code> with your public key.</div>' +
+        '<div style="margin-bottom:6px"><span class="pill" style="color:var(--ok);border-color:var(--ok)">' +
+        esc(r.bundle_sha256 || "") + '</span></div>' +
+        '<pre>' + esc(JSON.stringify(r.bundle, null, 2)) + '</pre>' +
+        (r.signature ? '<div class="muted" style="margin-top:8px">signature:</div><pre>' +
+          esc(r.signature) + '</pre>' : '') +
+        '<div class="label" style="margin-top:8px">' + esc(r.verify_recipe || "") + '</div>';
+      showHtml("Signed evidence attestation", body);
+    } catch (e) { show("Attestation", e.message); }
+  };
+
+  // Fragility Radar: which steps are most likely to break, ranked worst-first.
+  window.ssFragility = async function (id) {
+    try {
+      var r = await api("/session/" + id + "/fragility");
+      var rows = (r.fragility || []).map(function (f) {
+        var pct = Math.round((f.risk || 0) * 100);
+        var color = pct >= 70 ? "#f85149" : (pct >= 40 ? "var(--warn)" : "var(--ok)");
+        return '<tr><td style="padding:3px 10px 3px 0">step ' + esc(f.step_index) + '</td>' +
+          '<td style="padding:3px 10px 3px 0"><span class="pill">' + esc(f.stability) + '</span></td>' +
+          '<td style="padding:3px 10px 3px 0;color:' + color + '">' + pct + '%</td>' +
+          '<td class="muted" style="padding:3px 0;font-size:11px">' + esc(f.recommendation) + '</td></tr>';
+      }).join("");
+      var body = rows
+        ? '<div class="muted" style="margin-bottom:6px">' + esc(r.interactive_steps) +
+          ' interactive steps, ranked by how likely they are to break:</div>' +
+          '<table style="width:100%;border-collapse:collapse;font-size:12.5px"><tbody>' + rows + '</tbody></table>'
+        : '<p class="muted">No interactive steps to assess.</p>';
+      showHtml("Fragility radar", body);
+    } catch (e) { show("Fragility", e.message); }
+  };
+
+  // Minimal repro: the smallest failing path, compiled to Playwright.
+  window.ssMinRepro = async function (id) {
+    try {
+      var r = await api("/session/" + id + "/minimal-repro");
+      var body = '<div class="muted" style="margin-bottom:6px">Reduced from ' +
+        esc(r.original_steps) + ' to <strong>' + esc(r.reduced_steps) +
+        '</strong> steps (the failing-route path):</div><pre>' + esc(r.playwright_code || "") + '</pre>';
+      showHtml("Minimal repro", body);
+    } catch (e) { show("Minimal repro", e.message); }
   };
 
   // Insert a popout whose body is already-built, esc()-sanitized HTML (vs show(), which

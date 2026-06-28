@@ -69,6 +69,30 @@
         "responses": { "200": { "description": "Similar verified fixes" }, "404": { "description": "Not found" } }
       }
     },
+    "/session/{trace_id}/attestation": {
+      "get": {
+        "operationId": "GetAttestation",
+        "summary": "Signed, independently-verifiable evidence bundle (no NPI).",
+        "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Attestation bundle" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/session/{trace_id}/fragility": {
+      "get": {
+        "operationId": "GetFragilityMap",
+        "summary": "Per-step fragility ranking, worst-first (no NPI).",
+        "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Fragility map" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/session/{trace_id}/minimal-repro": {
+      "get": {
+        "operationId": "GenerateMinimalRepro",
+        "summary": "Smallest failing path compiled to Playwright (no NPI).",
+        "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Minimal repro" }, "404": { "description": "Not found" } }
+      }
+    },
     "/session/{trace_id}/export-preview": {
       "post": {
         "operationId": "CreateExportPreview",

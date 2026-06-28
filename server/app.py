@@ -19,6 +19,7 @@ from .host import build_app
 from .oidc import oidc_auth_from_env
 from .retention_job import logger as retention_logger
 from .retention_job import purge_interval_from_env, run_purge_loop
+from .signing import make_cosign_signer
 
 _ALEMBIC_INI = pathlib.Path(__file__).resolve().parent / "alembic.ini"
 
@@ -72,6 +73,10 @@ def create_app_from_env():
         get_user_id, require_admin = build_auth(admin_token, ingest_token)
     execute, fetchone, fetchall = build_db_callables(proxy)
     audit = make_db_audit(execute)  # durable audit trail (stepstitch_audit table)
+    # Optional tenant-controlled evidence signing (Evidence Attestation). The key is the
+    # deployer's; the service core never holds one. Unset -> attestations are returned unsigned.
+    signing_key = os.environ.get("STEPSTITCH_SIGNING_KEY")
+    sign_blob = make_cosign_signer(signing_key) if signing_key else None
 
     draft_adapters = None
     if enable_adapters:  # the built-in adapters (Apache-2.0); the core never imports them
@@ -134,6 +139,7 @@ def create_app_from_env():
         lifespan=lifespan,
         admin_token=admin_token,
         ingest_token=ingest_token,
+        sign_blob=sign_blob,
     )
 
 

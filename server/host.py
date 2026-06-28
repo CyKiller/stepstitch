@@ -93,6 +93,7 @@ def build_app(
     lifespan: Any = None,
     admin_token: Optional[str] = None,
     ingest_token: Optional[str] = None,
+    sign_blob: Optional[Callable[..., Any]] = None,
 ) -> FastAPI:
     """Build the ingest API. ``draft_adapters`` are the injected (Apache-2.0) adapters;
     ``record_writers`` enable the optional governed direct-write; ``audit`` is the audit
@@ -134,6 +135,7 @@ def build_app(
         retention_days=retention_days,
         scrub_policy=base_policy,
         scrub_policy_provider=_scrub_policy_provider,
+        sign_blob=sign_blob,
         draft_adapters=draft_adapters,
         record_writers=record_writers,
         github_bridge=github_bridge,
