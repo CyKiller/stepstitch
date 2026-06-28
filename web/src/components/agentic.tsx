@@ -10,6 +10,10 @@ const tools = [
   "get_privacy_posture",
   "get_diagnostic_summary",
   "generate_playwright_repro",
+  "match_verified_fixes",
+  "get_attestation",
+  "get_fragility_map",
+  "generate_minimal_repro",
   "create_export_preview",
   "create_fs_export_preview",
 ];
@@ -41,7 +45,7 @@ export function Agentic() {
     <Section id="agents" className="border-b border-line">
       <SectionHeader
         title="Bring your own agentic network"
-        body="StepStitch is a capability provider, not an agent orchestrator. One MCP server surfaces eight read-only and draft tools. Any agent network consumes them. The autonomy lives in your stack."
+        body="StepStitch is a capability provider, not an agent orchestrator. One MCP server surfaces twelve read-only and draft tools — including structural fix-memory, signed evidence attestation, and fragility prediction. Any agent network consumes them. The autonomy lives in your stack."
       />
 
       <div className="mt-12 grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -50,7 +54,7 @@ export function Agentic() {
             <div className="flex items-center gap-2.5">
               <Plugs size={18} weight="bold" className="text-accent" />
               <h3 className="text-base font-semibold text-fg">
-                Eight Copilot-safe tools
+                Twelve Copilot-safe tools
               </h3>
             </div>
             <div className="mt-5 grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">

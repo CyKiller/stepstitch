@@ -30,6 +30,9 @@ const canDo = [
   "Read sanitized diagnostics and the recommended next step",
   "Read the privacy posture and scrub report",
   "Generate a deterministic Playwright reproduction",
+  "Match a bug against the verified-fix corpus — “you’ve fixed this shape before”",
+  "Get a signed, independently-verifiable evidence attestation",
+  "Get a fragility map and a minimal repro for the failing path",
   "Create export-preview drafts (ServiceNow / Salesforce / Genesys / GitHub)",
 ];
 
