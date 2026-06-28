@@ -9,6 +9,7 @@ import { Features } from "@/components/features";
 import { Enterprise } from "@/components/enterprise";
 import { Agentic } from "@/components/agentic";
 import { Console } from "@/components/console";
+import { WhatsNew } from "@/components/whatsnew";
 import { Trust } from "@/components/trust";
 import { OpenCore } from "@/components/open-core";
 import { CaseStudies } from "@/components/case-studies";
@@ -39,6 +40,7 @@ export default function Home() {
       <Features />
       <Agentic />
       <Console />
+      <WhatsNew />
       <OpenCore />
 
       {/* Tier 4 — Trust (regulated enterprise) */}

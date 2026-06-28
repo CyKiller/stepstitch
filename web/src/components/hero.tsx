@@ -33,10 +33,11 @@ export function Hero() {
           </Reveal>
 
           <Reveal delay={0.1}>
-            <p className="mt-5 max-w-[56ch] text-lg leading-relaxed text-muted">
-              When a customer hits a bug, your team can reproduce it and prove
-              the fix. StepStitch never records their screen, their keystrokes,
-              or their data.
+            <p className="mt-5 max-w-[58ch] text-lg leading-relaxed text-muted">
+              When a customer hits a bug, your team reproduces it and proves the
+              fix — never recording their screen, keystrokes, or data. Self-hosted:
+              you hold the evidence, and it&apos;s scrubbed, signed, and
+              independently verifiable.
             </p>
           </Reveal>
 

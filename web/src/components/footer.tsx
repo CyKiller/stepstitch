@@ -22,7 +22,7 @@ const columns = [
       { href: NPM_URL, label: "npm", external: true },
       {
         href: `${GITHUB_URL}/releases`,
-        label: "Releases · v0.5.0",
+        label: "Releases · v0.6.0",
         external: true,
       },
     ],

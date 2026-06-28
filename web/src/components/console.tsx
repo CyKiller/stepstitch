@@ -65,7 +65,7 @@ export function Console() {
       <SectionHeader
         eyebrow="The operator console"
         title="Govern what your AI agents are allowed to see"
-        body="0.5.0 ships a self-hosted console for the part nobody else governs: which agent gets which evidence. Connect agents, scope their tokens, edit the scrub policy, and prove — to the byte — what reaches a model. Each panel points at the open-source code that implements it."
+        body="You get full control over the API and MCP — the dashboard is an optional, opinionated reference, not a requirement. It's the self-hosted console for the part nobody else governs: which agent gets which evidence. Connect agents, scope their tokens, edit the scrub policy, and prove — to the byte — what reaches a model. Each panel points at the open-source code that implements it."
       />
 
       <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
