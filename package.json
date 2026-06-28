@@ -1,6 +1,6 @@
 {
   "name": "@stepstitch/tracker",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "StepStitch — issue-to-repro infrastructure (not session replay): turns a user-reported problem into scrubbed diagnostics, a replayability score, and a copyable Playwright reproduction, without capturing screens, input values, or page text. Zero runtime dependencies.",
   "license": "Apache-2.0",
   "keywords": [
