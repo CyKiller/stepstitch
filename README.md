@@ -159,6 +159,9 @@ for the self-host incident-response notes.
 ## Documentation
 
 - **Getting started** — [`docs/getting-started.md`](docs/getting-started.md) (install → ingest host → first repro)
+- **0.6 features** — [`docs/fix-memory.md`](docs/fix-memory.md) (match a bug against the verified-fix corpus),
+  [`docs/evidence-attestation.md`](docs/evidence-attestation.md) (signed, independently-verifiable evidence),
+  [`docs/fragility-radar.md`](docs/fragility-radar.md) (predict what breaks + minimal repro)
 - **Contributing & governance** — `CONTRIBUTING.md`, `GOVERNANCE.md`, `SECURITY.md`
 - **Build a connector** — `docs/connectors.md` (the public `DraftAdapter` SDK + conformance kit)
 - **Agent networks** — `docs/AGENTS.md` (MCP, function specs for Hermes/OpenAI, the repro→PR loop)

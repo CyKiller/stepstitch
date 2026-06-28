@@ -1,0 +1,43 @@
+# One-command local stack: Postgres + the StepStitch ingest host.
+#
+#   docker compose up --build
+#
+# Then open http://localhost:8000/dashboard and paste the admin token (dev-admin).
+# Seed a sample trace:
+#   STEPSTITCH_BASE_URL=http://localhost:8000 STEPSTITCH_INGEST_TOKEN=dev-ingest \
+#     node scripts/seed-demo-trace.mjs
+#
+# These are throwaway dev credentials — never use them in production.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: stepstitch
+      POSTGRES_PASSWORD: stepstitch
+      POSTGRES_DB: stepstitch
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stepstitch"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  stepstitch:
+    # Build the current source. To run the published image instead, comment `build`
+    # and use:  image: ghcr.io/cykiller/stepstitch-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://stepstitch:stepstitch@db:5432/stepstitch
+      STEPSTITCH_INGEST_TOKEN: dev-ingest
+      STEPSTITCH_ADMIN_TOKEN: dev-admin
+      STEPSTITCH_PROFILE: financial-services-enterprise
+      # Optional: tenant-controlled Evidence Attestation signing (cosign key ref).
+      # STEPSTITCH_SIGNING_KEY: /keys/cosign.key
+    ports:
+      - "8000:8000"

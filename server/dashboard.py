@@ -143,12 +143,17 @@ DASHBOARD_HTML = r"""<!doctype html>
     try {
       var data = await api("/sessions?limit=100");
       var items = data.sessions || [];
-      if (!items.length) { listEl.innerHTML = '<div class="row muted">No traces.</div>'; return; }
+      if (!items.length) {
+        listEl.innerHTML = '<div class="row muted">No traces yet. Seed a sample:<br>' +
+          '<code style="font-size:11px">node scripts/seed-demo-trace.mjs</code></div>';
+        return;
+      }
       listEl.innerHTML = "";
       items.forEach(function (it) {
         var d = document.createElement("div");
         d.className = "row";
-        d.innerHTML = '<div class="id">' + esc(it.trace_id) + '</div>' +
+        var preview = it.explanation ? esc(String(it.explanation).slice(0, 60)) : esc(it.trace_id);
+        d.innerHTML = '<div class="id">' + preview + '</div>' +
           '<div class="meta">' + esc(it.app_id || "—") + ' · ' + esc(it.project_id || "—") +
           ' · ' + esc(it.created_at || "") + '</div>';
         d.onclick = function () { select(it.trace_id, d); };
