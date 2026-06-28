@@ -4,6 +4,26 @@ All notable changes to StepStitch are recorded here. Versions are repo-wide tags
 SDK (`@stepstitch/tracker`) and the backend (`stepstitch_service`) are versioned in
 lockstep per `RELEASE.md`.
 
+## [0.5.0](https://github.com/CyKiller/stepstitch/compare/v0.4.2...v0.5.0) (2026-06-28)
+
+
+### Features
+
+* **dashboard:** governed config console — agent scoping, scrub editor, audit ([02da6e8](https://github.com/CyKiller/stepstitch/commit/02da6e865d16430ac91a609da9abb62aedb6ccda))
+* product wrapper — evidence cockpit, red-to-green demo, buyer pages ([6fa4a60](https://github.com/CyKiller/stepstitch/commit/6fa4a6063e976a673e1674f4efb2a1077370c34b))
+* **web:** audience-altitude homepage, sharpened comparison + launch copy ([659eff2](https://github.com/CyKiller/stepstitch/commit/659eff21132a4cebbca9740dc766b41a7e6f259c))
+* **web:** surface enterprise capabilities, fix credibility + taste gaps ([18f9f48](https://github.com/CyKiller/stepstitch/commit/18f9f488775d7e6b84582d5ba42843c5ac738e49))
+
+
+### Bug Fixes
+
+* **ci:** green up main — bump SDK test node to 20, type the /demo bundle ([b3f6b0c](https://github.com/CyKiller/stepstitch/commit/b3f6b0cabf9989d025457b64aff465a2f5a3d6ca))
+* **compiler:** read exception class from error_type, not the dropped name key ([42c05c1](https://github.com/CyKiller/stepstitch/commit/42c05c16a841441c030d32b4fa63a85939525d6c))
+* **service:** align pyproject version to 0.4.2 (lockstep with SDK) ([3d8cd2c](https://github.com/CyKiller/stepstitch/commit/3d8cd2ce28dbf8edc8895b38ffb0112c448ae9af))
+* **service:** bump pyproject version to 0.4.2 for lockstep with SDK ([4f0b898](https://github.com/CyKiller/stepstitch/commit/4f0b89896a9a02a56d836ea8b67e67e1eaa7ea81))
+* **web:** guard contact email validation against ReDoS; add npm badge ([04d3b0c](https://github.com/CyKiller/stepstitch/commit/04d3b0c610f071841f9650d895dbbd7f3f143366))
+* **web:** ReDoS guard on contact email + npm badge ([38cfc97](https://github.com/CyKiller/stepstitch/commit/38cfc97f9d070fa29993f50da7d595a60e5a2e59))
+
 ## v0.4.2 — First public npm release
 
 - **Published to npm as `@stepstitch/tracker`**, provenance-signed and built by CI.
