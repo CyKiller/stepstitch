@@ -4,6 +4,16 @@ All notable changes to StepStitch are recorded here. Versions are repo-wide tags
 SDK (`@stepstitch/tracker`) and the backend (`stepstitch_service`) are versioned in
 lockstep per `RELEASE.md`.
 
+## [0.6.0](https://github.com/CyKiller/stepstitch/compare/v0.5.0...v0.6.0) (2026-06-28)
+
+
+### Features
+
+* Evidence Attestation + Fragility Radar (0.6.1, 0.6.2) ([c3e0d47](https://github.com/CyKiller/stepstitch/commit/c3e0d47fb54877c7fde6cc99e448848be698d564))
+* Fix Memory — structural match against the verified-fix corpus (0.6.0) ([ad9bc19](https://github.com/CyKiller/stepstitch/commit/ad9bc19ce288d9d6e5072bba32a309572f72ce98))
+* **web:** surface the 0.5.0 operator console on the site ([e1db202](https://github.com/CyKiller/stepstitch/commit/e1db20270720ac5519dd69708587045b8c7c02c9))
+* **web:** surface the 0.6.x agent tools on the site ([59f2568](https://github.com/CyKiller/stepstitch/commit/59f2568e703c0c99521e992924768a30a2821a5e))
+
 ## [0.5.0](https://github.com/CyKiller/stepstitch/compare/v0.4.2...v0.5.0) (2026-06-28)
 
 
