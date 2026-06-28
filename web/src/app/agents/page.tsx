@@ -80,6 +80,45 @@ export default function AgentsPage() {
           </div>
         </Reveal>
 
+        {/* Per-agent scoping (0.5.0) */}
+        <Reveal>
+          <div className="mt-5 rounded-2xl border border-line bg-surface p-6">
+            <div className="flex items-center gap-2.5">
+              <UserCheck size={18} weight="bold" className="text-accent" />
+              <h3 className="text-base font-semibold text-fg">
+                Scope each agent — not just the surface
+              </h3>
+            </div>
+            <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-muted">
+              The list above is the ceiling for <span className="text-fg">any</span> agent. From
+              the operator console you register each agent individually and issue it a named,
+              revocable token scoped to a tier — so one connection gets summaries only while another
+              can pull a repro. The host enforces the scope: an out-of-scope call is refused, not
+              silently allowed, and every read and denial lands on the audit trail.
+            </p>
+            <div className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+              {([
+                ["none", "registered, no access"],
+                ["summaries", "summaries · score · privacy posture"],
+                ["repros", "+ the Playwright reproduction"],
+                ["drafts", "+ sanitized ticket drafts"],
+              ] as const).map(([tier, what]) => (
+                <div
+                  key={tier}
+                  className="rounded-xl border border-line bg-surface-2/50 p-3.5"
+                >
+                  <p className="font-mono text-[12.5px] font-semibold text-accent">
+                    {tier}
+                  </p>
+                  <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
+                    {what}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Reveal>
+
         {/* Can / cannot */}
         <div className="mt-5 grid gap-3 md:grid-cols-2">
           <Reveal>

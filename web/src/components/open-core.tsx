@@ -7,6 +7,7 @@ import { GITHUB_URL } from "@/lib/links";
 const openSource = [
   "The @stepstitch/tracker SDK and the privacy / repro engine",
   "The universal MCP connector and OpenAPI surface",
+  "The operator console: agent scoping, scrub-policy editor, and audit",
   "The ServiceNow, Salesforce, and Genesys draft adapters",
   "OIDC SSO, RBAC, deployment profiles, and the compliance evidence",
 ];

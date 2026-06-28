@@ -76,14 +76,14 @@ tracker.start(); // OFF until consent; honors GPC/DNT`}
 railway up`}
               />
               <CodeBlock
-                code={`# Or build the image yourself
-docker build -t stepstitch .
+                code={`# Or pull the published multi-arch image
+docker pull ghcr.io/cykiller/stepstitch-api:latest
 docker run -p 8000:8000 \\
   -e DATABASE_URL=... \\
   -e STEPSTITCH_ADMIN_TOKEN=... \\
   -e STEPSTITCH_INGEST_TOKEN=... \\
   -e STEPSTITCH_PROFILE=financial-services-enterprise \\
-  stepstitch`}
+  ghcr.io/cykiller/stepstitch-api:latest`}
               />
             </div>
           </Reveal>

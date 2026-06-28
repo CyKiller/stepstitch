@@ -20,6 +20,11 @@ const columns = [
       { href: DOCS_URL, label: "Docs", external: true },
       { href: GITHUB_URL, label: "GitHub", external: true },
       { href: NPM_URL, label: "npm", external: true },
+      {
+        href: `${GITHUB_URL}/releases`,
+        label: "Releases · v0.5.0",
+        external: true,
+      },
     ],
   },
   {

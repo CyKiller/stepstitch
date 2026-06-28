@@ -1,0 +1,94 @@
+import {
+  Plugs,
+  Lock,
+  Eye,
+  ShieldCheck,
+  MagnifyingGlass,
+  UserGear,
+} from "@phosphor-icons/react/dist/ssr";
+import type { Icon } from "@phosphor-icons/react";
+import { Reveal } from "./reveal";
+import { Section, SectionHeader } from "./section";
+
+type Panel = {
+  icon: Icon;
+  title: string;
+  desc: string;
+  proof: string;
+};
+
+// The governed operator console that ships in 0.5.0. Every panel maps to a real,
+// named place in the open-source code — same proof-over-promises stance as the rest
+// of the page. Verified against server/agents.py, server/host.py, server/dashboard.py.
+const panels: Panel[] = [
+  {
+    icon: Plugs,
+    title: "Connect any agent, scoped",
+    desc: "Register each AI agent and issue it a named token scoped to a tier — none, summaries, repros, or drafts. The host enforces the scope; an out-of-scope call is refused, not silently allowed.",
+    proof: "server/agents.py · POST /admin/agents",
+  },
+  {
+    icon: Lock,
+    title: "Tokens you can revoke",
+    desc: "Each agent gets its own bearer token, stored only as a hash and shown once. Registering one hands you a ready-to-paste MCP client config — connect Claude, Copilot, or your own agent with no bespoke wiring.",
+    proof: "secrets.token_urlsafe · copilot/MCP-SETUP.md",
+  },
+  {
+    icon: Eye,
+    title: "See exactly what the model sees",
+    desc: "For any trace, preview the literal MCP payload an agent receives — alongside the never-captured list — before you approve a connection. No screens, values, or PII ever leave the boundary.",
+    proof: "GET /session/{id}/privacy-posture",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Edit the scrub policy live",
+    desc: "Add custom redaction patterns and dropped fields from the dashboard, with a live preview. Edits can only tighten the boundary — never loosen the built-in PII rules — proven by test.",
+    proof: "/admin/config/scrub · scrubber.py",
+  },
+  {
+    icon: MagnifyingGlass,
+    title: "Audit + per-agent activity",
+    desc: "Every operator read and config change is recorded. See each agent's reads, scopes exercised, denials, and last-seen — governance proof your reviewers can read.",
+    proof: "GET /audit",
+  },
+  {
+    icon: UserGear,
+    title: "Self-hosted operator console",
+    desc: "All of the above is a single read-only-by-default page served by the host at /dashboard — admin-gated, audited, with no destructive action exposed. It is the cockpit, not a SaaS you ship your data to.",
+    proof: "server/dashboard.py · GET /dashboard",
+  },
+];
+
+export function Console() {
+  return (
+    <Section id="console" className="border-b border-line">
+      <SectionHeader
+        eyebrow="The operator console"
+        title="Govern what your AI agents are allowed to see"
+        body="0.5.0 ships a self-hosted console for the part nobody else governs: which agent gets which evidence. Connect agents, scope their tokens, edit the scrub policy, and prove — to the byte — what reaches a model. Each panel points at the open-source code that implements it."
+      />
+
+      <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {panels.map((p, i) => {
+          const Glyph = p.icon;
+          return (
+            <Reveal key={p.title} delay={i * 0.06}>
+              <div className="flex h-full flex-col rounded-2xl border border-line bg-surface p-6 md:p-7">
+                <div className="flex items-center gap-2.5">
+                  <Glyph size={18} weight="bold" className="text-accent" />
+                  <h3 className="text-base font-semibold text-fg">{p.title}</h3>
+                </div>
+                <p className="mt-3 flex-1 text-[15px] leading-relaxed text-muted">
+                  {p.desc}
+                </p>
+                <p className="mt-4 font-mono text-[12px] text-accent/90">
+                  {p.proof}
+                </p>
+              </div>
+            </Reveal>
+          );
+        })}
+      </div>
+    </Section>
+  );
+}
