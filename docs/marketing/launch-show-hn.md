@@ -22,6 +22,15 @@ watch. I didn't want another recording. I wanted the bug as a regression test �
 one that fails on the bug and passes once it's fixed, so it stays fixed. So the
 output here is a test, not a replay.
 
+New in 0.6 (and the reason I'm posting now): three things I haven't seen elsewhere,
+each an open-source API + an MCP tool — (1) **Fix Memory**: every confirmed red→green fix
+becomes a structural fingerprint, so a new bug surfaces "you've fixed this shape before"
+without an agent ever seeing raw data; (2) **Evidence Attestation**: a signed, canonical
+evidence bundle you can verify independently with `cosign verify-blob` (I hold no key — you
+sign with yours); (3) **Fragility Radar**: predicts which steps will break + emits a minimal
+repro. Install paths are all live now: `npm i @stepstitch/tracker`,
+`pip install stepstitch-service`, `docker pull ghcr.io/cykiller/stepstitch-api`.
+
 How it works:
 
 - A tiny tracker (`@stepstitch/tracker`, zero runtime deps) records *structural*
