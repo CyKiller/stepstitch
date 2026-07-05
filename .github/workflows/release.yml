@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           # Node 20 for consistency with CI (publish job runs tsc-only `npm run release`).
           node-version: "20"
@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with: { python-version: "3.11" }
       - run: pip install build
       - run: python -m build ./service --outdir dist
@@ -105,7 +105,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Ingest API image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
@@ -115,7 +115,7 @@ jobs:
             ghcr.io/${{ steps.meta.outputs.owner }}/stepstitch-api:${{ steps.meta.outputs.version }}
             ghcr.io/${{ steps.meta.outputs.owner }}/stepstitch-api:latest
       - name: MCP connector image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: service
           file: service/Dockerfile.mcp
