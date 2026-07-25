@@ -486,6 +486,52 @@ def create_stepstitch_router(
             ],
         }
 
+    @router.get("/session/{trace_id}/agent-packet")
+    async def get_agent_packet(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        # The Safe Agent Packet: one call composing the same five already-agent-safe reads
+        # (summary, replayability, privacy posture, diagnostic, Playwright repro) instead of
+        # five round-trips. No new capability — every field here is already individually
+        # exposed as its own MCP tool; this only removes the round-trips.
+        row = await fetchone(
+            "SELECT footsteps, project_id, trace_metadata FROM stepstitch_traces WHERE id = ?",
+            (trace_id,),
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        await _audit("stepstitch.agent_packet", _actor_id(admin), {"trace_id": trace_id})
+        footsteps = _loads(row[0])
+        summary = build_trace_summary(trace_id, footsteps, project_id=row[1])
+        meta = _loads(row[2]) or {}
+        scrub = meta.get("_scrub") if isinstance(meta, dict) else None
+        return {
+            "status": "ok",
+            "trace_id": trace_id,
+            "agent_packet": {
+                "summary": summary.as_dict(),
+                "replayability": score_trace(footsteps),
+                "privacy_posture": {
+                    "policy": scrub_policy.name,
+                    "scrub": scrub,
+                    "never_captured": [
+                        "screenshots", "video", "input values", "raw URLs", "page text",
+                        "request/response bodies", "console messages", "network headers",
+                    ],
+                },
+                "diagnostic": {
+                    "recommended_next_step": _recommended_next_step(summary),
+                    "never_included": [
+                        "raw console logs", "raw error messages", "stack traces",
+                        "request/response bodies", "headers", "cookies",
+                        "input values", "screenshots", "full URLs",
+                    ],
+                },
+                "playwright_code": generate_playwright_test(trace_id, footsteps, base_url),
+            },
+        }
+
     @router.post("/session/{trace_id}/export-preview")
     async def post_export_preview(
         trace_id: str,
@@ -858,6 +904,7 @@ def create_stepstitch_router(
         await _audit("stepstitch.corpus", _actor_id(admin), {"verdict": verdict})
         return {"status": "ok", "verdict": verdict,
                 "entries": [_verification_row(r) for r in rows]}
+
 
     @router.get("/session/{trace_id}/playwright")
     async def get_compiled_repro(

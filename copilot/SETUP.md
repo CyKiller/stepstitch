@@ -11,9 +11,10 @@ handoff.
 ```
 Copilot Studio agent
 ├── StepStitch (custom connector, from copilot/openapi-v2.json)   ← read-only / draft
-│     GetTraceSummary · GetPrivacyPosture · GetReplayabilityScore
-│     GetDiagnosticSummary · GeneratePlaywrightRepro
-│     CreateFinancialServicesExportPreview · ListRecentTraces
+│     ListRecentTraces · GetTraceSummary · GetReplayabilityScore · GetPrivacyPosture
+│     GetDiagnosticSummary · GeneratePlaywrightRepro · MatchVerifiedFixes
+│     GetAttestation · GetFragilityMap · GenerateMinimalRepro · GetAgentPacket
+│     CreateExportPreview · CreateFinancialServicesExportPreview
 ├── ServiceNow (native connector)   ← Create Record (Incident)
 └── Salesforce (native connector)   ← Create Record (Case)
 └── Genesys workflow/context         ← queue/case context, via governed flow
@@ -21,9 +22,9 @@ Copilot Studio agent
 
 ## Choose a connection path
 
-Two ways to connect an agent to the **live** StepStitch service — the same eight
-read-only/draft operations, both sharing `system-prompt.md`, `action-policy.md`, and
-`connector-field-map.md`.
+Two ways to connect an agent to the **live** StepStitch service — the same thirteen
+read-only/draft operations (the **Safe Agent Packet** and twelve individual reads/drafts),
+both sharing `system-prompt.md`, `action-policy.md`, and `connector-field-map.md`.
 
 | Path | Best for | Doc |
 |---|---|---|

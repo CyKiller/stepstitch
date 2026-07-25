@@ -33,6 +33,8 @@ class QueryAwareDB:
         if not row:
             return None
         q = " ".join(query.split())  # normalize whitespace
+        if q.startswith("SELECT footsteps, project_id, trace_metadata"):
+            return (row["footsteps"], row["project_id"], row["trace_metadata"])
         if q.startswith("SELECT footsteps, project_id"):
             return (row["footsteps"], row["project_id"])
         if q.startswith("SELECT trace_metadata"):
@@ -128,7 +130,10 @@ def test_export_preview_builds_drafts_without_npi():
     r = client.post(f"{_PFX}/session/{tid}/export-preview")
     assert r.status_code == 200
     drafts = r.json()["drafts"]
-    assert set(drafts.keys()) == {"servicenow", "salesforce", "genesys"}
+    assert set(drafts.keys()) == {
+        "servicenow", "salesforce", "genesys", "jira", "zendesk",
+        "github_issues", "linear", "slack",
+    }
     assert drafts["servicenow"]["correlation_id"] == f"stepstitch:{tid}"
     assert drafts["genesys"]["diagnostic_endpoint"] == "/api/accounts/:id"
     blob = json.dumps(drafts)
@@ -150,6 +155,43 @@ def test_diagnostic_summary_is_copilot_safe_and_audited():
     assert any(a[0] == "stepstitch.diagnostic_summary" for a in db.audits)
 
 
+def test_agent_packet_composes_the_five_individual_reads():
+    client, db = _build()
+    tid = _ingest(client)
+
+    summary = client.get(f"{_PFX}/session/{tid}/summary").json()["summary"]
+    replayability = client.get(f"{_PFX}/session/{tid}/replayability").json()["replayability"]
+    posture = client.get(f"{_PFX}/session/{tid}/privacy-posture").json()
+    diagnostic = client.get(f"{_PFX}/session/{tid}/diagnostic-summary").json()["diagnostic"]
+    repro = client.get(f"{_PFX}/session/{tid}/playwright").json()["playwright_code"]
+
+    r = client.get(f"{_PFX}/session/{tid}/agent-packet")
+    assert r.status_code == 200
+    packet = r.json()["agent_packet"]
+
+    # Same data as the five individual calls, not a re-derivation that could drift.
+    assert packet["summary"] == summary
+    assert packet["replayability"] == replayability
+    assert packet["privacy_posture"]["policy"] == posture["policy"]
+    assert packet["privacy_posture"]["scrub"] == posture["scrub"]
+    assert packet["privacy_posture"]["never_captured"] == posture["never_captured"]
+    assert packet["diagnostic"]["recommended_next_step"] == diagnostic["recommended_next_step"]
+    assert packet["diagnostic"]["never_included"] == diagnostic["never_included"]
+    assert packet["playwright_code"] == repro
+
+    # No new NPI surface, and it's audited under its own action (not piggybacked on another).
+    blob = json.dumps(packet)
+    assert "123-45-6789" not in blob
+    assert "8675309" not in blob
+    assert any(a[0] == "stepstitch.agent_packet" for a in db.audits)
+
+
+def test_agent_packet_404_on_missing():
+    client, _ = _build()
+    r = client.get(f"{_PFX}/session/nope/agent-packet")
+    assert r.status_code == 404
+
+
 def test_financial_services_export_preview_is_named_and_audited():
     client, db = _build()
     tid = _ingest(client)
@@ -157,7 +199,10 @@ def test_financial_services_export_preview_is_named_and_audited():
     assert r.status_code == 200
     body = r.json()
     assert body["target_pack"] == "financial-services-support"
-    assert set(body["drafts"]) == {"servicenow", "salesforce", "genesys"}
+    assert set(body["drafts"]) == {
+        "servicenow", "salesforce", "genesys", "jira", "zendesk",
+        "github_issues", "linear", "slack",
+    }
     assert any(
         a[0] == "stepstitch.financial_services_export_preview" for a in db.audits
     )

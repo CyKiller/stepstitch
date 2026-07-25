@@ -192,6 +192,16 @@ COPILOT_SAFE_OPERATIONS: Tuple[CopilotSafeOperation, ...] = (
         params=(_TRACE_ID,),
     ),
     CopilotSafeOperation(
+        operation_id="GetAgentPacket",
+        tool_name="get_agent_packet",
+        method="GET",
+        path="/session/{trace_id}/agent-packet",
+        description="The Safe Agent Packet: summary + replayability + privacy posture + "
+                    "diagnostic + Playwright repro composed into one call. No NPI; a "
+                    "convenience wrapper over five already agent-safe reads, not new capability.",
+        params=(_TRACE_ID,),
+    ),
+    CopilotSafeOperation(
         operation_id="CreateExportPreview",
         tool_name="create_export_preview",
         method="POST",

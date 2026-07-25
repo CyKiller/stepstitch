@@ -1,7 +1,36 @@
 # Building a StepStitch connector
 
 StepStitch is fully open (Apache-2.0) and the adapter framework is its **public extension
-seam**. Anyone can add a connector (Jira, Zendesk, Linear, PagerDuty, …) without forking.
+seam**. Anyone can add a connector (PagerDuty, Discord, …) without forking.
+
+## Bundled by default
+
+`default_draft_adapters()` (`stepstitch_service.integrations.bundle`) ships eight adapters
+today, in canonical order:
+
+| Adapter | System | Shape |
+|---|---|---|
+| `ServiceNowAdapter` | ServiceNow | Incident draft |
+| `SalesforceAdapter` | Salesforce | Case draft |
+| `GenesysAdapter` | Genesys | Support-context draft |
+| `JiraAdapter` | Jira | Issue draft |
+| `ZendeskAdapter` | Zendesk | Ticket draft |
+| `GitHubIssuesAdapter` (`name = "github_issues"`) | GitHub Issues | Issue draft |
+| `LinearAdapter` | Linear | Issue draft |
+| `SlackAdapter` | Slack | Message draft (not a ticket — a channel notification) |
+
+`GitHubIssuesAdapter`'s adapter name is `github_issues`, not `github` — that key is already
+used by the human-gated Repair Loop's dry-run issue/PR preview
+(`github_bridge/`, `contracts/stepstitch.md`'s `/github/issue` + `/github/pr`), which is a
+different, more privileged flow (it can open a real issue/PR against *this* repo, admin-only,
+never on the agent surface). This adapter is the general-purpose "draft a ticket in the
+visitor's own GitHub repo" connector — same draft-only posture as every other adapter here.
+
+The first three are enterprise system-of-record adapters; the rest close the developer-first
+gap (GitHub Issues, Linear, Jira, Zendesk, Slack) so a team that isn't running ServiceNow or
+Salesforce still has a first-class integration target. All eight are draft-only and share the
+same governance posture: nothing here ever gains direct-write/auto-file capability — see
+[Optional direct-write](#4-optional-direct-write) below.
 
 A connector turns the sanitized `TraceSummary` into a **flat draft** for a system of record.
 It never sees raw footsteps, the explanation, the user id, page text, or bodies.
@@ -34,7 +63,9 @@ Rules enforced by the framework:
   `raw_url` are rejected.
 - **Deterministic** — same summary in, same draft out.
 
-See the worked references: `integrations/contrib/jira.py` and `integrations/contrib/zendesk.py`.
+See the worked references — also the real, bundled-by-default adapters, not just examples:
+`integrations/contrib/jira.py`, `integrations/contrib/zendesk.py`, `integrations/github.py`,
+`integrations/linear.py`, `integrations/slack.py`.
 
 ## 2. Prove it with the conformance kit
 

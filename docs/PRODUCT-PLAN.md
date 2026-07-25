@@ -23,7 +23,9 @@ capability contract surfaced two ways:
 ```
    ONE capability contract  (contracts/stepstitch.md  +  copilot/openapi-v2.json)
    ListRecentTraces · GetTraceSummary · GetReplayabilityScore · GetPrivacyPosture
-   · GetDiagnosticSummary · GeneratePlaywrightRepro · Create[FS]ExportPreview
+   · GetDiagnosticSummary · GeneratePlaywrightRepro · MatchVerifiedFixes
+   · GetAttestation · GetFragilityMap · GenerateMinimalRepro · GetAgentPacket (composed)
+   · CreateExportPreview · CreateFinancialServicesExportPreview
                                    │
         ┌──────────────────────────┴──────────────────────────┐
         ▼                                                     ▼
@@ -87,13 +89,13 @@ shared by the MCP tools, `copilot/openapi-v2.json`, and the live router routes.
 - **Acceptance (green):** `test_mcp_surface.py::test_mcp_matches_openapi_exactly` (operationId+method+path parity vs OpenAPI) and `::test_mcp_paths_are_real_routes` (every tool maps to a live route) — fails on any drift.
 
 ### P1 — MCP server  ✅ **SHIPPED**  *(the universal connector)*
-`mcp_server.py` exposes the 8 read-only/draft operations as MCP tools; `mcp_cli.py` runs it
+`mcp_server.py` exposes the 12 read-only/draft operations as MCP tools; `mcp_cli.py` runs it
 over stdio. Pure tool-registry + `dispatch_tool` are dependency-free; only `serve_stdio` needs
 the optional `mcp` extra (`pip install 'stepstitch-service[mcp]'`). Dispatch proxies the host's
 deployed service via an injected `call_route`, so the scrubber, admin auth, and `stepstitch.*`
 read-audit stay centralized in the service.
 - **Default posture (enforced):** read-only + draft-only; `is_destructive` guard runs at import and **no** `delete`/`purge`/kill-switch/retention/raw-`explanation` tool can ship.
-- **Acceptance (green):** `test_mcp_surface.py` — `test_no_destructive_mcp_tool`, `test_tool_definitions_have_schemas`, and `test_dispatch_drives_service_sanitized_and_audited` (E2E: tool call → real service → sanitized, no NPI, audited). **183 service tests green.**
+- **Acceptance (green):** `test_mcp_surface.py` — `test_no_destructive_mcp_tool`, `test_tool_definitions_have_schemas`, and `test_dispatch_drives_service_sanitized_and_audited` (E2E: tool call → real service → sanitized, no NPI, audited). **The full service suite is a required-green CI gate.**
 
 ### P2 — Connector enablement, finished  ✅ **SHIPPED**  *(product scope: connectors only)*
 `copilot/` documents **two live-service connector paths**, both sharing `system-prompt.md`
@@ -104,12 +106,12 @@ read-audit stay centralized in the service.
 
 ### P3 — Productization & packaging  ✅ **SHIPPED (open core)**  *(publish steps credential-gated)*
 Open-core boundary is now real and **enforced**, not just declared:
-- **Boundary:** the commercial system-of-record adapters (ServiceNow/Salesforce/Genesys) moved behind injection — `create_stepstitch_router(draft_adapters=...)` + `integrations/bundle.py`. The open core never imports them; with no adapters it still serves every read-only/draft op (export-preview returns `{}`).
+- **Boundary:** the concrete system-of-record adapters (ServiceNow/Salesforce/Genesys — all Apache-2.0 today) moved behind injection — `create_stepstitch_router(draft_adapters=...)` + `integrations/bundle.py`. This is a **layering rule, not a licensing one**: the core never imports a concrete adapter; with no adapters it still serves every read-only/draft op (export-preview returns `{}`).
 - **Enforcement (green):** `test_open_core_boundary.py` (dependency-free AST check) **and** the `.importlinter` contract in `pyproject.toml` — `lint-imports` reports **KEPT**.
-- **License:** Apache-2.0 `LICENSE` + SDK `package.json` (`Apache-2.0`, `publishConfig.access=public`); commercial pack scoped in `COMMERCIAL.md`.
+- **License:** everything Apache-2.0 today — `LICENSE` + SDK `package.json` (`Apache-2.0`, `publishConfig.access=public`); future commercial editions scoped in `COMMERCIAL.md` (additive only, nothing currently open would be closed).
 - **Posture knob:** `STEPSTITCH_PROFILE` documented in `docs/DEPLOY.md` (FS default / healthcare-strict / internal / open-source).
 - **Packaging:** `service/Dockerfile.mcp` (the MCP connector image) + `docs/DEPLOY.md` (install, mount, run).
-- **Still gated (credentials, not engineering):** `npm publish` (flip `private:false`), `twine upload` to PyPI, building/pushing the image.
+- **Still gated (credentials, not engineering):** `npm publish` (the SDK `package.json` is already `publishConfig.access=public`), `twine upload` to PyPI, building/pushing the image.
 
 ### P4 — Governance/compliance pack  ✅ **SHIPPED**  *(the axis-2/3 moat — corrected frameworks)*
 The compliance evidence packet (`compliance.py` → `COMPLIANCE-EVIDENCE.md`) now carries a
@@ -147,6 +149,11 @@ Tools = the frozen Copilot-safe operation set, 1:1. All read-only or draft; all 
 | `get_privacy_posture` | `GET /session/{id}/privacy-posture` | `trace_id` | scrub report + never-captured list | no |
 | `get_diagnostic_summary` | `GET /session/{id}/diagnostic-summary` | `trace_id` | sanitized diagnostic + next-step | no |
 | `generate_playwright_repro` | `GET /session/{id}/playwright` | `trace_id` | runnable Playwright code (header score) | no |
+| `match_verified_fixes` | `GET /session/{id}/similar-fixes` | `trace_id`, `limit≤50` | structural matches to prior verified fixes | no |
+| `get_attestation` | `GET /session/{id}/attestation` | `trace_id` | signed, independently-verifiable evidence bundle | no |
+| `get_fragility_map` | `GET /session/{id}/fragility` | `trace_id` | per-step fragility ranking, worst-first | no |
+| `generate_minimal_repro` | `GET /session/{id}/minimal-repro` | `trace_id` | smallest failing path compiled to Playwright | no |
+| `get_agent_packet` (**Safe Agent Packet**) | `GET /session/{id}/agent-packet` | `trace_id` | the six rows above, composed into one call | no |
 | `create_export_preview` | `POST /session/{id}/export-preview` | `trace_id` | ServiceNow/Salesforce/Genesys **drafts** | no (sends nothing) |
 | `create_fs_export_preview` | `POST /session/{id}/financial-services-export-preview` | `trace_id` | named FS support **draft** pack | no (sends nothing) |
 
@@ -168,8 +175,8 @@ P0–P6 is the **product** play (StepStitch "for all").
 | Item | Unblocker | Owner |
 |---|---|---|
 | ~~OSS split~~ ✅ done | Boundary injected + import-linter contract KEPT (P3) | — |
-| ~~License~~ ✅ done | Open core Apache-2.0; commercial pack scoped in `COMMERCIAL.md` (P3) | — |
-| Publish artifacts | `npm publish` (flip `private`), `twine upload`, build/push `Dockerfile.mcp` | **you** (credentials) |
+| ~~License~~ ✅ done | Everything Apache-2.0 today; future commercial editions scoped in `COMMERCIAL.md` (additive only) (P3) | — |
+| Publish artifacts | `npm publish` (SDK already `publishConfig.access=public`), `twine upload`, build/push `Dockerfile.mcp` | **you** (credentials) |
 | Stand up Copilot agent in tenant | Follow `copilot/SETUP.md` / `MCP-SETUP.md` in the customer's Copilot Studio | **customer tenant** |
 | Optional networks (LangGraph/Bedrock/Vertex) | Pull-driven: a real consumer asks | **pull-driven** |
 

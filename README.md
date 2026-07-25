@@ -82,17 +82,18 @@ support-to-engineering evidence:
 - **Compliance evidence** — `COMPLIANCE-EVIDENCE.md` is generated from the live scrub
   policy (`npm run evidence`); a drift guard keeps it equal to the code.
 
-Each is proven by the test suite (183 service + 31 host + 22 SDK tests). See
-`contracts/stepstitch.md` for the frozen contracts and `COMPLIANCE-EVIDENCE.md` for the
-reviewer packet.
+Each is proven by the test suite — the service, host, and SDK test gates that CI requires
+green. See `contracts/stepstitch.md` for the frozen contracts and `COMPLIANCE-EVIDENCE.md`
+for the reviewer packet.
 
 ## Universal agentic connector (MCP)
 
 StepStitch is a capability **provider**, not an agent orchestrator — it perceives, scores,
 compiles a Playwright repro, and **drafts**, but never plans or acts autonomously. Its
 universal connector is an **MCP server** (`service/stepstitch_service/mcp_server.py`, run
-via `mcp_cli.py`): the same eight read-only/draft operations, consumable by **any** MCP
-client — Microsoft Copilot Studio, OpenAI, Google Vertex, LangGraph, AWS Bedrock, Claude.
+via `mcp_cli.py`): the same thirteen read-only/draft operations — including the composed
+**Safe Agent Packet** (`get_agent_packet`, one call instead of five) — consumable by **any**
+MCP client — Microsoft Copilot Studio, OpenAI, Google Vertex, LangGraph, AWS Bedrock, Claude.
 One server, every agent network; the autonomy stays in the customer's stack. A
 no-destructive guard runs at import, and the tool set is drift-guarded against the OpenAPI
 pack and the live routes (`service/tests/test_mcp_surface.py`). See `copilot/MCP-SETUP.md`
@@ -111,7 +112,8 @@ An **architecture boundary** is still enforced so the design stays clean — the
 imports a *concrete* adapter, and adapters only ever see the sanitized `TraceSummary`. This
 is a layering rule (not a licensing one), proven by
 `service/tests/test_open_core_boundary.py` and an `.importlinter` contract. A future
-commercially-licensed edition may re-introduce a paid adapter/compliance pack; see
+commercially-licensed edition may *add* a separately-licensed adapter or compliance pack —
+additive only; nothing currently Apache-2.0 would be closed. See
 `COMMERCIAL.md`, `docs/PRODUCT-PLAN.md`, and `docs/DEPLOY.md`.
 
 ## Usage

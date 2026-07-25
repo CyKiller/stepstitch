@@ -19,6 +19,11 @@ It is enforced two ways: (1) the agent is only given the tools in `openapi-v2.js
 | `GetPrivacyPosture` | `GET /session/{id}/privacy-posture` | scrub report + never-captured list |
 | `GetDiagnosticSummary` | `GET /session/{id}/diagnostic-summary` | sanitized frontend/API diagnostics only |
 | `GeneratePlaywrightRepro` | `GET /session/{id}/playwright` | returns code text; never executed here |
+| `MatchVerifiedFixes` | `GET /session/{id}/similar-fixes` | structural fingerprint match to prior verified fixes; no NPI |
+| `GetAttestation` | `GET /session/{id}/attestation` | signed, independently-verifiable evidence bundle; no NPI |
+| `GetFragilityMap` | `GET /session/{id}/fragility` | per-step fragility ranking, worst-first; no NPI |
+| `GenerateMinimalRepro` | `GET /session/{id}/minimal-repro` | smallest failing path compiled to Playwright; no NPI |
+| `GetAgentPacket` (**Safe Agent Packet**) | `GET /session/{id}/agent-packet` | composed summary + replayability + privacy posture + diagnostic + repro in one call; no new data, no NPI |
 | `CreateExportPreview` | `POST /session/{id}/export-preview` | builds drafts; sends nothing |
 | `CreateFinancialServicesExportPreview` | `POST /session/{id}/financial-services-export-preview` | builds Salesforce, ServiceNow, Genesys drafts; sends nothing |
 
@@ -47,5 +52,5 @@ It is enforced two ways: (1) the agent is only given the tools in `openapi-v2.js
 2. Always surface the privacy posture ("no SSNs, input values, page text, screenshots,
    raw URLs were captured") alongside any summary.
 3. If a tool returns 404/403, report it plainly; do not retry destructive alternatives.
-4. Keep the tool set tight; these eight read/draft tools are sufficient for the
-   financial-services support pack.
+4. Keep the tool set tight; these thirteen read/draft tools (the Safe Agent Packet plus the
+   twelve individual reads/drafts) are sufficient for the financial-services support pack.

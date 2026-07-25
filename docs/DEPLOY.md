@@ -19,7 +19,7 @@ for the eight-step walk-through and the optional local-Postgres live path.
 
 ## The deployable units
 
-StepStitch ships as three things, not one monolith:
+StepStitch ships as four things, not one monolith:
 
 | Unit | What it is | Install |
 |---|---|---|
@@ -48,7 +48,7 @@ router = create_stepstitch_router(
     generate_playwright_test=generate_playwright_test,
     capture_enabled=my_killswitch_flag,     # org-wide incident kill switch
     scrub_policy=load_profile("financial-services-enterprise"),
-    # Commercial pack (optional): system-of-record draft adapters.
+    # System-of-record draft adapters (optional; host-injected, all Apache-2.0).
     # from stepstitch_service.integrations.bundle import default_draft_adapters
     # draft_adapters=default_draft_adapters(),
 )
@@ -56,7 +56,7 @@ app.include_router(router, prefix="/api")
 ```
 
 The **open core runs with no adapters**: every read-only/draft operation works; export
-previews return an empty draft set until the commercial adapter pack is injected.
+previews return an empty draft set until the system-of-record adapters are injected.
 
 ## Deploy the ingest API on Railway
 
@@ -190,18 +190,19 @@ docker run --rm -i \
 Register it with any MCP client — see [../copilot/MCP-SETUP.md](../copilot/MCP-SETUP.md).
 Transport is stdio today; remote clients (Copilot Studio) front it with streamable-HTTP.
 
-## 4. Open-core boundary (what's publishable as OSS)
+## 4. Open-core boundary (a layering rule, not licensing)
 
-Apache-2.0 core vs. commercial pack is defined in [../COMMERCIAL.md](../COMMERCIAL.md) and
-**enforced**: `test_open_core_boundary.py` (dependency-free AST check) and the
-`.importlinter` contract (`lint-imports`) both prove no core module imports a commercial
-adapter. The commercial adapters live in this repo for now but are import-isolated, so they
-extract into a separate distribution without touching core.
+Everything in this repo is Apache-2.0 today (see [../COMMERCIAL.md](../COMMERCIAL.md)). An
+import boundary is still **enforced** — but as a *layering* rule, not a license one:
+`test_open_core_boundary.py` (dependency-free AST check) and the `.importlinter` contract
+(`lint-imports`) both prove no core module imports a *concrete* adapter. The adapters live
+in this repo and are import-isolated, so the adapter set stays swappable and a future
+commercial edition could ship additively without touching core.
 
 ## Release steps (gated)
 
-- **npm:** the SDK is Apache-2.0 with `publishConfig.access=public`. `private:true` is kept
-  as a safety gate — flip it to publish (`npm publish`). *(Requires npm credentials.)*
+- **npm:** the SDK `package.json` is Apache-2.0 with `publishConfig.access=public` and no
+  `private` flag — `npm publish` is ready to run. *(Requires npm credentials.)*
 - **PyPI:** `python -m build` in `service/` → `twine upload`. *(Requires PyPI credentials.)*
 - **Image:** `service/Dockerfile.mcp` is written but not yet built/pushed in this repo.
 

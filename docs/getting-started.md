@@ -86,4 +86,3 @@ npm run demo   # writes demo/evidence-bundle.json — deterministic, re-runs ide
 - **Agent networks & MCP** — [`docs/AGENTS.md`](AGENTS.md)
 - **Frozen wire contract** — [`contracts/stepstitch.md`](../contracts/stepstitch.md)
 - **Compliance evidence** — [`COMPLIANCE-EVIDENCE.md`](../COMPLIANCE-EVIDENCE.md)
-```
