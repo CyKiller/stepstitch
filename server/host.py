@@ -213,6 +213,10 @@ def build_app(
             "audit_events": await _count("stepstitch_audit"),
             "agents_total": await _count("stepstitch_agents"),
             "agents_active": int(active[0]) if active else 0,
+            # Whether CI has ever reported a repro outcome. The console's setup checklist reads
+            # this to know if the loop is closed — without it, the verified-fix corpus can never
+            # fill and Fix Memory has nothing to match against.
+            "verifications": await _count("stepstitch_verifications"),
         }
 
     # --- Scrub-policy editor (operator config; only ever TIGHTENS the base profile) ---

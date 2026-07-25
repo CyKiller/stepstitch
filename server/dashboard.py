@@ -32,6 +32,9 @@ DASHBOARD_HTML = r"""<!doctype html>
     --ease:cubic-bezier(0.32,0.72,0,1);
   }
   * { box-sizing:border-box; }
+  /* `display:flex` on a component beats the [hidden] attribute's UA default of display:none,
+     so hiding anything flex-based silently fails without this. */
+  [hidden] { display:none !important; }
   html, body { height:100%; }
   body {
     margin:0; background:var(--bg); color:var(--fg);
@@ -41,6 +44,80 @@ DASHBOARD_HTML = r"""<!doctype html>
   }
   code, .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
   ::selection { background:color-mix(in oklab, var(--accent) 28%, transparent); }
+
+  /* Keyboard users get a visible ring on everything focusable. This was missing entirely —
+     an accessibility defect, not a polish item. :focus-visible so pointer users see nothing. */
+  :focus-visible {
+    outline:2px solid var(--accent);
+    outline-offset:2px;
+    border-radius:var(--r-sm);
+  }
+
+  /* Fixed grain layer: breaks the digital flatness without touching any scroller. A data: URI,
+     which the page CSP already permits via `img-src 'self' data:` — no external asset. */
+  .grain {
+    position:fixed; inset:0; z-index:5; pointer-events:none;
+    opacity:.035; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Skeletons mirror the shape of what is loading, so the layout does not jump when it lands. */
+  @media (prefers-reduced-motion: no-preference) {
+    .skel { animation:pulse 1.4s ease-in-out infinite; }
+  }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.55; } }
+  .skel {
+    background:var(--surface-2); border:1px solid var(--line);
+    border-radius:var(--r-lg); height:82px;
+  }
+  .skel.line { height:12px; border-radius:999px; border:none; }
+
+  .search {
+    width:210px; padding:5px 10px; font-size:13px; border-radius:999px;
+    background:var(--bg); transition:width .25s var(--ease), border-color .25s var(--ease);
+  }
+  .search:focus { width:280px; border-color:color-mix(in oklab, var(--accent) 45%, transparent); }
+  .search::placeholder { color:var(--muted); }
+
+  /* Technical-detail switch. Off by default: the operator who needs plain language is the one
+     who does not know to go looking for a toggle. */
+  .switch { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--muted); cursor:pointer; white-space:nowrap; }
+  .switch input { appearance:none; width:32px; height:18px; border-radius:999px; background:var(--surface-2); border:1px solid var(--line); position:relative; cursor:pointer; transition:background-color .25s var(--ease), border-color .25s var(--ease); }
+  .switch input::after { content:""; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:var(--muted); transition:transform .25s var(--ease), background-color .25s var(--ease); }
+  .switch input:checked { background:color-mix(in oklab, var(--accent) 22%, transparent); border-color:color-mix(in oklab, var(--accent) 50%, transparent); }
+  .switch input:checked::after { transform:translateX(14px); background:var(--accent); }
+  .switch:hover { color:var(--fg); }
+
+  /* Teaching notes + setup checklist. */
+  .teach {
+    display:flex; gap:9px; align-items:flex-start;
+    border-left:2px solid color-mix(in oklab, var(--accent) 55%, transparent);
+    background:color-mix(in oklab, var(--accent) 6%, transparent);
+    border-radius:0 var(--r) var(--r) 0; padding:9px 11px; font-size:12px;
+    color:var(--muted); line-height:1.5;
+  }
+  .teach button { background:none; border:none; color:var(--muted); padding:0 2px; font-size:15px; line-height:1; cursor:pointer; }
+  .teach button:hover { color:var(--fg); }
+
+  .setup { max-width:620px; }
+  .setup ol { list-style:none; margin:14px 0 0; padding:0; }
+  .setup li { display:flex; gap:12px; padding:13px 0; border-top:1px solid var(--line); }
+  .setup li:first-child { border-top:none; }
+  .setup .tick {
+    flex:0 0 auto; width:21px; height:21px; border-radius:50%; display:grid; place-items:center;
+    border:1px solid var(--line); color:var(--muted); font-size:11px; margin-top:1px;
+  }
+  .setup li.done .tick { border-color:var(--ok); color:var(--ok); }
+  .setup li.done .st { color:var(--muted); }
+  .setup .st { font-size:14px; color:var(--fg); font-weight:550; }
+  .setup .sd { font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.5; }
+  .setup-mini { font-size:11.5px; color:var(--muted); }
+  .setup-mini b { color:var(--accent); font-weight:600; }
+  .boardbar {
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    padding:9px 18px; border-bottom:1px solid var(--line);
+    font-size:12px; color:var(--muted); background:var(--surface);
+  }
 
   /* ---- chrome ---- */
   header.top {
@@ -115,22 +192,41 @@ DASHBOARD_HTML = r"""<!doctype html>
   /* Columns share the width so the whole pipeline — including the Fixed win state — is on
      screen at once. They only start scrolling below ~1300px. */
   .board { display:flex; gap:14px; padding:18px; align-items:flex-start; min-height:100%; }
-  .col { flex:1 1 0; min-width:208px; max-width:360px; display:flex; flex-direction:column; gap:10px; }
-  .col-head { display:flex; align-items:baseline; gap:8px; padding:0 2px; }
-  .col-head h2 { margin:0; font-size:12px; font-weight:650; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
-  .col-head .n { font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
-  .col-head .why { flex:1 1 100%; font-size:11.5px; color:var(--muted); margin-top:-2px; }
+  /* Plain column names ("Waiting for a test run") are far longer than the technical ones
+     ("Untriaged"), so the header wraps and the columns need more floor width. */
+  .col { flex:1 1 0; min-width:236px; max-width:360px; display:flex; flex-direction:column; gap:10px; }
+  .col-head { display:flex; align-items:baseline; gap:6px; padding:0 2px; flex-wrap:wrap; }
+  .col-head h2 {
+    margin:0; font-size:12px; font-weight:650; letter-spacing:.06em; text-transform:uppercase;
+    line-height:1.35; min-width:0;
+  }
+  .col-head .n {
+    font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums;
+    flex:0 0 auto; margin-left:auto;
+  }
+  .col-head .why { flex:1 1 100%; font-size:11.5px; color:var(--muted); margin-top:1px; line-height:1.4; }
   .col.s-known h2 { color:var(--accent); }
   .col.s-fixed h2 { color:var(--ok); }
   .col.s-repro_invalid h2, .col.s-fix_failed h2 { color:var(--warn); }
 
+  /* Elevation carries the accent hue rather than black, so cards sit in the palette instead of
+     on top of it. Radius is concentric with the column gutter, not uniform everywhere. */
   .card {
     background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg);
     padding:13px 14px; text-align:left; width:100%; display:block;
-    transition:border-color .25s var(--ease), transform .25s var(--ease);
+    box-shadow:0 1px 2px color-mix(in oklab, var(--bg) 80%, black),
+               0 8px 24px -18px color-mix(in oklab, var(--accent) 40%, transparent);
+    transition:border-color .25s var(--ease), transform .25s var(--ease),
+               box-shadow .25s var(--ease);
   }
-  button.card:hover { border-color:color-mix(in oklab, var(--accent) 45%, transparent); transform:translateY(-1px); }
+  button.card:hover {
+    border-color:color-mix(in oklab, var(--accent) 45%, transparent);
+    transform:translateY(-1px);
+    box-shadow:0 2px 4px color-mix(in oklab, var(--bg) 80%, black),
+               0 14px 34px -18px color-mix(in oklab, var(--accent) 55%, transparent);
+  }
   .card-top { display:flex; align-items:center; gap:10px; }
+  .card .headline { font-size:13px; color:var(--fg); font-weight:550; line-height:1.4; text-wrap:pretty; }
   .card .route { font-size:12.5px; color:var(--fg); word-break:break-all; font-weight:550; }
   .card .sub { margin-top:6px; font-size:11.5px; color:var(--muted); display:flex; flex-wrap:wrap; gap:4px 8px; }
   .card .known { margin-top:9px; font-size:11.5px; color:var(--accent); }
@@ -199,10 +295,16 @@ DASHBOARD_HTML = r"""<!doctype html>
 <header class="top">
   <span class="brand">StepStitch<span class="dot">.</span></span>
   <span class="pill">operator console</span>
-  <nav class="main" id="nav"></nav>
+  <nav class="main" id="nav" aria-label="Sections"></nav>
   <span class="spacer"></span>
-  <span class="status" id="statusbar"></span>
-  <button id="tokenbtn" class="ghost">Token</button>
+  <input id="search" type="search" class="search" placeholder="Search failures…"
+         aria-label="Search failures" autocomplete="off">
+  <label class="switch" for="techtoggle">
+    <input type="checkbox" id="techtoggle">
+    <span>Technical detail</span>
+  </label>
+  <span class="status" id="statusbar" aria-live="polite"></span>
+  <button id="tokenbtn" class="ghost">Disconnect</button>
 </header>
 
 <div class="privacy" id="privacy">
@@ -216,7 +318,10 @@ DASHBOARD_HTML = r"""<!doctype html>
   <span class="never">cookies &amp; headers</span>
 </div>
 
-<div class="flow">
+<!-- The pipeline, stated twice. Both registers ship in the document — the technical one names
+     the real artefacts for an engineer, the plain one is what everyone else can follow — and
+     the technical-detail toggle decides which is shown. -->
+<div class="flow" id="flow-tech" hidden>
   <b>Customer bug</b><span class="arr">&rarr;</span>
   <b>privacy scrub</b><span class="arr">&rarr;</span>
   <b>replayability score</b><span class="arr">&rarr;</span>
@@ -224,8 +329,17 @@ DASHBOARD_HTML = r"""<!doctype html>
   <b>draft ticket/PR</b><span class="arr">&rarr;</span>
   <b>verified fix</b>
 </div>
+<div class="flow" id="flow-plain">
+  <b>Someone reports a bug</b><span class="arr">&rarr;</span>
+  <b>personal details stripped</b><span class="arr">&rarr;</span>
+  <b>we check it can be reproduced</b><span class="arr">&rarr;</span>
+  <b>a test is written for it</b><span class="arr">&rarr;</span>
+  <b>a ticket is drafted</b><span class="arr">&rarr;</span>
+  <b>the fix is proven</b>
+</div>
 
-<main class="view" id="view"></main>
+<div class="grain" aria-hidden="true"></div>
+<main class="view" id="view" aria-live="polite" aria-busy="false"></main>
 
 <footer class="bottom">Operator console &middot; every read and config change is audited &middot; records are scrubbed server-side before storage &middot; drafts are previews, nothing is sent &middot; evidence is never edited or deleted here.</footer>
 
@@ -237,6 +351,21 @@ DASHBOARD_HTML = r"""<!doctype html>
   var viewEl = document.getElementById("view");
   var navEl = document.getElementById("nav");
   var token = sessionStorage.getItem("ss_token") || "";
+
+  // ---- operator preferences -------------------------------------------------------------
+  // Persisted in localStorage (preferences, not credentials — the token stays in
+  // sessionStorage). `tech` defaults to FALSE: the operator who most needs plain language is
+  // exactly the one who would not think to go looking for a toggle.
+  function pref(key, fallback) {
+    try { var v = localStorage.getItem("ss_" + key); return v === null ? fallback : v === "1"; }
+    catch (e) { return fallback; }
+  }
+  function setPref(key, on) {
+    try { localStorage.setItem("ss_" + key, on ? "1" : "0"); } catch (e) { /* private mode */ }
+  }
+  var tech = pref("tech", false);
+  var query = "";
+  var lastStatus = null;
 
   // ---- DOM construction -----------------------------------------------------------------
   // Everything is built through el(). Text is set via textContent and attributes via
@@ -375,7 +504,77 @@ DASHBOARD_HTML = r"""<!doctype html>
     if (actionLabel) kids.push(el("button", { class: "primary", text: actionLabel, onclick: onAction }));
     return el("div", { class: "empty" }, kids);
   }
+  // Skeletons shaped like what is arriving, so the layout does not jump when it lands.
+  function skeleton(kind) {
+    if (kind === "board") {
+      return el("div", { class: "board" }, [0, 1, 2, 3, 4].map(function (i) {
+        return el("div", { class: "col" }, [
+          el("div", { class: "skel line", style: "width:60%" }),
+          el("div", { class: "skel" }),
+          i % 2 ? el("div", { class: "skel", style: "height:64px" }) : null
+        ]);
+      }));
+    }
+    return el("div", { class: "detail" }, [
+      el("div", { class: "skel line", style: "width:34%;margin-bottom:14px" }),
+      el("div", { class: "skel", style: "height:56px;margin-bottom:16px" }),
+      el("div", { class: "grid2" }, [
+        el("div", { class: "skel", style: "height:180px" }),
+        el("div", { class: "skel", style: "height:180px" })
+      ])
+    ]);
+  }
   function spinner(label) { return el("p", { class: "muted", text: label || "Loading…" }); }
+
+  // A one-sentence explainer shown the first time a concept actually matters, then dismissed
+  // for good. Teaching in place beats a tour nobody finishes.
+  function teach(id, message) {
+    if (pref("seen_" + id, false)) return null;
+    var node = el("div", { class: "teach" }, [
+      el("span", { text: message }),
+      el("button", { text: "×", "aria-label": "Dismiss", onclick: function () {
+        setPref("seen_" + id, true);
+        if (node.parentNode) node.parentNode.removeChild(node);
+      } })
+    ]);
+    return node;
+  }
+
+  // ---- plain language -------------------------------------------------------------------
+  // The sentence itself comes from the service (humanize.py) and travels on the shape, so the
+  // console never invents wording. These only decide WHICH of the two registers to show.
+  function headlineFor(shape) {
+    if (tech) return (shape.fingerprint || {}).route || "(no route)";
+    return shape.plain_summary || (shape.fingerprint || {}).route || "Unknown failure";
+  }
+  function stageNameFor(shape, stage) {
+    return tech ? stage.label : (shape.stage_label || stage.label);
+  }
+  var CONFIDENCE = [
+    [0.85, "Reliably reproducible"], [0.70, "Likely reproducible"],
+    [0.55, "Might be reproducible"], [0.40, "Hard to reproduce"]
+  ];
+  function confidenceBand(score) {
+    if (score === null || score === undefined) return "Not yet assessed";
+    for (var i = 0; i < CONFIDENCE.length; i++) {
+      if (score >= CONFIDENCE[i][0]) return CONFIDENCE[i][1];
+    }
+    return "Very hard to reproduce";
+  }
+  // Replayability warning codes, in the reader's terms. Mirrors humanize._WARNING_TEXT; an
+  // unknown code falls back to the server's own detail string rather than disappearing.
+  var WARNINGS = {
+    templated_route_needs_fixture:
+      "the page address contains an ID, so the test needs a real account to run against",
+    unstable_selector:
+      "some buttons are identified by their position or styling, which changes when the page " +
+      "is redesigned — the test may break for the wrong reason",
+    missing_selector: "we could not tell which control was used, so the test has to guess",
+    no_terminal_action:
+      "the report does not end on a clear action, so there is nothing obvious to assert on",
+    long_trace: "the report is long, so the test covers a lot of ground and may be slow or brittle",
+    empty_trace: "nothing was captured for this report, so there is nothing to rebuild"
+  };
   function fail(e) { return el("p", { class: "err", text: e && e.message ? e.message : String(e) }); }
 
   // The ambient privacy strip is static markup in <head>'s sibling chrome, not built here:
@@ -398,15 +597,30 @@ DASHBOARD_HTML = r"""<!doctype html>
       navEl.appendChild(b);
     });
   }
+  var currentShapeId = null;   // set while a shape detail is open, so re-renders return to it
+
   function go(id) {
     current = id;
+    currentShapeId = null;
     renderNav();
+    syncChrome();
     if (!token) return renderGate();
     loadStatus();   // counts move as you work — refresh them on every navigation
     var route = ROUTES.filter(function (r) { return r.id === id; })[0] || ROUTES[0];
     route.render();
   }
-  function mount(node) { clear(viewEl); viewEl.appendChild(node); viewEl.scrollTop = 0; }
+  function mount(node) {
+    clear(viewEl);
+    viewEl.appendChild(node);
+    viewEl.scrollTop = 0;
+    viewEl.setAttribute("aria-busy", "false");
+    syncChrome();
+  }
+  function mountLoading(node) {
+    clear(viewEl);
+    viewEl.appendChild(node);
+    viewEl.setAttribute("aria-busy", "true");
+  }
 
   // ---- token gate -----------------------------------------------------------------------
   function renderGate() {
@@ -440,6 +654,35 @@ DASHBOARD_HTML = r"""<!doctype html>
     renderGate();
   };
 
+  // Technical detail: re-renders in place, so the operator sees the same screen re-worded
+  // rather than being bounced back to the board.
+  var techEl = document.getElementById("techtoggle");
+  techEl.checked = tech;
+  techEl.onchange = function () {
+    tech = techEl.checked;
+    setPref("tech", tech);
+    syncChrome();
+    if (currentShapeId) openShape(currentShapeId); else go(current);
+  };
+
+  var searchEl = document.getElementById("search");
+  var searchTimer = null;
+  searchEl.oninput = function () {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () {
+      query = searchEl.value.trim().toLowerCase();
+      if (current === "board" && !currentShapeId) renderBoard();
+    }, 160);
+  };
+
+  // Search only means anything on the board; hide it elsewhere rather than leave it inert.
+  // The flow banner swaps register with the toggle rather than being rewritten.
+  function syncChrome() {
+    searchEl.style.display = (current === "board" && !currentShapeId) ? "" : "none";
+    document.getElementById("flow-tech").hidden = !tech;
+    document.getElementById("flow-plain").hidden = tech;
+  }
+
   async function loadStatus() {
     var bar = document.getElementById("statusbar");
     try {
@@ -455,89 +698,259 @@ DASHBOARD_HTML = r"""<!doctype html>
     } catch (e) { clear(bar); }
   }
 
+  // "today" / "yesterday" / "3 days ago" — dates mean nothing at a glance.
+  function relativeDay(iso) {
+    if (!iso) return "";
+    var then = new Date(String(iso).replace(" ", "T"));
+    if (isNaN(then.getTime())) return "";
+    var days = Math.floor((Date.now() - then.getTime()) / 86400000);
+    if (days <= 0) return "today";
+    if (days === 1) return "yesterday";
+    if (days < 30) return days + " days ago";
+    return then.toISOString().slice(0, 10);
+  }
+
+  // ---- setup ------------------------------------------------------------------------------
+  // Four steps, each DETECTED rather than ticked by hand, so the checklist can never claim
+  // something that is not true.
+  function setupSteps(status) {
+    var s = status || {};
+    return [
+      { done: !!token, title: "Connect to your host",
+        detail: "You are connected. This token stays in this browser tab and is never shared " +
+                "with an agent." },
+      { done: (s.traces || 0) > 0, title: "Receive your first report",
+        detail: "Install @stepstitch/tracker in your app, or send a sample below to see the " +
+                "console with real evidence in it." },
+      { done: (s.verifications || 0) > 0, title: "Let CI report results",
+        detail: "Your CI runs the generated test before and after a fix and posts the outcome " +
+                "back. Until it does, nothing can be proven fixed and there is no memory to " +
+                "match new bugs against. Open any failure and use the Verify tab for the snippet." },
+      { done: (s.agents_total || 0) > 0, title: "Connect an AI agent (optional)",
+        detail: "Give an assistant a scoped, revocable token so it can read safe evidence — " +
+                "never raw data. Set this up in Agents." }
+    ];
+  }
+  function setupComplete(status) {
+    return setupSteps(status).every(function (st) { return st.done; });
+  }
+
+  async function sendSampleReport() {
+    // A one-click first trace. Structural and synthetic — the same shape the SDK would send,
+    // so the board fills with something real rather than telling an operator to open a shell.
+    return api("/session", jsonPost({
+      app_id: "console-sample",
+      metadata: { sdk_version: "console-sample" },
+      footsteps: [
+        { timestamp: new Date().toISOString(), type: "navigation", route: "/orders/:id",
+          label: "[masked]" },
+        { timestamp: new Date().toISOString(), type: "click", route: "/orders/:id",
+          target: "[data-testid=place-order]", label: "[masked]" },
+        { timestamp: new Date().toISOString(), type: "api_error", route: "/orders/:id",
+          label: "[masked]",
+          metadata: { status: 500, method: "POST", endpoint: "/api/orders/:id/submit" } }
+      ]
+    }));
+  }
+
+  function setupView(status) {
+    var steps = setupSteps(status);
+    var sampleBtn = el("button", { class: "primary", text: "Send a sample report" });
+    var out = el("div", {});
+    sampleBtn.onclick = async function () {
+      sampleBtn.disabled = true;
+      sampleBtn.textContent = "Sending…";
+      try { await sendSampleReport(); renderBoard(); }
+      catch (e) {
+        clear(out); out.appendChild(fail(e));
+        sampleBtn.disabled = false; sampleBtn.textContent = "Send a sample report";
+      }
+    };
+
+    return el("div", { class: "detail setup" }, [
+      el("h1", { style: "font-size:21px;margin:0 0 6px;font-weight:640",
+                 text: "Let's get this working" }),
+      el("p", { class: "muted", style: "margin:0;font-size:13.5px",
+                text: "StepStitch turns a bug report into evidence a developer can act on — " +
+                      "without ever capturing anyone's screen, typing, or personal details. " +
+                      "Four steps, and you only need the first two to see it work." }),
+      el("ol", {}, steps.map(function (st) {
+        return el("li", { class: st.done ? "done" : "" }, [
+          el("span", { class: "tick", text: st.done ? "✓" : "", "aria-hidden": "true" }),
+          el("div", {}, [
+            el("div", { class: "st", text: st.title }),
+            el("div", { class: "sd", text: st.detail })
+          ])
+        ]);
+      })),
+      el("div", { class: "row-actions", style: "margin-top:18px" }, [
+        sampleBtn,
+        el("button", { class: "ghost", text: "Check again", onclick: renderBoard })
+      ]),
+      out,
+      el("div", { class: "note", text: "Everything here is read-only. Nothing in this console " +
+                                       "can delete evidence or send anything to another system." })
+    ]);
+  }
+
+  // Once past the empty board, setup shrinks to a single line rather than nagging.
+  function setupMini(status) {
+    var steps = setupSteps(status);
+    var left = steps.filter(function (st) { return !st.done; });
+    var next = left[0];
+    return el("div", { class: "boardbar" }, [
+      el("span", { class: "setup-mini" }, [
+        el("b", { text: (steps.length - left.length) + "/" + steps.length + " set up" }),
+        document.createTextNode(" · next: " + next.title)
+      ]),
+      el("button", { class: "link", text: "Show me", onclick: function () {
+        mount(setupView(status));
+      } })
+    ]);
+  }
+
   // ---- board ----------------------------------------------------------------------------
   // An empty column is information too: "nothing invalid" is a different sentence from
   // "nothing fixed yet", so each says its own.
+  // `label` is the technical name; `plain` is what a support lead or QA engineer reads. The
+  // stage IDs are the contract — only the wording changes with the toggle.
   var STAGES = [
-    { id: "untriaged", label: "Untriaged", why: "no CI result reported yet",
-      blank: "Nothing waiting — every shape has a CI result." },
-    { id: "known_shape", label: "Known shape", why: "you have fixed this shape before",
-      blank: "No repeats. Every shape here is new to you." },
-    { id: "repro_invalid", label: "Repro invalid", why: "the test passed before the fix",
-      blank: "Every repro reproduced its bug." },
-    { id: "reproduced", label: "Reproduced", why: "red confirmed, awaiting a fix",
+    { id: "untriaged", label: "Untriaged", plain: "Waiting for a test run",
+      why: "no CI result reported yet",
+      teach: "Nobody has run the generated test against these yet, so we cannot say whether " +
+             "they are reproducible.",
+      blank: "Nothing waiting — everything here has been tested." },
+    { id: "known_shape", label: "Known shape", plain: "Seen before",
+      why: "you have fixed this before",
+      teach: "These broke the same way as something you already fixed. Start from that fix " +
+             "rather than from scratch.",
+      blank: "No repeats. Everything here is new to you." },
+    { id: "repro_invalid", label: "Repro invalid", plain: "Test needs fixing",
+      why: "the test passed before the fix",
+      teach: "The test we generated passed even before the fix — so it is not catching this " +
+             "bug and needs adjusting.",
+      blank: "Every test caught the bug it was written for." },
+    { id: "reproduced", label: "Reproduced", plain: "Confirmed broken",
+      why: "reproduced, awaiting a fix",
+      teach: "The test fails exactly as reported, so the bug is real and reproducible. It is " +
+             "waiting on a fix.",
       blank: "Nothing confirmed-broken is waiting on a fix." },
-    { id: "fix_failed", label: "Fix failed", why: "still red after the fix",
+    { id: "fix_failed", label: "Fix failed", plain: "Still broken",
+      why: "still failing after a fix",
+      teach: "Someone shipped a fix, but the test still fails. The bug is not gone.",
       blank: "No fix has regressed." },
-    { id: "fixed", label: "Fixed", why: "red to green, recorded in the corpus",
-      blank: "Nothing confirmed fixed yet — report a CI result to fill the corpus." }
+    { id: "fixed", label: "Fixed", plain: "Fixed and proven",
+      why: "failed before the fix, passed after",
+      teach: "The test failed before the fix and passed after it. That is the only thing we " +
+             "accept as proof — and it is what fills the memory this console matches against.",
+      blank: "Nothing proven fixed yet — connect CI so results get reported." }
   ];
   var ALWAYS_SHOWN = { untriaged: 1, known_shape: 1, reproduced: 1, fixed: 1 };
 
   function shapeCard(shape) {
     var fp = shape.fingerprint || {};
-    var facts = [];
-    if (fp.failing_status) facts.push("HTTP " + fp.failing_status);
-    if (fp.exception_type) facts.push(fp.exception_type);
-    if (fp.diagnostic_type) facts.push(fp.diagnostic_type);
-    facts.push(shape.occurrences + (shape.occurrences === 1 ? " report" : " reports"));
-
     var kids = [
       el("div", { class: "card-top" }, [
         glyph(fp, 30),
-        el("div", { class: "route mono", text: fp.route || "(no route)" })
-      ]),
-      el("div", { class: "sub" }, facts.map(function (f) { return el("span", { text: f }); }))
+        el("div", { class: tech ? "route mono" : "headline", text: headlineFor(shape) })
+      ])
     ];
+
+    // Plain view answers "how many people, and can we reproduce it?". Technical view keeps the
+    // status codes and diagnostic types an engineer triages on.
+    var facts = [];
+    if (tech) {
+      if (fp.failing_status) facts.push("HTTP " + fp.failing_status);
+      if (fp.exception_type) facts.push(fp.exception_type);
+      if (fp.diagnostic_type) facts.push(fp.diagnostic_type);
+    }
+    facts.push(shape.occurrences === 1 ? "1 person affected"
+                                       : shape.occurrences + " people affected");
+    // Recency is what tells a non-engineer whether this is live or historical. The board has
+    // no replayability score to show here — that needs the trace body, so it lives on the
+    // detail view where we actually fetch one.
+    var seen = relativeDay(shape.last_seen);
+    if (seen) facts.push("last seen " + seen);
+    kids.push(el("div", { class: "sub" }, facts.map(function (f) {
+      return el("span", { text: f });
+    })));
+
     if (shape.prior_fixes && shape.prior_fixes.length) {
       var top = shape.prior_fixes[0];
-      kids.push(el("div", { class: "known", text: "Seen before · " +
-        (top.fix_ref || top.trace_id) + " · " + Math.round((top.similarity || 0) * 100) + "% match" }));
+      kids.push(el("div", { class: "known", text: tech
+        ? "Seen before · " + (top.fix_ref || top.trace_id) + " · " +
+          Math.round((top.similarity || 0) * 100) + "% match"
+        : "You fixed this before — see " + (top.fix_ref || top.trace_id) }));
     }
     return el("button", { class: "card", onclick: function () { openShape(shape.shape_id); } }, kids);
   }
 
+  // Free-text filter across everything a person might search by, in either register.
+  function matchesQuery(shape) {
+    if (!query) return true;
+    var fp = shape.fingerprint || {};
+    return [shape.plain_summary, shape.stage_label, fp.route, fp.diagnostic_type,
+            fp.exception_type, fp.failing_status, fp.terminal_selector]
+      .filter(Boolean).join(" ").toLowerCase().indexOf(query) >= 0;
+  }
+
   async function renderBoard() {
-    mount(spinner("Loading shapes…"));
-    var data;
-    try { data = await api("/shapes"); }
-    catch (e) { return mount(fail(e)); }
+    mountLoading(skeleton("board"));
+    var data, status;
+    try {
+      data = await api("/shapes");
+      status = await adminApi("/status").catch(function () { return lastStatus || {}; });
+      lastStatus = status;
+    } catch (e) { return mount(fail(e)); }
 
     var shapes = data.shapes || [];
-    var columns = data.board || {};
-    if (!shapes.length) {
-      return mount(el("div", { class: "detail" }, [
-        box("No failure shapes yet", [
-          el("p", { class: "muted", text: "A shape appears as soon as one trace is ingested. " +
-                                          "Seed a sample to see the board with real evidence in it:" }),
-          el("pre", { text: "node scripts/seed-demo-trace.mjs" }),
-          el("div", { class: "row-actions" }, [
-            copyBtn(function () { return "node scripts/seed-demo-trace.mjs"; }, "Copy command"),
-            el("button", { class: "primary", text: "Reload", onclick: renderBoard })
-          ])
-        ])
+
+    // Nothing to show yet is not an error — it means setup is unfinished. Say what to do next.
+    if (!shapes.length) return mount(setupView(status));
+
+    var visible = shapes.filter(matchesQuery);
+    var wrap = el("div", {});
+
+    if (query) {
+      wrap.appendChild(el("div", { class: "boardbar" }, [
+        el("span", { text: "Showing " + visible.length + " of " + shapes.length +
+                           (shapes.length === 1 ? " failure" : " failures") }),
+        el("button", { class: "link", text: "Clear", onclick: function () {
+          searchEl.value = ""; query = ""; renderBoard();
+        } })
       ]));
+    } else if (status && !setupComplete(status)) {
+      wrap.appendChild(setupMini(status));
     }
 
     var board = el("div", { class: "board" });
     STAGES.forEach(function (stage) {
-      var items = columns[stage.id] || [];
+      var items = visible.filter(function (s) { return s.stage === stage.id; });
       if (!items.length && !ALWAYS_SHOWN[stage.id]) return;   // noise columns collapse
       var col = el("div", { class: "col s-" + stage.id }, [
         el("div", { class: "col-head" }, [
-          el("h2", { text: stage.label }),
+          el("h2", { text: tech ? stage.label : stage.plain }),
           el("span", { class: "n", text: String(items.length) }),
           el("span", { class: "why", text: stage.why })
         ])
       ]);
+      // A column explains itself the first time it actually has something in it — the moment
+      // the concept becomes relevant, rather than in a tour up front.
+      if (items.length) {
+        var note = teach("col_" + stage.id, stage.teach);
+        if (note) col.appendChild(note);
+      }
       if (!items.length) {
-        col.appendChild(el("div", { class: "empty" }, [el("p", { text: stage.blank })]));
+        col.appendChild(el("div", { class: "empty" }, [
+          el("p", { text: query ? "No matches here." : stage.blank })
+        ]));
       } else {
         items.forEach(function (s) { col.appendChild(shapeCard(s)); });
       }
       board.appendChild(col);
     });
-    mount(board);
+    wrap.appendChild(board);
+    mount(wrap);
   }
 
   // ---- shape detail ---------------------------------------------------------------------
@@ -545,7 +958,8 @@ DASHBOARD_HTML = r"""<!doctype html>
   var GRADE_TONE = { A: "ok", B: "ok", C: "warn", D: "warn", E: "bad", F: "bad" };
 
   async function openShape(shapeId) {
-    mount(spinner("Loading shape…"));
+    currentShapeId = shapeId;
+    mountLoading(skeleton("detail"));
     var shape, trace;
     try {
       shape = (await api("/shapes/" + encodeURIComponent(shapeId))).shape;
@@ -579,37 +993,52 @@ DASHBOARD_HTML = r"""<!doctype html>
 
     root.appendChild(el("button", { class: "crumb", text: "← Board", onclick: renderBoard }));
 
-    // Verdict: the decision, above the fold.
+    // Verdict: the decision, above the fold — in whichever register the operator reads in.
     var facts = [];
-    facts.push(shape.occurrences + (shape.occurrences === 1 ? " report" : " reports"));
-    if (rep.score !== undefined) facts.push("score " + rep.score);
-    if (fp.failing_status) facts.push("HTTP " + fp.failing_status);
-    if (fp.diagnostic_endpoint) facts.push(fp.diagnostic_endpoint);
-    if (shape.last_seen) facts.push("last seen " + String(shape.last_seen).slice(0, 10));
+    facts.push(shape.occurrences === 1 ? "1 person affected"
+                                       : shape.occurrences + " people affected");
+    if (tech) {
+      if (rep.score !== undefined) facts.push("score " + rep.score);
+      if (fp.failing_status) facts.push("HTTP " + fp.failing_status);
+      if (fp.diagnostic_endpoint) facts.push(fp.diagnostic_endpoint);
+    }
+    var seen = relativeDay(shape.last_seen);
+    if (seen) facts.push("last seen " + seen);
 
     var stageMeta = STAGES.filter(function (s) { return s.id === shape.stage; })[0] || STAGES[0];
     root.appendChild(el("div", { class: "verdict" }, [
       glyph(fp, 58),
       el("div", {}, [
-        el("h1", { class: "mono", text: fp.route || "(no route)" }),
+        el("h1", { class: tech ? "mono" : "", text: headlineFor(shape) }),
         el("div", { class: "facts" }, [
-          el("span", { class: "pill " + (shape.stage === "fixed" ? "ok" : "acc"), text: stageMeta.label })
+          el("span", { class: "pill " + (shape.stage === "fixed" ? "ok" : "acc"),
+                       text: tech ? stageMeta.label : stageMeta.plain })
         ].concat(facts.map(function (f) { return el("span", { text: f }); })))
       ]),
       el("div", { class: "grade" }, [
-        el("span", { class: "pill " + (GRADE_TONE[grade] || ""), text: "grade " + grade })
+        tech
+          ? el("span", { class: "pill " + (GRADE_TONE[grade] || ""), text: "grade " + grade })
+          : el("span", { class: "pill " + (GRADE_TONE[grade] || ""),
+                         text: confidenceBand(rep.score) })
       ])
     ]));
+
+    // What this stage means, taught once.
+    var stageNote = teach("stage_" + shape.stage, stageMeta.teach);
+    if (stageNote) root.appendChild(el("div", { style: "margin-top:14px" }, [stageNote]));
 
     if (shape.prior_fixes && shape.prior_fixes.length) {
       var pf = shape.prior_fixes[0];
       root.appendChild(el("div", { class: "next" }, [
-        el("div", { class: "lab", text: "You have fixed this shape before" }),
+        el("div", { class: "lab", text: "You have fixed this before" }),
         el("div", {}, [
-          el("span", { text: (pf.fix_ref || pf.trace_id) + " — " +
-                             Math.round((pf.similarity || 0) * 100) + "% structural match (" +
-                             (pf.reasons || []).join(", ") + "). " }),
-          extLink(pf.run_url, "CI run")
+          el("span", { text: tech
+            ? (pf.fix_ref || pf.trace_id) + " — " +
+              Math.round((pf.similarity || 0) * 100) + "% structural match (" +
+              (pf.reasons || []).join(", ") + "). "
+            : "Something that broke this same way was fixed in " +
+              (pf.fix_ref || pf.trace_id) + ". Start there. " }),
+          extLink(pf.run_url, "See the CI run")
         ])
       ]));
     } else if (trace.diagnostic.recommended_next_step) {
@@ -620,21 +1049,30 @@ DASHBOARD_HTML = r"""<!doctype html>
     }
 
     // Sections
+    // Tab wording follows the toggle too — "Repro" means nothing outside engineering.
     var TABS = [
-      { id: "evidence", label: "Evidence", render: function () { return panelEvidence(shape, trace); } },
-      { id: "repro", label: "Repro", render: function () { return panelRepro(trace); } },
-      { id: "verify", label: "Verify", render: function () { return panelVerify(shape, trace); } },
-      { id: "drafts", label: "Drafts", render: function () { return panelDrafts(trace); } },
-      { id: "agent", label: "Agent view", render: function () { return panelAgent(trace); } },
-      { id: "attest", label: "Attestation", render: function () { return panelAttest(trace); } }
+      { id: "evidence", label: "Evidence", plain: "What happened",
+        render: function () { return panelEvidence(shape, trace); } },
+      { id: "repro", label: "Repro", plain: "The test",
+        render: function () { return panelRepro(trace); } },
+      { id: "verify", label: "Verify", plain: "Proof it's fixed",
+        render: function () { return panelVerify(shape, trace); } },
+      { id: "drafts", label: "Drafts", plain: "Ticket drafts",
+        render: function () { return panelDrafts(trace); } },
+      { id: "agent", label: "Agent view", plain: "What an AI sees",
+        render: function () { return panelAgent(trace); } },
+      { id: "attest", label: "Attestation", plain: "Signed record",
+        render: function () { return panelAttest(trace); } }
     ];
-    var tabs = el("div", { class: "tabs" });
-    var panel = el("div", { class: "panel" });
+    var tabs = el("div", { class: "tabs", role: "tablist", "aria-label": "Evidence sections" });
+    var panel = el("div", { class: "panel", id: "tabpanel", role: "tabpanel",
+                            "aria-live": "polite" });
     var active = "evidence";
     function select(id) {
       active = id;
       Array.prototype.forEach.call(tabs.children, function (btn) {
         btn.setAttribute("aria-selected", btn.dataset.tab === id ? "true" : "false");
+        btn.setAttribute("tabindex", btn.dataset.tab === id ? "0" : "-1");
       });
       clear(panel);
       var out = TABS.filter(function (t) { return t.id === id; })[0].render();
@@ -647,7 +1085,9 @@ DASHBOARD_HTML = r"""<!doctype html>
       }
     }
     TABS.forEach(function (t) {
-      var b = el("button", { text: t.label, onclick: function () { select(t.id); } });
+      var b = el("button", { text: tech ? t.label : t.plain, role: "tab",
+                             "aria-controls": "tabpanel",
+                             onclick: function () { select(t.id); } });
       b.dataset.tab = t.id;
       tabs.appendChild(b);
     });
@@ -671,42 +1111,66 @@ DASHBOARD_HTML = r"""<!doctype html>
       var group = byCode[code];
       var steps = group.map(function (w) { return w.step_index; })
                        .filter(function (s) { return s !== undefined && s !== null; });
+      var body = tech
+        ? (group[0].detail || "") + (steps.length ? "  (steps " + steps.join(", ") + ")" : "")
+        : (WARNINGS[code] || group[0].detail || code.replace(/_/g, " "));
       return el("div", { style: "margin-bottom:8px" }, [
         el("div", {}, [
-          el("span", { class: "pill warn", text: group.length + "×" }),
-          el("span", { text: " " + code.replace(/_/g, " ") })
+          el("span", { class: "pill warn",
+                       text: group.length + (tech ? "×" : (group.length === 1 ? " step" : " steps")) }),
+          tech ? el("span", { text: " " + code.replace(/_/g, " ") }) : null
         ]),
-        el("div", { class: "note", text: (group[0].detail || "") +
-          (steps.length ? "  (steps " + steps.join(", ") + ")" : "") })
+        el("div", { class: "note", text: body })
       ]);
     });
 
     var signals = rep.signals || {};
     wrap.appendChild(el("div", { class: "grid2" }, [
-      box("Replayability", [
-        el("div", {}, [
-          el("span", { class: "pill " + (GRADE_TONE[rep.grade] || ""), text: "grade " + (rep.grade || "—") }),
-          el("span", { class: "muted", text: "  score " + (rep.score !== undefined ? rep.score : "—") })
-        ]),
-        el("div", { class: "note", text: [signals.steps + " steps", signals.interactive + " interactive",
-                                          signals.stable_selectors + " stable selectors"].join(" · ") }),
-        warnRows.length ? el("div", { style: "margin-top:12px" }, warnRows) : null
+      box(tech ? "Replayability" : "Can a developer reproduce this?", [
+        tech
+          ? el("div", {}, [
+              el("span", { class: "pill " + (GRADE_TONE[rep.grade] || ""),
+                           text: "grade " + (rep.grade || "—") }),
+              el("span", { class: "muted",
+                           text: "  score " + (rep.score !== undefined ? rep.score : "—") })
+            ])
+          : el("div", {}, [
+              el("span", { class: "pill " + (GRADE_TONE[rep.grade] || ""),
+                           text: confidenceBand(rep.score) })
+            ]),
+        el("div", { class: "note", text: tech
+          ? [signals.steps + " steps", signals.interactive + " interactive",
+             signals.stable_selectors + " stable selectors"].join(" · ")
+          : signals.steps + " steps were recorded, " + signals.interactive +
+            " of them things the person clicked or typed into." }),
+        warnRows.length
+          ? el("div", { style: "margin-top:12px" }, [
+              el("div", { class: "note", style: "margin-top:0",
+                          text: tech ? "" : "What could make the test unreliable:" })
+            ].concat(warnRows))
+          : null
       ]),
       privacyProof(trace)
     ]));
 
-    wrap.appendChild(box("Fingerprint — how this shape is identified", [
+    wrap.appendChild(box(tech ? "Fingerprint — how this shape is identified"
+                              : "How we know these reports are the same bug", [
       el("div", { style: "display:flex;gap:14px;align-items:center" }, [
         glyph(shape.fingerprint, 44),
-        el("div", { class: "note", text: "Templated routes and structural selectors only. " +
-          "Nothing here can identify a person, which is why the shape — and its fix — stay " +
-          "matchable after retention purges the trace body." })
+        el("div", { class: "note", text: tech
+          ? "Templated routes and structural selectors only. Nothing here can identify a " +
+            "person, which is why the shape — and its fix — stay matchable after retention " +
+            "purges the trace body."
+          : "We match on the structure of the failure — which page, which control, what went " +
+            "wrong — never on anything about the person who hit it. That is also why this " +
+            "keeps working after the report itself is deleted." })
       ]),
-      kvTable(shape.fingerprint)
+      tech ? kvTable(shape.fingerprint) : null
     ]));
 
     if (shape.trace_ids && shape.trace_ids.length > 1) {
-      wrap.appendChild(box(shape.occurrences + " traces share this shape", [
+      wrap.appendChild(box(tech ? shape.occurrences + " traces share this shape"
+                                : shape.occurrences + " people reported this", [
         el("ul", { class: "tight mono" }, shape.trace_ids.map(function (t) {
           return el("li", { text: t });
         }))
@@ -1184,6 +1648,7 @@ DASHBOARD_HTML = r"""<!doctype html>
 
   // ---- boot -----------------------------------------------------------------------------
   renderNav();
+  syncChrome();
   if (token) { loadStatus(); go("board"); } else { renderGate(); }
 })();
 </script>

@@ -21,6 +21,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from .fix_memory import DEFAULT_WEIGHTS
 from .fix_memory import match as fix_match
+from .humanize import plain_summary, stage_label
 from .verification.verdict import (
     VERDICT_CONFIRMED_FIXED,
     VERDICT_NOT_FIXED,
@@ -160,6 +161,11 @@ def cluster(
         shapes.append({
             "shape_id": bucket["shape_id"],
             "fingerprint": bucket["fingerprint"],
+            # Plain-language rendering travels WITH the shape rather than being reconstructed by
+            # each consumer, so the console, the MCP surface and anything later all say the same
+            # sentence about the same failure.
+            "plain_summary": plain_summary(bucket["fingerprint"]),
+            "stage_label": stage_label(stage),
             "occurrences": len(bucket["trace_ids"]),
             "trace_ids": bucket["trace_ids"],
             "representative_trace_id": bucket["trace_ids"][0],
