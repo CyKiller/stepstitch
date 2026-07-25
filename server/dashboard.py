@@ -6,6 +6,11 @@ the **read-only / draft** operator endpoints with the admin bearer token the ope
 (kept in sessionStorage, never persisted). It can preview drafts and run a **dry-run** deliver,
 but exposes no destructive action.
 
+Typography ships inside the page: ``__FONT_SANS_B64__`` is substituted with the base64 woff2
+from :mod:`server.fonts` at render time. That is why the CSP carries ``font-src data:`` — the
+bytes are already in the document and the directive grants no network reach. A system font stack
+is the single clearest tell that an interface is an internal tool rather than a product.
+
 Organised around the **failure shape**, not the trace: traces that broke the same way collapse
 into one card on a pipeline board whose columns are derived from the verdict state machine in
 ``stepstitch_service.verification.verdict``. Forty reports of one bug is one decision.
@@ -22,334 +27,375 @@ DASHBOARD_HTML = r"""<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>StepStitch — operator console</title>
 <style>
-  /* Tokens mirror web/src/app/globals.css (dark) so the console reads as the same product as
-     the site. Density and calm only — none of the marketing motion. */
+  /* Geist Variable, embedded as a data: URI — the console cannot fetch a font under
+     `default-src 'none'`, and a system stack is the clearest tell that something is an internal
+     tool rather than a product. One variable file covers every weight. See server/fonts.py. */
+  @font-face {
+    font-family: "GeistConsole";
+    src: url("data:font/woff2;base64,__FONT_SANS_B64__") format("woff2");
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: block;
+  }
+
   :root {
-    --bg:#09090b; --surface:#101013; --surface-2:#18181b; --line:#27272a;
-    --fg:#fafafa; --muted:#a1a1aa; --accent:#34d399; --accent-2:#2dd4bf;
-    --accent-fg:#04241a; --ok:#34d399; --bad:#f87171; --warn:#fbbf24;
-    --r-sm:6px; --r:10px; --r-lg:14px;
-    --ease:cubic-bezier(0.32,0.72,0,1);
+    /* Near-black with a hint of blue, layered rather than flat. Borders are alpha so they sit
+       ON the surface instead of fighting it. */
+    --bg:#08090a;
+    --panel:#0c0d0f;
+    --surface:#101114;
+    --raised:#16171b;
+    --line:rgba(255,255,255,.07);
+    --line-strong:rgba(255,255,255,.12);
+    --fg:#eceef1;
+    --muted:#8a8f98;
+    --faint:#5c616a;
+    --accent:#34d399;
+    --accent-dim:rgba(52,211,153,.13);
+    --ok:#34d399; --bad:#f87171; --warn:#fbbf24; --info:#7aa2f7;
+    --r:6px; --r-lg:9px;
+    --ease:cubic-bezier(.32,.72,0,1);
+    --sidebar:244px;
   }
   * { box-sizing:border-box; }
-  /* `display:flex` on a component beats the [hidden] attribute's UA default of display:none,
-     so hiding anything flex-based silently fails without this. */
   [hidden] { display:none !important; }
   html, body { height:100%; }
   body {
     margin:0; background:var(--bg); color:var(--fg);
-    font:14px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-    -webkit-font-smoothing:antialiased;
-    display:flex; flex-direction:column;
+    font:400 13px/1.5 "GeistConsole", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    letter-spacing:-.01em;
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    display:flex; overflow:hidden;
   }
-  code, .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
-  ::selection { background:color-mix(in oklab, var(--accent) 28%, transparent); }
+  .mono, code, pre { font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace; letter-spacing:0; }
+  ::selection { background:rgba(52,211,153,.26); }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:1px; border-radius:var(--r); }
+  ::-webkit-scrollbar { width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb { background:rgba(255,255,255,.09); border-radius:9px; }
+  ::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.16); }
+  ::-webkit-scrollbar-track { background:transparent; }
 
-  /* Keyboard users get a visible ring on everything focusable. This was missing entirely —
-     an accessibility defect, not a polish item. :focus-visible so pointer users see nothing. */
-  :focus-visible {
-    outline:2px solid var(--accent);
-    outline-offset:2px;
-    border-radius:var(--r-sm);
-  }
-
-  /* Fixed grain layer: breaks the digital flatness without touching any scroller. A data: URI,
-     which the page CSP already permits via `img-src 'self' data:` — no external asset. */
   .grain {
-    position:fixed; inset:0; z-index:5; pointer-events:none;
-    opacity:.035; mix-blend-mode:overlay;
+    position:fixed; inset:0; z-index:60; pointer-events:none; opacity:.022; mix-blend-mode:overlay;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
 
-  /* Skeletons mirror the shape of what is loading, so the layout does not jump when it lands. */
-  @media (prefers-reduced-motion: no-preference) {
-    .skel { animation:pulse 1.4s ease-in-out infinite; }
+  /* ---- sidebar ---- */
+  aside.sidebar {
+    width:var(--sidebar); flex:0 0 var(--sidebar); height:100vh;
+    background:var(--panel); border-right:1px solid var(--line);
+    display:flex; flex-direction:column; padding:12px 10px 10px;
   }
-  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.55; } }
-  .skel {
-    background:var(--surface-2); border:1px solid var(--line);
-    border-radius:var(--r-lg); height:82px;
+  .brandrow { display:flex; align-items:center; gap:8px; padding:4px 8px 14px; }
+  .mark {
+    width:20px; height:20px; border-radius:5px; flex:0 0 auto;
+    background:linear-gradient(150deg, var(--accent), #2dd4bf);
+    box-shadow:0 0 0 1px rgba(52,211,153,.25), 0 4px 14px -6px rgba(52,211,153,.6);
   }
-  .skel.line { height:12px; border-radius:999px; border:none; }
+  .brandrow b { font-size:13.5px; font-weight:600; letter-spacing:-.02em; }
+  .brandrow .env { font-size:10.5px; color:var(--faint); margin-left:auto; }
 
-  .search {
-    width:210px; padding:5px 10px; font-size:13px; border-radius:999px;
-    background:var(--bg); transition:width .25s var(--ease), border-color .25s var(--ease);
+  .sgroup { margin-bottom:2px; }
+  .slabel {
+    font-size:10.5px; font-weight:550; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--faint); padding:12px 8px 5px;
   }
-  .search:focus { width:280px; border-color:color-mix(in oklab, var(--accent) 45%, transparent); }
-  .search::placeholder { color:var(--muted); }
+  .snav { display:flex; align-items:center; gap:9px; width:100%;
+    padding:6px 8px; border:none; background:none; color:var(--muted);
+    font:inherit; font-size:13px; border-radius:var(--r); cursor:pointer; text-align:left;
+    transition:background-color .12s var(--ease), color .12s var(--ease); }
+  .snav:hover { background:rgba(255,255,255,.045); color:var(--fg); }
+  .snav[aria-current="page"] { background:rgba(255,255,255,.07); color:var(--fg); font-weight:500; }
+  .snav .dot { width:7px; height:7px; border-radius:2px; flex:0 0 auto; background:var(--faint); }
+  .snav .ct { margin-left:auto; font-size:11.5px; color:var(--faint); font-variant-numeric:tabular-nums; }
+  .snav.on .ct { color:var(--muted); }
+  .d-untriaged { background:var(--faint) !important; }
+  .d-known_shape { background:var(--accent) !important; }
+  .d-repro_invalid { background:var(--warn) !important; }
+  .d-reproduced { background:var(--info) !important; }
+  .d-fix_failed { background:var(--bad) !important; }
+  .d-fixed { background:var(--ok) !important; }
 
-  /* Technical-detail switch. Off by default: the operator who needs plain language is the one
-     who does not know to go looking for a toggle. */
-  .switch { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--muted); cursor:pointer; white-space:nowrap; }
-  .switch input { appearance:none; width:32px; height:18px; border-radius:999px; background:var(--surface-2); border:1px solid var(--line); position:relative; cursor:pointer; transition:background-color .25s var(--ease), border-color .25s var(--ease); }
-  .switch input::after { content:""; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:var(--muted); transition:transform .25s var(--ease), background-color .25s var(--ease); }
-  .switch input:checked { background:color-mix(in oklab, var(--accent) 22%, transparent); border-color:color-mix(in oklab, var(--accent) 50%, transparent); }
-  .switch input:checked::after { transform:translateX(14px); background:var(--accent); }
-  .switch:hover { color:var(--fg); }
+  .legend { margin:0; padding:0 8px; font-size:11px; line-height:1.75; color:var(--faint); }
+  .legend i { color:rgba(52,211,153,.55); font-style:normal; padding:0 1px; }
 
-  /* Teaching notes + setup checklist. */
-  .teach {
-    display:flex; gap:9px; align-items:flex-start;
-    border-left:2px solid color-mix(in oklab, var(--accent) 55%, transparent);
-    background:color-mix(in oklab, var(--accent) 6%, transparent);
-    border-radius:0 var(--r) var(--r) 0; padding:9px 11px; font-size:12px;
-    color:var(--muted); line-height:1.5;
-  }
-  .teach button { background:none; border:none; color:var(--muted); padding:0 2px; font-size:15px; line-height:1; cursor:pointer; }
-  .teach button:hover { color:var(--fg); }
+  .sfoot { margin-top:auto; padding:10px 8px 2px; border-top:1px solid var(--line); }
+  .privacy { font-size:10.5px; line-height:1.65; color:var(--faint); }
+  .privacy strong { display:block; color:var(--muted); font-weight:550; margin-bottom:3px; }
+  .privacy .never { text-decoration:line-through; text-decoration-color:rgba(248,113,113,.5); }
+  .guarantees { font-size:10px; line-height:1.6; color:var(--faint); margin-top:9px; }
 
-  .setup { max-width:620px; }
-  .setup ol { list-style:none; margin:14px 0 0; padding:0; }
-  .setup li { display:flex; gap:12px; padding:13px 0; border-top:1px solid var(--line); }
-  .setup li:first-child { border-top:none; }
-  .setup .tick {
-    flex:0 0 auto; width:21px; height:21px; border-radius:50%; display:grid; place-items:center;
-    border:1px solid var(--line); color:var(--muted); font-size:11px; margin-top:1px;
+  /* ---- main ---- */
+  main.view { flex:1 1 auto; min-width:0; height:100vh; display:flex; flex-direction:column; }
+  .topbar {
+    height:45px; flex:0 0 auto; display:flex; align-items:center; gap:10px;
+    padding:0 16px; border-bottom:1px solid var(--line); background:var(--bg);
   }
-  .setup li.done .tick { border-color:var(--ok); color:var(--ok); }
-  .setup li.done .st { color:var(--muted); }
-  .setup .st { font-size:14px; color:var(--fg); font-weight:550; }
-  .setup .sd { font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.5; }
-  .setup-mini { font-size:11.5px; color:var(--muted); }
-  .setup-mini b { color:var(--accent); font-weight:600; }
-  .boardbar {
-    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-    padding:9px 18px; border-bottom:1px solid var(--line);
-    font-size:12px; color:var(--muted); background:var(--surface);
-  }
-
-  /* ---- chrome ---- */
-  header.top {
-    display:flex; align-items:center; gap:14px; padding:0 18px; height:54px;
-    border-bottom:1px solid var(--line); background:var(--surface); flex:0 0 auto;
-  }
-  .brand { font-size:15px; font-weight:650; letter-spacing:-0.01em; }
-  .brand .dot { color:var(--accent); }
-  nav.main { display:flex; gap:2px; margin-left:10px; }
-  nav.main button {
-    background:none; border:none; color:var(--muted); font:inherit; font-size:13.5px;
-    padding:7px 13px; border-radius:999px; cursor:pointer;
-    transition:color .25s var(--ease), background-color .25s var(--ease);
-  }
-  nav.main button:hover { color:var(--fg); }
-  nav.main button[aria-current="page"] { color:var(--accent); background:color-mix(in oklab, var(--accent) 12%, transparent); }
+  .crumbs { font-size:13px; color:var(--fg); font-weight:500; display:flex; align-items:center; gap:7px; min-width:0; }
+  .crumbs .sep { color:var(--faint); }
+  .crumbs button { background:none; border:none; color:var(--muted); font:inherit; padding:0; cursor:pointer; }
+  .crumbs button:hover { color:var(--fg); }
   .spacer { flex:1; }
+  .kbd {
+    display:inline-flex; align-items:center; gap:3px; padding:2px 5px; border-radius:4px;
+    border:1px solid var(--line); background:rgba(255,255,255,.03);
+    font-size:10.5px; color:var(--faint); font-family:inherit;
+  }
+  .searchbtn {
+    display:flex; align-items:center; gap:8px; height:27px; padding:0 8px 0 9px;
+    border:1px solid var(--line); background:rgba(255,255,255,.025); color:var(--faint);
+    border-radius:var(--r); font:inherit; font-size:12.5px; cursor:pointer; min-width:190px;
+    transition:border-color .15s var(--ease), background-color .15s var(--ease);
+  }
+  .searchbtn:hover { border-color:var(--line-strong); background:rgba(255,255,255,.05); }
+  .searchbtn .kbd { margin-left:auto; }
+  input#search { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
 
-  /* Ambient privacy: the product's central claim, always on screen. */
-  .privacy {
-    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
-    padding:7px 18px; font-size:12px; color:var(--muted);
-    background:color-mix(in oklab, var(--accent) 5%, var(--bg));
-    border-bottom:1px solid var(--line); flex:0 0 auto;
-  }
-  .privacy strong { color:var(--fg); font-weight:600; }
-  .privacy .never { text-decoration:line-through; text-decoration-color:color-mix(in oklab, var(--bad) 60%, transparent); }
+  .switch { display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--muted); cursor:pointer; white-space:nowrap; }
+  .switch input { appearance:none; width:28px; height:16px; border-radius:999px; background:rgba(255,255,255,.09); border:1px solid var(--line); position:relative; cursor:pointer; transition:background-color .18s var(--ease); }
+  .switch input::after { content:""; position:absolute; top:1.5px; left:1.5px; width:11px; height:11px; border-radius:50%; background:var(--faint); transition:transform .18s var(--ease), background-color .18s var(--ease); }
+  .switch input:checked { background:var(--accent-dim); border-color:rgba(52,211,153,.4); }
+  .switch input:checked::after { transform:translateX(12px); background:var(--accent); }
+  .switch:hover { color:var(--fg); }
+  .status { font-size:11.5px; color:var(--faint); white-space:nowrap; }
+  .status b { color:var(--muted); font-weight:500; }
 
-  .flow {
-    display:flex; flex-wrap:wrap; align-items:center; gap:6px;
-    padding:7px 18px; font-size:11.5px; color:var(--muted);
-    border-bottom:1px solid var(--line); background:var(--surface); flex:0 0 auto;
-  }
-  .flow b { color:var(--fg); font-weight:600; }
-  .flow .arr { color:var(--accent); }
+  .content { flex:1 1 auto; overflow:auto; min-height:0; }
 
-  main.view { flex:1 1 auto; overflow:auto; min-height:0; }
-  footer.bottom {
-    padding:9px 18px; font-size:11px; color:var(--muted);
-    border-top:1px solid var(--line); background:var(--surface); flex:0 0 auto;
+  /* ---- grouped list (the board, as a list) ---- */
+  .ghead {
+    position:sticky; top:0; z-index:2; display:flex; align-items:center; gap:9px;
+    padding:7px 16px; background:var(--panel); border-bottom:1px solid var(--line);
+    font-size:11.5px; color:var(--muted); cursor:pointer; user-select:none;
   }
-  .status { font-size:11.5px; color:var(--muted); }
-  .status b { color:var(--fg); font-weight:600; }
+  .ghead:hover { background:var(--surface); }
+  .ghead .gname { font-weight:550; color:var(--fg); letter-spacing:-.005em; }
+  .ghead .gct { color:var(--faint); font-variant-numeric:tabular-nums; }
+  .ghead .gwhy { color:var(--faint); font-size:11px; }
+  .ghead .chev { color:var(--faint); font-size:9px; width:9px; transition:transform .18s var(--ease); }
+  .ghead.collapsed .chev { transform:rotate(-90deg); }
 
-  /* ---- controls ---- */
-  button, input, select, textarea {
-    font:inherit; color:var(--fg); background:var(--surface-2);
-    border:1px solid var(--line); border-radius:var(--r-sm); padding:6px 10px;
+  .row {
+    display:flex; align-items:center; gap:11px; width:100%; text-align:left;
+    padding:0 16px; height:42px; background:none; border:none; border-bottom:1px solid var(--line);
+    color:var(--fg); font:inherit; cursor:pointer; position:relative;
+    transition:background-color .12s var(--ease);
   }
-  button { cursor:pointer; transition:border-color .25s var(--ease), transform .25s var(--ease); }
-  button:hover { border-color:color-mix(in oklab, var(--fg) 30%, transparent); }
-  button:active { transform:scale(0.98); }
-  button.primary {
-    background:var(--accent); border-color:var(--accent); color:var(--accent-fg); font-weight:600;
-  }
-  button.ghost { background:none; }
-  button.link { background:none; border:none; color:var(--accent); padding:0; text-decoration:underline; }
-  a { color:var(--accent); }
+  .row:hover { background:rgba(255,255,255,.028); }
+  .row.sel { background:rgba(255,255,255,.05); }
+  .row.sel::before { content:""; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--accent); }
+  .row .rt { font-size:13px; font-weight:450; letter-spacing:-.008em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1 1 auto; }
+  .row .rt.mono { font-size:12.5px; }
+  .row .meta { display:flex; align-items:center; gap:14px; flex:0 0 auto; font-size:11.5px; color:var(--faint); font-variant-numeric:tabular-nums; }
+  .row .seen { color:var(--accent); font-size:11.5px; white-space:nowrap; }
+  .row .cnt { min-width:74px; text-align:right; }
+  .row .when { min-width:78px; text-align:right; }
 
-  .pill {
-    display:inline-block; padding:1px 8px; border-radius:999px; font-size:11.5px;
-    border:1px solid var(--line); color:var(--muted); white-space:nowrap;
-  }
-  .pill.ok { color:var(--ok); border-color:color-mix(in oklab, var(--ok) 40%, transparent); }
-  .pill.bad { color:var(--bad); border-color:color-mix(in oklab, var(--bad) 40%, transparent); }
-  .pill.warn { color:var(--warn); border-color:color-mix(in oklab, var(--warn) 40%, transparent); }
-  .pill.acc { color:var(--accent); border-color:color-mix(in oklab, var(--accent) 40%, transparent); }
-  .muted { color:var(--muted); }
-  .err { color:var(--bad); }
+  .listempty { padding:22px 16px; font-size:12.5px; color:var(--faint); }
 
-  /* ---- board ---- */
-  /* Columns share the width so the whole pipeline — including the Fixed win state — is on
-     screen at once. They only start scrolling below ~1300px. */
-  .board { display:flex; gap:14px; padding:18px; align-items:flex-start; min-height:100%; }
-  /* Plain column names ("Waiting for a test run") are far longer than the technical ones
-     ("Untriaged"), so the header wraps and the columns need more floor width. */
-  .col { flex:1 1 0; min-width:236px; max-width:360px; display:flex; flex-direction:column; gap:10px; }
-  .col-head { display:flex; align-items:baseline; gap:6px; padding:0 2px; flex-wrap:wrap; }
-  .col-head h2 {
-    margin:0; font-size:12px; font-weight:650; letter-spacing:.06em; text-transform:uppercase;
-    line-height:1.35; min-width:0;
+  /* ---- command palette ---- */
+  .scrim { position:fixed; inset:0; z-index:70; background:rgba(4,5,6,.62); backdrop-filter:blur(3px); display:grid; place-items:start center; padding-top:14vh; }
+  .palette {
+    width:min(560px, 92vw); background:var(--raised); border:1px solid var(--line-strong);
+    border-radius:11px; overflow:hidden;
+    box-shadow:0 24px 70px -18px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.02) inset;
   }
-  .col-head .n {
-    font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums;
-    flex:0 0 auto; margin-left:auto;
+  .palette input {
+    width:100%; border:none; background:none; color:var(--fg); font:inherit; font-size:14.5px;
+    padding:14px 16px; outline:none; letter-spacing:-.01em;
   }
-  .col-head .why { flex:1 1 100%; font-size:11.5px; color:var(--muted); margin-top:1px; line-height:1.4; }
-  .col.s-known h2 { color:var(--accent); }
-  .col.s-fixed h2 { color:var(--ok); }
-  .col.s-repro_invalid h2, .col.s-fix_failed h2 { color:var(--warn); }
-
-  /* Elevation carries the accent hue rather than black, so cards sit in the palette instead of
-     on top of it. Radius is concentric with the column gutter, not uniform everywhere. */
-  .card {
-    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg);
-    padding:13px 14px; text-align:left; width:100%; display:block;
-    box-shadow:0 1px 2px color-mix(in oklab, var(--bg) 80%, black),
-               0 8px 24px -18px color-mix(in oklab, var(--accent) 40%, transparent);
-    transition:border-color .25s var(--ease), transform .25s var(--ease),
-               box-shadow .25s var(--ease);
+  .palette input::placeholder { color:var(--faint); }
+  .presults { max-height:52vh; overflow:auto; border-top:1px solid var(--line); }
+  .pitem {
+    display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+    padding:9px 16px; border:none; background:none; color:var(--fg); font:inherit; font-size:13px; cursor:pointer;
   }
-  button.card:hover {
-    border-color:color-mix(in oklab, var(--accent) 45%, transparent);
-    transform:translateY(-1px);
-    box-shadow:0 2px 4px color-mix(in oklab, var(--bg) 80%, black),
-               0 14px 34px -18px color-mix(in oklab, var(--accent) 55%, transparent);
-  }
-  .card-top { display:flex; align-items:center; gap:10px; }
-  .card .headline { font-size:13px; color:var(--fg); font-weight:550; line-height:1.4; text-wrap:pretty; }
-  .card .route { font-size:12.5px; color:var(--fg); word-break:break-all; font-weight:550; }
-  .card .sub { margin-top:6px; font-size:11.5px; color:var(--muted); display:flex; flex-wrap:wrap; gap:4px 8px; }
-  .card .known { margin-top:9px; font-size:11.5px; color:var(--accent); }
-  .count { font-variant-numeric:tabular-nums; font-weight:650; }
-
-  .empty {
-    border:1px dashed var(--line); border-radius:var(--r-lg); padding:16px;
-    font-size:12.5px; color:var(--muted);
-  }
-  .empty p { margin:0 0 10px; }
+  .pitem .pk { margin-left:auto; font-size:11px; color:var(--faint); }
+  .pitem.on { background:rgba(255,255,255,.06); }
+  .pitem .ps { color:var(--faint); font-size:11.5px; }
+  .pempty { padding:16px; color:var(--faint); font-size:12.5px; }
 
   /* ---- detail ---- */
-  .detail { padding:22px 26px 40px; max-width:1180px; }
-  .crumb { background:none; border:none; color:var(--muted); padding:0; font-size:12.5px; cursor:pointer; }
-  .crumb:hover { color:var(--fg); }
-  .verdict { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; margin-top:14px; }
-  .verdict .grade { font-size:44px; font-weight:680; line-height:1; letter-spacing:-0.03em; }
-  .verdict h1 { margin:0; font-size:23px; font-weight:640; letter-spacing:-0.015em; word-break:break-all; }
-  .verdict .facts { display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:9px; font-size:12.5px; color:var(--muted); }
+  .detail { padding:24px 28px 56px; max-width:1080px; }
+  .verdict { display:flex; gap:16px; align-items:flex-start; }
+  .verdict h1 { margin:0; font-size:21px; font-weight:560; letter-spacing:-.022em; line-height:1.3; text-wrap:pretty; }
+  .verdict .facts { display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:8px; font-size:12.5px; color:var(--faint); }
   .next {
-    margin-top:16px; padding:12px 14px; border-radius:var(--r);
-    border:1px solid color-mix(in oklab, var(--accent) 32%, transparent);
-    background:color-mix(in oklab, var(--accent) 7%, transparent); font-size:13.5px;
+    margin-top:18px; padding:11px 13px; border-radius:var(--r-lg);
+    border:1px solid rgba(52,211,153,.22); background:var(--accent-dim); font-size:13px; line-height:1.55;
   }
-  .next .lab { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); }
+  .next .lab { font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:3px; }
 
-  .tabs { display:flex; gap:2px; margin:22px 0 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .tabs { display:flex; gap:1px; margin:24px 0 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
   .tabs button {
-    background:none; border:none; border-bottom:2px solid transparent; border-radius:0;
-    color:var(--muted); font-size:13px; padding:9px 13px; cursor:pointer;
-    transition:color .25s var(--ease), border-color .25s var(--ease);
+    background:none; border:none; border-bottom:1.5px solid transparent; border-radius:0;
+    color:var(--muted); font:inherit; font-size:12.5px; padding:8px 11px; cursor:pointer;
+    transition:color .15s var(--ease), border-color .15s var(--ease);
   }
   .tabs button:hover { color:var(--fg); }
   .tabs button[aria-selected="true"] { color:var(--fg); border-bottom-color:var(--accent); }
-  .panel { padding-top:18px; }
+  .panel { padding-top:20px; }
 
-  .box { background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); padding:15px 16px; margin-bottom:12px; }
-  .box h3 { margin:0 0 10px; font-size:11.5px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
-  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; }
+  .box { background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); padding:14px 15px; margin-bottom:11px; }
+  .box h3 { margin:0 0 10px; font-size:11px; font-weight:550; color:var(--faint); text-transform:uppercase; letter-spacing:.06em; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:11px; }
   pre {
     white-space:pre-wrap; word-break:break-word; margin:0;
-    background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r);
-    padding:12px; font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;
-    max-height:420px; overflow:auto; color:color-mix(in oklab, var(--fg) 92%, transparent);
+    background:var(--bg); border:1px solid var(--line); border-radius:var(--r);
+    padding:12px; font-size:12px; line-height:1.62; max-height:420px; overflow:auto; color:#c9ccd1;
   }
   table { width:100%; border-collapse:collapse; font-size:12.5px; }
-  th { text-align:left; color:var(--muted); font-weight:600; padding:4px 12px 6px 0; }
-  td { padding:4px 12px 4px 0; vertical-align:top; }
-  td.k { color:var(--muted); white-space:nowrap; }
-  ul.tight { margin:6px 0 0; padding-left:18px; font-size:12.5px; color:var(--muted); }
-  ul.tight li { margin-bottom:3px; }
-  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
-  .chip { border:1px solid var(--line); background:var(--surface-2); border-radius:var(--r-sm); padding:2px 7px; font-size:11.5px; color:var(--muted); }
-  .chip.strike { text-decoration:line-through; text-decoration-color:color-mix(in oklab, var(--bad) 55%, transparent); }
-  .row-actions { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
-  .glyph { flex:0 0 auto; }
-  .note { font-size:11.5px; color:var(--muted); margin-top:9px; }
-  .gate { max-width:520px; margin:70px auto; }
-  .gate h1 { font-size:20px; margin:0 0 8px; font-weight:640; }
-  .gate p { color:var(--muted); font-size:13.5px; margin:0 0 16px; }
-  .gate .field { display:flex; gap:8px; }
-  .gate input { flex:1; }
+  th { text-align:left; color:var(--faint); font-weight:550; padding:3px 12px 6px 0; }
+  td { padding:3px 12px 3px 0; vertical-align:top; }
+  td.k { color:var(--faint); white-space:nowrap; }
+  ul.tight { margin:6px 0 0; padding-left:17px; font-size:12.5px; color:var(--muted); }
+  ul.tight li { margin-bottom:2px; }
+  .chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+  .chip { border:1px solid var(--line); background:rgba(255,255,255,.02); border-radius:5px; padding:2px 7px; font-size:11.5px; color:var(--muted); }
+  .chip.strike { text-decoration:line-through; text-decoration-color:rgba(248,113,113,.5); }
+  .note { font-size:11.5px; color:var(--faint); margin-top:8px; line-height:1.6; }
+  .row-actions { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px; }
+
+  /* ---- controls ---- */
+  button, input, select, textarea {
+    font:inherit; color:var(--fg); background:var(--surface);
+    border:1px solid var(--line); border-radius:var(--r); padding:5px 9px; font-size:12.5px;
+  }
+  button { cursor:pointer; transition:background-color .14s var(--ease), border-color .14s var(--ease); }
+  button:hover { border-color:var(--line-strong); background:var(--raised); }
+  button:active { transform:translateY(.5px); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#04241a; font-weight:550; }
+  button.primary:hover { background:#4ade9f; border-color:#4ade9f; }
+  button.ghost { background:none; }
+  button.link { background:none; border:none; color:var(--accent); padding:0; font-size:12.5px; }
+  button.link:hover { background:none; text-decoration:underline; }
+  a { color:var(--accent); text-underline-offset:2px; }
+
+  .pill { display:inline-block; padding:1px 7px; border-radius:5px; font-size:11px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
+  .pill.ok { color:var(--ok); border-color:rgba(52,211,153,.32); background:rgba(52,211,153,.08); }
+  .pill.bad { color:var(--bad); border-color:rgba(248,113,113,.32); background:rgba(248,113,113,.08); }
+  .pill.warn { color:var(--warn); border-color:rgba(251,191,36,.32); background:rgba(251,191,36,.08); }
+  .pill.acc { color:var(--accent); border-color:rgba(52,211,153,.32); background:var(--accent-dim); }
+  .muted { color:var(--muted); } .err { color:var(--bad); }
+
+  /* ---- skeletons, teaching, setup ---- */
+  @media (prefers-reduced-motion: no-preference) { .skel { animation:pulse 1.5s ease-in-out infinite; } }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.5 } }
+  .skel { background:var(--surface); border-radius:var(--r); height:42px; border-bottom:1px solid var(--line); }
+  .skel.line { height:11px; border-radius:999px; border:none; }
+
+  /* A teaching note is a footnote, not an alert. One muted line under the group header, with a
+     hairline to mark it as commentary — four boxed callouts on first load read as clutter. */
+  .teach {
+    display:flex; gap:8px; align-items:baseline;
+    padding:8px 16px 8px 45px; border-bottom:1px solid var(--line);
+    font-size:11.5px; color:var(--faint); line-height:1.55; background:rgba(255,255,255,.012);
+  }
+  .teach span { flex:1 1 auto; }
+  .teach button { background:none; border:none; color:var(--faint); padding:0 3px; font-size:13px; line-height:1; flex:0 0 auto; }
+  .teach button:hover { color:var(--fg); background:none; }
+
+  .setup { max-width:600px; }
+  .setup h1 { font-size:19px; margin:0 0 6px; font-weight:560; letter-spacing:-.02em; }
+  .setup ol { list-style:none; margin:16px 0 0; padding:0; }
+  .setup li { display:flex; gap:12px; padding:13px 0; border-top:1px solid var(--line); }
+  .setup li:first-child { border-top:none; }
+  .setup .tick { flex:0 0 auto; width:19px; height:19px; border-radius:50%; display:grid; place-items:center; border:1px solid var(--line-strong); color:var(--faint); font-size:10px; margin-top:1px; }
+  .setup li.done .tick { border-color:rgba(52,211,153,.5); color:var(--ok); background:var(--accent-dim); }
+  .setup li.done .st { color:var(--muted); }
+  .setup .st { font-size:13.5px; font-weight:500; }
+  .setup .sd { font-size:12.5px; color:var(--faint); margin-top:3px; line-height:1.55; }
+  .setupbar { display:flex; align-items:center; gap:12px; padding:8px 16px; border-bottom:1px solid var(--line); font-size:11.5px; color:var(--faint); background:var(--panel); }
+  .setupbar b { color:var(--accent); font-weight:550; }
+
+  .gate { max-width:400px; margin:16vh auto 0; }
+  .gate h1 { font-size:19px; margin:0 0 7px; font-weight:560; letter-spacing:-.02em; }
+  .gate p { color:var(--muted); font-size:13px; margin:0 0 16px; line-height:1.6; }
+  .gate .field { display:flex; gap:7px; }
+  .gate input { flex:1; padding:7px 10px; }
+
+  @media (max-width: 860px) {
+    body { overflow:auto; }
+    aside.sidebar { display:none; }
+    main.view { height:auto; }
+  }
 </style>
 </head>
 <body>
-<header class="top">
-  <span class="brand">StepStitch<span class="dot">.</span></span>
-  <span class="pill">operator console</span>
-  <nav class="main" id="nav" aria-label="Sections"></nav>
-  <span class="spacer"></span>
-  <input id="search" type="search" class="search" placeholder="Search failures…"
-         aria-label="Search failures" autocomplete="off">
-  <label class="switch" for="techtoggle">
-    <input type="checkbox" id="techtoggle">
-    <span>Technical detail</span>
-  </label>
-  <span class="status" id="statusbar" aria-live="polite"></span>
-  <button id="tokenbtn" class="ghost">Disconnect</button>
-</header>
-
-<div class="privacy" id="privacy">
-  <strong>Structural evidence only.</strong>
-  <span>StepStitch never captures, ever:</span>
-  <span class="never">screens</span>
-  <span class="never">input values</span>
-  <span class="never">page text</span>
-  <span class="never">raw URLs</span>
-  <span class="never">request bodies</span>
-  <span class="never">cookies &amp; headers</span>
-</div>
-
-<!-- The pipeline, stated twice. Both registers ship in the document — the technical one names
-     the real artefacts for an engineer, the plain one is what everyone else can follow — and
-     the technical-detail toggle decides which is shown. -->
-<div class="flow" id="flow-tech" hidden>
-  <b>Customer bug</b><span class="arr">&rarr;</span>
-  <b>privacy scrub</b><span class="arr">&rarr;</span>
-  <b>replayability score</b><span class="arr">&rarr;</span>
-  <b>Playwright repro</b><span class="arr">&rarr;</span>
-  <b>draft ticket/PR</b><span class="arr">&rarr;</span>
-  <b>verified fix</b>
-</div>
-<div class="flow" id="flow-plain">
-  <b>Someone reports a bug</b><span class="arr">&rarr;</span>
-  <b>personal details stripped</b><span class="arr">&rarr;</span>
-  <b>we check it can be reproduced</b><span class="arr">&rarr;</span>
-  <b>a test is written for it</b><span class="arr">&rarr;</span>
-  <b>a ticket is drafted</b><span class="arr">&rarr;</span>
-  <b>the fix is proven</b>
-</div>
-
 <div class="grain" aria-hidden="true"></div>
-<main class="view" id="view" aria-live="polite" aria-busy="false"></main>
 
-<footer class="bottom">Operator console &middot; every read and config change is audited &middot; records are scrubbed server-side before storage &middot; drafts are previews, nothing is sent &middot; evidence is never edited or deleted here.</footer>
+<aside class="sidebar">
+  <div class="brandrow">
+    <span class="mark" aria-hidden="true"></span>
+    <b>StepStitch</b>
+    <span class="env">operator console</span>
+  </div>
+
+  <div class="sgroup" id="nav" role="navigation" aria-label="Sections"></div>
+  <div class="sgroup" id="stagenav"></div>
+
+  <!-- The pipeline, stated twice. Both registers ship in the document — the technical one names
+       the real artefacts for an engineer, the plain one is what everyone else follows — and the
+       technical-detail toggle decides which is shown. -->
+  <div class="sgroup" id="flow-tech" hidden>
+    <p class="slabel">How it works</p>
+    <p class="legend">
+      Customer bug <i>&rarr;</i> privacy scrub <i>&rarr;</i> replayability score <i>&rarr;</i>
+      Playwright repro <i>&rarr;</i> draft ticket/PR <i>&rarr;</i> verified fix
+    </p>
+  </div>
+  <div class="sgroup" id="flow-plain">
+    <p class="slabel">How it works</p>
+    <p class="legend">
+      Someone reports a bug <i>&rarr;</i> personal details stripped <i>&rarr;</i>
+      we check it can be reproduced <i>&rarr;</i> a test is written for it <i>&rarr;</i>
+      a ticket is drafted <i>&rarr;</i> the fix is proven
+    </p>
+  </div>
+
+  <div class="sfoot">
+    <div class="privacy" id="privacy">
+      <strong>Structural evidence only.</strong>
+      StepStitch never captures, ever:
+      <span class="never">screens</span>, <span class="never">input values</span>,
+      <span class="never">page text</span>, <span class="never">raw URLs</span>,
+      <span class="never">request bodies</span>, <span class="never">cookies &amp; headers</span>.
+    </div>
+    <div class="guarantees">
+      Operator console &middot; every read and config change is audited &middot; records are
+      scrubbed server-side before storage &middot; drafts are previews, nothing is sent &middot;
+      evidence is never edited or deleted here.
+    </div>
+  </div>
+</aside>
+
+<main class="view" id="view">
+  <div class="topbar">
+    <div class="crumbs" id="crumbs"></div>
+    <span class="spacer"></span>
+    <button class="searchbtn" id="searchbtn">
+      <span>Search failures</span><span class="kbd">&#8984;K</span>
+    </button>
+    <input id="search" type="search" aria-label="Search failures" autocomplete="off" tabindex="-1">
+    <label class="switch" for="techtoggle">
+      <input type="checkbox" id="techtoggle">
+      <span>Technical</span>
+    </label>
+    <span class="status" id="statusbar" aria-live="polite"></span>
+    <button id="tokenbtn" class="ghost">Disconnect</button>
+  </div>
+  <div class="content" id="content" aria-live="polite" aria-busy="false"></div>
+</main>
 
 <script nonce="__CSP_NONCE__">
 (function () {
   "use strict";
 
   var API = "/api/stepstitch/v1";
-  var viewEl = document.getElementById("view");
+  var viewEl = document.getElementById("content");
   var navEl = document.getElementById("nav");
+  var stageNavEl = document.getElementById("stagenav");
+  var crumbsEl = document.getElementById("crumbs");
   var token = sessionStorage.getItem("ss_token") || "";
 
   // ---- operator preferences -------------------------------------------------------------
@@ -589,24 +635,75 @@ DASHBOARD_HTML = r"""<!doctype html>
   ];
   var current = "board";
 
+  var lastShapes = [];         // cached for the sidebar counts and the command palette
+  var stageFilter = null;      // null = all stages
+
   function renderNav() {
     clear(navEl);
+    navEl.appendChild(el("p", { class: "slabel", text: "Console" }));
     ROUTES.forEach(function (r) {
-      var b = el("button", { text: r.label, onclick: function () { go(r.id); } });
+      var b = el("button", { class: "snav", text: r.label,
+                             onclick: function () { go(r.id); } });
       if (r.id === current) b.setAttribute("aria-current", "page");
       navEl.appendChild(b);
     });
+    renderStageNav();
   }
+
+  // Stage filters live in the sidebar with live counts, so the pipeline is navigable without
+  // the horizontal columns a board would need — and it still works at 200 shapes.
+  function renderStageNav() {
+    clear(stageNavEl);
+    if (current !== "board" || !lastShapes.length) return;
+    stageNavEl.appendChild(el("p", { class: "slabel", text: "Failures" }));
+
+    var all = el("button", { class: "snav" + (stageFilter === null ? " on" : ""),
+                             onclick: function () { stageFilter = null; renderBoard(); } }, [
+      el("span", { class: "dot" }),
+      el("span", { text: "All" }),
+      el("span", { class: "ct", text: String(lastShapes.length) })
+    ]);
+    if (stageFilter === null) all.setAttribute("aria-current", "page");
+    stageNavEl.appendChild(all);
+
+    STAGES.forEach(function (stage) {
+      var n = lastShapes.filter(function (s) { return s.stage === stage.id; }).length;
+      if (!n) return;                       // an empty stage is not worth a permanent row
+      var b = el("button", { class: "snav" + (stageFilter === stage.id ? " on" : ""),
+                             onclick: function () { stageFilter = stage.id; renderBoard(); } }, [
+        el("span", { class: "dot d-" + stage.id }),
+        el("span", { text: tech ? stage.label : stage.plain }),
+        el("span", { class: "ct", text: String(n) })
+      ]);
+      if (stageFilter === stage.id) b.setAttribute("aria-current", "page");
+      stageNavEl.appendChild(b);
+    });
+  }
+
+  // Breadcrumbs replace the old page-title guesswork: always says where you are, always offers
+  // the way back.
+  function renderCrumbs(trail) {
+    clear(crumbsEl);
+    (trail || []).forEach(function (part, i) {
+      if (i) crumbsEl.appendChild(el("span", { class: "sep", text: "/" }));
+      crumbsEl.appendChild(part.onclick
+        ? el("button", { text: part.text, onclick: part.onclick })
+        : el("span", { text: part.text }));
+    });
+  }
+
   var currentShapeId = null;   // set while a shape detail is open, so re-renders return to it
 
   function go(id) {
     current = id;
     currentShapeId = null;
+    selectedRow = -1;
     renderNav();
     syncChrome();
     if (!token) return renderGate();
     loadStatus();   // counts move as you work — refresh them on every navigation
     var route = ROUTES.filter(function (r) { return r.id === id; })[0] || ROUTES[0];
+    renderCrumbs([{ text: route.label }]);
     route.render();
   }
   function mount(node) {
@@ -675,10 +772,10 @@ DASHBOARD_HTML = r"""<!doctype html>
     }, 160);
   };
 
-  // Search only means anything on the board; hide it elsewhere rather than leave it inert.
-  // The flow banner swaps register with the toggle rather than being rewritten.
+  // Search opens the palette rather than living inline; the flow legend swaps register with
+  // the toggle rather than being rewritten.
   function syncChrome() {
-    searchEl.style.display = (current === "board" && !currentShapeId) ? "" : "none";
+    document.getElementById("searchbtn").hidden = (current !== "board" || !!currentShapeId);
     document.getElementById("flow-tech").hidden = !tech;
     document.getElementById("flow-plain").hidden = tech;
   }
@@ -688,15 +785,139 @@ DASHBOARD_HTML = r"""<!doctype html>
     try {
       var s = await adminApi("/status");
       clear(bar);
-      [["profile", s.profile], ["retention", s.retention_days + "d"],
-       ["traces", s.traces], ["agents", s.agents_active + "/" + s.agents_total],
-       ["audit", s.audit_events]].forEach(function (pair, i) {
-        if (i) bar.appendChild(document.createTextNode(" · "));
-        bar.appendChild(document.createTextNode(pair[0] + " "));
-        bar.appendChild(el("b", { text: String(pair[1]) }));
-      });
+      [["traces", s.traces], ["agents", s.agents_active + "/" + s.agents_total]]
+        .forEach(function (pair, i) {
+          if (i) bar.appendChild(document.createTextNode(" · "));
+          bar.appendChild(document.createTextNode(pair[0] + " "));
+          bar.appendChild(el("b", { text: String(pair[1]) }));
+        });
     } catch (e) { clear(bar); }
   }
+
+  // ---- command palette ---------------------------------------------------------------------
+  // ⌘K over every failure plus the destinations. In a keyboard-first tool this replaces an
+  // always-on search field: it costs no chrome and reaches more than a filter box would.
+  var paletteOpen = false;
+
+  function openPalette() {
+    if (paletteOpen) return;
+    paletteOpen = true;
+    var input = el("input", { type: "text", placeholder: "Search failures, or jump to…",
+                              "aria-label": "Command palette" });
+    var results = el("div", { class: "presults" });
+    var scrim = el("div", { class: "scrim" }, [
+      el("div", { class: "palette", role: "dialog", "aria-modal": "true" }, [input, results])
+    ]);
+    var items = [], cursor = 0;
+
+    function actions() {
+      var out = ROUTES.filter(function (r) { return r.id !== current; }).map(function (r) {
+        return { label: "Go to " + r.label, hint: "Section", run: function () { go(r.id); } };
+      });
+      out.push({ label: (tech ? "Hide" : "Show") + " technical detail", hint: "View",
+                 run: function () { techEl.checked = !tech; techEl.onchange(); } });
+      return out;
+    }
+
+    function draw() {
+      var q = input.value.trim().toLowerCase();
+      items = [];
+      lastShapes.forEach(function (s) {
+        var hay = [s.plain_summary, (s.fingerprint || {}).route, s.stage_label]
+          .filter(Boolean).join(" ").toLowerCase();
+        if (!q || hay.indexOf(q) >= 0) {
+          items.push({ label: headlineFor(s), hint: stageLabelFor(s),
+                       fp: s.fingerprint, run: function () { openShape(s.shape_id); } });
+        }
+      });
+      actions().forEach(function (a) {
+        if (!q || a.label.toLowerCase().indexOf(q) >= 0) items.push(a);
+      });
+      items = items.slice(0, 40);
+      if (cursor >= items.length) cursor = Math.max(0, items.length - 1);
+
+      clear(results);
+      if (!items.length) {
+        results.appendChild(el("div", { class: "pempty", text: "Nothing matches “" +
+          input.value + "”." }));
+        return;
+      }
+      items.forEach(function (it, i) {
+        var b = el("button", { class: "pitem" + (i === cursor ? " on" : ""),
+                               onclick: function () { closePalette(); it.run(); } }, [
+          it.fp ? glyph(it.fp, 16) : el("span", { class: "ps", text: "→" }),
+          el("span", { text: it.label }),
+          el("span", { class: "pk", text: it.hint || "" })
+        ]);
+        b.onmousemove = function () {
+          if (cursor === i) return;
+          cursor = i; draw();
+        };
+        results.appendChild(b);
+      });
+    }
+
+    input.oninput = function () { cursor = 0; draw(); };
+    scrim.onclick = function (e) { if (e.target === scrim) closePalette(); };
+    scrim.onkeydown = function (e) {
+      if (e.key === "Escape") { e.preventDefault(); closePalette(); }
+      else if (e.key === "ArrowDown" || (e.key === "n" && e.ctrlKey)) {
+        e.preventDefault(); cursor = Math.min(cursor + 1, items.length - 1); draw();
+        var on = results.querySelector(".pitem.on"); if (on) on.scrollIntoView({ block: "nearest" });
+      } else if (e.key === "ArrowUp" || (e.key === "p" && e.ctrlKey)) {
+        e.preventDefault(); cursor = Math.max(cursor - 1, 0); draw();
+        var up = results.querySelector(".pitem.on"); if (up) up.scrollIntoView({ block: "nearest" });
+      } else if (e.key === "Enter" && items[cursor]) {
+        e.preventDefault(); var run = items[cursor].run; closePalette(); run();
+      }
+    };
+    document.body.appendChild(scrim);
+    window.__ssPalette = scrim;
+    draw();
+    input.focus();
+  }
+  function closePalette() {
+    paletteOpen = false;
+    if (window.__ssPalette && window.__ssPalette.parentNode) {
+      window.__ssPalette.parentNode.removeChild(window.__ssPalette);
+    }
+    window.__ssPalette = null;
+  }
+  function stageLabelFor(shape) {
+    var st = STAGES.filter(function (s) { return s.id === shape.stage; })[0];
+    return st ? (tech ? st.label : st.plain) : "";
+  }
+
+  // ---- keyboard ------------------------------------------------------------------------------
+  function moveSelection(delta) {
+    if (!rowShapes.length) return;
+    selectedRow = Math.max(0, Math.min(rowShapes.length - 1, selectedRow + delta));
+    var rows = viewEl.querySelectorAll(".row");
+    Array.prototype.forEach.call(rows, function (r) { r.classList.remove("sel"); });
+    var target = viewEl.querySelector('.row[data-idx="' + selectedRow + '"]');
+    if (target) { target.classList.add("sel"); target.scrollIntoView({ block: "nearest" }); }
+  }
+
+  document.addEventListener("keydown", function (e) {
+    var mod = e.metaKey || e.ctrlKey;
+    if (mod && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      return paletteOpen ? closePalette() : openPalette();
+    }
+    if (paletteOpen) return;                       // the palette owns its own keys
+    var t = e.target;
+    if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+
+    if (e.key === "/") { e.preventDefault(); return openPalette(); }
+    if (e.key === "Escape" && currentShapeId) { e.preventDefault(); return renderBoard(); }
+    if (current !== "board" || currentShapeId) return;
+    if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); moveSelection(selectedRow < 0 ? 0 : 1); }
+    else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); moveSelection(-1); }
+    else if (e.key === "Enter" && rowShapes[selectedRow]) {
+      e.preventDefault(); openShape(rowShapes[selectedRow].shape_id);
+    }
+  });
+  document.getElementById("searchbtn").onclick = openPalette;
 
   // "today" / "yesterday" / "3 days ago" — dates mean nothing at a glance.
   function relativeDay(iso) {
@@ -798,8 +1019,8 @@ DASHBOARD_HTML = r"""<!doctype html>
     var steps = setupSteps(status);
     var left = steps.filter(function (st) { return !st.done; });
     var next = left[0];
-    return el("div", { class: "boardbar" }, [
-      el("span", { class: "setup-mini" }, [
+    return el("div", { class: "setupbar" }, [
+      el("span", {}, [
         el("b", { text: (steps.length - left.length) + "/" + steps.length + " set up" }),
         document.createTextNode(" · next: " + next.title)
       ]),
@@ -847,42 +1068,33 @@ DASHBOARD_HTML = r"""<!doctype html>
   ];
   var ALWAYS_SHOWN = { untriaged: 1, known_shape: 1, reproduced: 1, fixed: 1 };
 
-  function shapeCard(shape) {
+  // One failure = one row. A list scales to hundreds where columns stop working around thirty,
+  // and it is what a keyboard-driven tool actually wants.
+  function shapeRow(shape, index) {
     var fp = shape.fingerprint || {};
-    var kids = [
-      el("div", { class: "card-top" }, [
-        glyph(fp, 30),
-        el("div", { class: tech ? "route mono" : "headline", text: headlineFor(shape) })
-      ])
-    ];
-
-    // Plain view answers "how many people, and can we reproduce it?". Technical view keeps the
-    // status codes and diagnostic types an engineer triages on.
-    var facts = [];
+    var meta = [];
     if (tech) {
-      if (fp.failing_status) facts.push("HTTP " + fp.failing_status);
-      if (fp.exception_type) facts.push(fp.exception_type);
-      if (fp.diagnostic_type) facts.push(fp.diagnostic_type);
+      if (fp.failing_status) meta.push(String(fp.failing_status));
+      else if (fp.exception_type) meta.push(fp.exception_type);
     }
-    facts.push(shape.occurrences === 1 ? "1 person affected"
-                                       : shape.occurrences + " people affected");
-    // Recency is what tells a non-engineer whether this is live or historical. The board has
-    // no replayability score to show here — that needs the trace body, so it lives on the
-    // detail view where we actually fetch one.
-    var seen = relativeDay(shape.last_seen);
-    if (seen) facts.push("last seen " + seen);
-    kids.push(el("div", { class: "sub" }, facts.map(function (f) {
-      return el("span", { text: f });
-    })));
-
-    if (shape.prior_fixes && shape.prior_fixes.length) {
-      var top = shape.prior_fixes[0];
-      kids.push(el("div", { class: "known", text: tech
-        ? "Seen before · " + (top.fix_ref || top.trace_id) + " · " +
-          Math.round((top.similarity || 0) * 100) + "% match"
-        : "You fixed this before — see " + (top.fix_ref || top.trace_id) }));
-    }
-    return el("button", { class: "card", onclick: function () { openShape(shape.shape_id); } }, kids);
+    var row = el("button", { class: "row", "data-idx": String(index),
+                             onclick: function () { openShape(shape.shape_id); } }, [
+      glyph(fp, 20),
+      el("span", { class: "rt" + (tech ? " mono" : ""), text: headlineFor(shape) }),
+      shape.prior_fixes && shape.prior_fixes.length
+        ? el("span", { class: "seen", text: tech
+            ? Math.round((shape.prior_fixes[0].similarity || 0) * 100) + "% match"
+            : "fixed before" })
+        : null,
+      el("span", { class: "meta" }, meta.map(function (m) {
+        return el("span", { text: m });
+      }).concat([
+        el("span", { class: "cnt", text: shape.occurrences === 1
+          ? "1 person" : shape.occurrences + " people" }),
+        el("span", { class: "when", text: relativeDay(shape.last_seen) || "" })
+      ]))
+    ]);
+    return row;
   }
 
   // Free-text filter across everything a person might search by, in either register.
@@ -894,6 +1106,9 @@ DASHBOARD_HTML = r"""<!doctype html>
       .filter(Boolean).join(" ").toLowerCase().indexOf(query) >= 0;
   }
 
+  var rowShapes = [];       // flat, in render order — what j/k and Enter walk
+  var selectedRow = -1;
+
   async function renderBoard() {
     mountLoading(skeleton("board"));
     var data, status;
@@ -904,52 +1119,74 @@ DASHBOARD_HTML = r"""<!doctype html>
     } catch (e) { return mount(fail(e)); }
 
     var shapes = data.shapes || [];
+    lastShapes = shapes;
+    renderStageNav();
 
     // Nothing to show yet is not an error — it means setup is unfinished. Say what to do next.
     if (!shapes.length) return mount(setupView(status));
 
-    var visible = shapes.filter(matchesQuery);
+    var visible = shapes.filter(matchesQuery).filter(function (s) {
+      return !stageFilter || s.stage === stageFilter;
+    });
     var wrap = el("div", {});
+    rowShapes = [];
 
-    if (query) {
-      wrap.appendChild(el("div", { class: "boardbar" }, [
+    if (query || stageFilter) {
+      wrap.appendChild(el("div", { class: "setupbar" }, [
         el("span", { text: "Showing " + visible.length + " of " + shapes.length +
                            (shapes.length === 1 ? " failure" : " failures") }),
         el("button", { class: "link", text: "Clear", onclick: function () {
-          searchEl.value = ""; query = ""; renderBoard();
+          query = ""; stageFilter = null; searchEl.value = ""; renderNav(); renderBoard();
         } })
       ]));
     } else if (status && !setupComplete(status)) {
       wrap.appendChild(setupMini(status));
     }
 
-    var board = el("div", { class: "board" });
+    if (!visible.length) {
+      wrap.appendChild(el("p", { class: "listempty",
+        text: "Nothing matches. Try a different search, or clear the filter." }));
+      return mount(wrap);
+    }
+
+    // Grouped by stage with sticky headers — the pipeline is still legible, but vertically,
+    // so it survives hundreds of rows.
     STAGES.forEach(function (stage) {
       var items = visible.filter(function (s) { return s.stage === stage.id; });
-      if (!items.length && !ALWAYS_SHOWN[stage.id]) return;   // noise columns collapse
-      var col = el("div", { class: "col s-" + stage.id }, [
-        el("div", { class: "col-head" }, [
-          el("h2", { text: tech ? stage.label : stage.plain }),
-          el("span", { class: "n", text: String(items.length) }),
-          el("span", { class: "why", text: stage.why })
-        ])
+      if (!items.length) return;
+      var collapsed = pref("fold_" + stage.id, false);
+      var body = el("div", {});
+      var head = el("div", { class: "ghead" + (collapsed ? " collapsed" : ""),
+                             role: "button", tabindex: "0" }, [
+        el("span", { class: "chev", text: "▼" }),
+        el("span", { class: "gname", text: tech ? stage.label : stage.plain }),
+        el("span", { class: "gct", text: String(items.length) }),
+        el("span", { class: "gwhy", text: stage.why })
       ]);
-      // A column explains itself the first time it actually has something in it — the moment
+      function toggleFold() {
+        collapsed = !collapsed;
+        setPref("fold_" + stage.id, collapsed);
+        head.className = "ghead" + (collapsed ? " collapsed" : "");
+        body.hidden = collapsed;
+      }
+      head.onclick = toggleFold;
+      head.onkeydown = function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleFold(); }
+      };
+      wrap.appendChild(head);
+
+      // A group explains itself the first time it actually has something in it — the moment
       // the concept becomes relevant, rather than in a tour up front.
-      if (items.length) {
-        var note = teach("col_" + stage.id, stage.teach);
-        if (note) col.appendChild(note);
-      }
-      if (!items.length) {
-        col.appendChild(el("div", { class: "empty" }, [
-          el("p", { text: query ? "No matches here." : stage.blank })
-        ]));
-      } else {
-        items.forEach(function (s) { col.appendChild(shapeCard(s)); });
-      }
-      board.appendChild(col);
+      var note = teach("col_" + stage.id, stage.teach);
+      if (note) body.appendChild(note);
+
+      items.forEach(function (s) {
+        body.appendChild(shapeRow(s, rowShapes.length));
+        rowShapes.push(s);
+      });
+      body.hidden = collapsed;
+      wrap.appendChild(body);
     });
-    wrap.appendChild(board);
     mount(wrap);
   }
 
@@ -991,7 +1228,11 @@ DASHBOARD_HTML = r"""<!doctype html>
     var grade = rep.grade || "—";
     var root = el("div", { class: "detail" });
 
-    root.appendChild(el("button", { class: "crumb", text: "← Board", onclick: renderBoard }));
+    // Location and the way back live in the topbar breadcrumb, not inline above the content.
+    renderCrumbs([
+      { text: "Failures", onclick: renderBoard },
+      { text: headlineFor(shape) }
+    ]);
 
     // Verdict: the decision, above the fold — in whichever register the operator reads in.
     var facts = [];
