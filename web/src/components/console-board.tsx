@@ -123,39 +123,55 @@ const CHECKOUT: Fingerprint = {
 };
 
 // The real board columns, derived from the verdict state machine in verification/verdict.py.
+// Wording matches the console's DEFAULT register — plain language, with the technical names
+// (Untriaged / Known shape / HTTP 500) living behind its "Technical detail" toggle. The site
+// should advertise the vocabulary a visitor actually meets when they open the thing.
 const COLUMNS: {
   label: string;
   why: string;
   tone?: string;
-  cards: { fp: Fingerprint; facts: string; seen?: string }[];
+  cards: { fp: Fingerprint; headline: string; facts: string; seen?: string }[];
 }[] = [
   {
-    label: "Untriaged",
+    label: "Waiting for a test run",
     why: "no CI result yet",
     cards: [],
   },
   {
-    label: "Known shape",
+    label: "Seen before",
     why: "you fixed this before",
     tone: "text-accent",
     cards: [
       {
         fp: { ...TRANSFER, terminal_selector: "[data-testid=confirm-transfer]" },
-        facts: "HTTP 500 · 1 report",
-        seen: "Seen before · PR-42 · 88% match",
+        headline: "Transfer — the server errored after Confirm transfer",
+        facts: "1 person affected",
+        seen: "You fixed this before — see PR-42",
       },
     ],
   },
   {
-    label: "Reproduced",
-    why: "red confirmed",
-    cards: [{ fp: CHECKOUT, facts: "HTTP 422 · 1 report" }],
+    label: "Confirmed broken",
+    why: "reproduced, awaiting a fix",
+    cards: [
+      {
+        fp: CHECKOUT,
+        headline: "Checkout — the request was rejected",
+        facts: "1 person affected",
+      },
+    ],
   },
   {
-    label: "Fixed",
-    why: "red to green",
+    label: "Fixed and proven",
+    why: "failed before the fix, passed after",
     tone: "text-ok",
-    cards: [{ fp: TRANSFER, facts: "HTTP 500 · 4 reports" }],
+    cards: [
+      {
+        fp: TRANSFER,
+        headline: "Transfer — the server errored after Review transfer",
+        facts: "4 people affected",
+      },
+    ],
   },
 ];
 
@@ -191,10 +207,10 @@ export function ConsoleBoard() {
                       key={card.fp.terminal_selector}
                       className="rounded-xl border border-line bg-surface p-3"
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-start gap-2">
                         <Glyph fp={card.fp} />
-                        <p className="truncate font-mono text-[11.5px] font-medium text-fg">
-                          {card.fp.route}
+                        <p className="text-pretty text-[11.5px] font-medium leading-snug text-fg">
+                          {card.headline}
                         </p>
                       </div>
                       <p className="mt-1.5 text-[11px] text-muted">
@@ -212,8 +228,9 @@ export function ConsoleBoard() {
             </div>
           ))}
         </div>
-        <p className="border-t border-line px-4 py-2.5 font-mono text-[11px] text-muted">
-          GET /dashboard · four reports of one bug are one card, not four rows
+        <p className="border-t border-line px-4 py-2.5 text-[11px] text-muted">
+          Four reports of one bug are one card, not four rows. Engineers can flip on technical
+          detail for route templates, status codes and raw payloads.
         </p>
       </div>
     </Bezel>
