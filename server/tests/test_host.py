@@ -169,9 +169,23 @@ def test_dashboard_is_organised_around_failure_shapes():
     for stage in ("untriaged", "known_shape", "repro_invalid", "reproduced", "fix_failed",
                   "fixed"):
         assert f'"{stage}"' in body, f"board missing stage column: {stage}"
-    # Three destinations, not a row of equal-weight buttons.
-    for dest in ("Board", "Agents", "Governance"):
+    # Four destinations, not a row of equal-weight buttons. "Board" became "Failures" when the
+    # metrics Overview took the landing slot — the queue is no longer the front door.
+    for dest in ("Overview", "Failures", "Agents", "Governance"):
         assert f'label: "{dest}"' in body
+
+
+def test_dashboard_leads_with_metrics_not_a_queue():
+    # The landing screen answers "how are things?" before "what should I work on?" — every
+    # figure derived from /shapes + /admin/status, with the maths mirrored in metrics.py.
+    client, _ = _client()
+    body = client.get("/dashboard").text
+    assert 'var current = "overview"' in body
+    assert 'go("overview")' in body, "the console must boot into the overview"
+    for metric in ("Open failures", "People affected", "Proven fixed", "Repeat rate"):
+        assert metric in body, f"overview missing metric tile: {metric}"
+    assert "function overviewMetrics" in body and "function areaChart" in body
+    assert "function donut" in body
 
 
 def test_dashboard_builds_dom_instead_of_concatenating_markup():

@@ -109,15 +109,23 @@ DASHBOARD_HTML = r"""<!doctype html>
   .snav .dot { width:7px; height:7px; border-radius:2px; flex:0 0 auto; background:var(--faint); }
   .snav .ct { margin-left:auto; font-size:11.5px; color:var(--faint); font-variant-numeric:tabular-nums; }
   .snav.on .ct { color:var(--muted); }
-  .d-untriaged { background:var(--faint) !important; }
-  .d-known_shape { background:var(--accent) !important; }
-  .d-repro_invalid { background:var(--warn) !important; }
-  .d-reproduced { background:var(--info) !important; }
-  .d-fix_failed { background:var(--bad) !important; }
-  .d-fixed { background:var(--ok) !important; }
+  /* Sidebar dots reuse the stage tokens defined with the overview, so the donut, the legend
+     and the nav can never disagree about what colour a stage is. */
+  .d-untriaged { background:var(--s-untriaged) !important; }
+  .d-known_shape { background:var(--s-known_shape) !important; }
+  .d-repro_invalid { background:var(--s-repro_invalid) !important; }
+  .d-reproduced { background:var(--s-reproduced) !important; }
+  .d-fix_failed { background:var(--s-fix_failed) !important; }
+  .d-fixed { background:var(--s-fixed) !important; }
 
-  .legend { margin:0; padding:0 8px; font-size:11px; line-height:1.75; color:var(--faint); }
-  .legend i { color:rgba(52,211,153,.55); font-style:normal; padding:0 1px; }
+  /* A stepped list, not a wrapped sentence: at 244px the inline arrows stranded themselves on
+     their own lines and the whole legend read as broken. */
+  .legend { margin:0; padding:0 8px; font-size:11px; line-height:1.5; color:var(--faint);
+    counter-reset:fl; }
+  .legend i { display:block; font-style:normal; padding:2px 0 2px 16px; position:relative;
+    counter-increment:fl; }
+  .legend i::before { content:counter(fl); position:absolute; left:0; top:2px;
+    color:rgba(52,211,153,.7); font-variant-numeric:tabular-nums; font-size:10px; }
 
   .sfoot { margin-top:auto; padding:10px 8px 2px; border-top:1px solid var(--line); }
   .privacy { font-size:10.5px; line-height:1.65; color:var(--faint); }
@@ -161,6 +169,87 @@ DASHBOARD_HTML = r"""<!doctype html>
   .status b { color:var(--muted); font-weight:500; }
 
   .content { flex:1 1 auto; overflow:auto; min-height:0; }
+
+  /* ---- overview ---- */
+  /* Stage colours are tokens so the donut, the legend and the sidebar dots can never drift. */
+  :root{
+    --s-untriaged:#5c616a; --s-known_shape:#34d399; --s-repro_invalid:#fbbf24;
+    --s-reproduced:#7aa2f7; --s-fix_failed:#f87171; --s-fixed:#34d399;
+  }
+  .ov{padding:0 30px 64px;max-width:1340px;margin:0 auto}
+  .ov .hero{display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center;
+    padding:46px 0 38px}
+  .ov .eyebrow{font-size:10.5px;letter-spacing:.19em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 14px}
+  .ov h1{margin:0;font-size:clamp(34px,4.1vw,56px);font-weight:600;letter-spacing:-.045em;
+    line-height:1.03}
+  .ov h1 b{color:var(--accent);font-weight:600}
+  .ov .lede{color:var(--muted);font-size:14.5px;margin:16px 0 0;max-width:47ch;line-height:1.65}
+  .ov .cta{display:flex;gap:9px;margin-top:24px}
+  .ov .cta button{border-radius:99px;padding:8px 16px;font-size:13px}
+
+  /* Every open failure as its own mark — the glyph stops being decoration. */
+  .cst{position:relative;height:320px}
+  .cnode{position:absolute;padding:9px;border-radius:12px;border:1px solid var(--line);
+    background:rgba(22,23,27,.72);cursor:pointer;
+    box-shadow:0 12px 34px -18px rgba(0,0,0,.9);
+    transition:transform .3s var(--ease),border-color .3s var(--ease)}
+  .cnode:hover{transform:translateY(-3px);border-color:rgba(52,211,153,.5)}
+  .cnode.lead{padding:16px;border-color:rgba(52,211,153,.34);
+    box-shadow:0 0 0 1px rgba(52,211,153,.12),0 22px 60px -26px rgba(52,211,153,.5)}
+  .cnode .cl{display:block;font-size:9.5px;color:var(--faint);margin-top:5px;text-align:center}
+
+  .stripe{display:grid;grid-template-columns:repeat(4,1fr);
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .stripe .st{padding:20px 24px 18px;border-left:1px solid var(--line)}
+  .stripe .st:first-child{border-left:none;padding-left:0}
+  .stripe .k{font-size:11.5px;color:var(--faint)}
+  .stripe .v{font-size:34px;font-weight:600;letter-spacing:-.042em;margin-top:5px;line-height:1;
+    font-variant-numeric:tabular-nums}
+  .stripe .d{font-size:11.5px;color:var(--faint);margin-top:6px}
+
+  .ov .two{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;margin-top:30px}
+  .ov .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;
+    padding:22px 24px}
+  .ov .card.accent{border-color:rgba(52,211,153,.16);
+    background:linear-gradient(158deg,rgba(52,211,153,.075),var(--surface) 52%)}
+  .ov .ch{display:flex;align-items:baseline;gap:11px;margin-bottom:18px}
+  .ov .ch h2{margin:0;font-size:14.5px;font-weight:550;letter-spacing:-.022em}
+  .ov .ch .sub{font-size:12px;color:var(--faint)}
+  .ov .ch .rt{margin-left:auto;font-size:12px;color:var(--accent)}
+  .ov .axis{display:flex;justify-content:space-between;font-size:10.5px;color:var(--faint);
+    margin-top:9px}
+  .chart{display:block}
+
+  .ringwrap{display:flex;align-items:center;position:relative}
+  .ringmid{position:absolute;left:66px;top:50%;transform:translate(-50%,-50%);text-align:center}
+  .ringmid .b{font-size:25px;font-weight:600;letter-spacing:-.03em;line-height:1;
+    font-variant-numeric:tabular-nums}
+  .ringmid .s{font-size:10px;color:var(--faint);margin-top:2px}
+  .legend{display:flex;flex-direction:column;gap:9px;margin-left:20px;flex:1}
+  .lg{display:flex;align-items:center;gap:9px;font-size:12.5px}
+  .lg .sw{width:8px;height:8px;border-radius:3px;flex:0 0 auto}
+  .lg .n{margin-left:auto;color:var(--muted);font-weight:550;font-variant-numeric:tabular-nums}
+
+  .prow{display:flex;align-items:center;gap:13px;padding:10px 0;border-top:1px solid var(--line)}
+  .prow:first-child{border-top:none;padding-top:0}
+  .prow .nm{font-size:12.5px;min-width:92px}
+  .prow .bar{flex:1;height:7px;border-radius:99px;background:rgba(255,255,255,.05);
+    overflow:hidden}
+  .prow .fill{display:block;height:100%;border-radius:99px;
+    background:linear-gradient(90deg,var(--accent-2),var(--accent))}
+  .prow .n{font-size:12px;color:var(--muted);min-width:74px;text-align:right;
+    font-variant-numeric:tabular-nums}
+
+  .orow{display:flex;align-items:center;gap:11px;width:100%;text-align:left;padding:9px 0;
+    background:none;border:none;border-top:1px solid var(--line);color:var(--fg);font:inherit;
+    cursor:pointer}
+  .orow:first-child{border-top:none}
+  .orow:hover{background:rgba(255,255,255,.025)}
+  .orow .t{flex:1;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .orow .pp{font-size:11.5px;color:var(--muted);min-width:62px;text-align:right}
+  .orow .wh{font-size:11.5px;color:var(--faint);min-width:70px;text-align:right}
+  @media(max-width:1120px){.ov .hero,.ov .two{grid-template-columns:1fr}.cst{display:none}}
 
   /* ---- grouped list (the board, as a list) ---- */
   .ghead {
@@ -339,18 +428,11 @@ DASHBOARD_HTML = r"""<!doctype html>
        technical-detail toggle decides which is shown. -->
   <div class="sgroup" id="flow-tech" hidden>
     <p class="slabel">How it works</p>
-    <p class="legend">
-      Customer bug <i>&rarr;</i> privacy scrub <i>&rarr;</i> replayability score <i>&rarr;</i>
-      Playwright repro <i>&rarr;</i> draft ticket/PR <i>&rarr;</i> verified fix
-    </p>
+    <p class="legend"><i>Customer bug</i><i>privacy scrub</i><i>replayability score</i><i>Playwright repro</i><i>draft ticket/PR</i><i>verified fix</i></p>
   </div>
   <div class="sgroup" id="flow-plain">
     <p class="slabel">How it works</p>
-    <p class="legend">
-      Someone reports a bug <i>&rarr;</i> personal details stripped <i>&rarr;</i>
-      we check it can be reproduced <i>&rarr;</i> a test is written for it <i>&rarr;</i>
-      a ticket is drafted <i>&rarr;</i> the fix is proven
-    </p>
+    <p class="legend"><i>Someone reports a bug</i><i>personal details stripped</i><i>we check it can be reproduced</i><i>a test is written for it</i><i>a ticket is drafted</i><i>the fix is proven</i></p>
   </div>
 
   <div class="sfoot">
@@ -629,11 +711,12 @@ DASHBOARD_HTML = r"""<!doctype html>
 
   // ---- routing --------------------------------------------------------------------------
   var ROUTES = [
-    { id: "board", label: "Board", render: renderBoard },
+    { id: "overview", label: "Overview", render: renderOverview },
+    { id: "board", label: "Failures", render: renderBoard },
     { id: "agents", label: "Agents", render: renderAgents },
     { id: "governance", label: "Governance", render: renderGovernance }
   ];
-  var current = "board";
+  var current = "overview";
 
   var lastShapes = [];         // cached for the sidebar counts and the command palette
   var stageFilter = null;      // null = all stages
@@ -1028,6 +1111,280 @@ DASHBOARD_HTML = r"""<!doctype html>
         mount(setupView(status));
       } })
     ]);
+  }
+
+  // ---- overview ----------------------------------------------------------------------------
+  // The landing screen. Every number here is derived from /shapes + /admin/status — no new
+  // endpoint — and the maths mirrors service/stepstitch_service/metrics.py, which is where it
+  // is unit-tested. A dashboard that quietly computes the wrong number is worse than none.
+
+  function dayKeys(n) {
+    var out = [], now = new Date();
+    for (var i = n - 1; i >= 0; i--) {
+      var d = new Date(now.getTime() - i * 86400000);
+      out.push(d.toISOString().slice(0, 10));
+    }
+    return out;
+  }
+
+  function overviewMetrics(shapes, days) {
+    var open = shapes.filter(function (s) { return s.stage !== "fixed"; });
+    var counts = {};
+    days.forEach(function (d) { counts[d] = 0; });
+    shapes.forEach(function (s) {
+      var d = String(s.first_seen || "").slice(0, 10);
+      if (d in counts) counts[d] += 1;
+    });
+    var pages = {};
+    open.forEach(function (s) {
+      var r = (s.fingerprint || {}).route;
+      if (r) pages[r] = (pages[r] || 0) + (s.occurrences || 0);
+    });
+    return {
+      open: open.length,
+      people: open.reduce(function (a, s) { return a + (s.occurrences || 0); }, 0),
+      fixed: shapes.filter(function (s) { return s.stage === "fixed"; }).length,
+      repeat: shapes.length
+        ? Math.round(shapes.filter(function (s) {
+            return (s.prior_fixes || []).length; }).length / shapes.length * 1000) / 10
+        : 0,
+      series: days.map(function (d) { return counts[d]; }),
+      stages: STAGES.map(function (st) {
+        return { st: st, n: open.filter(function (s) { return s.stage === st.id; }).length };
+      }).filter(function (r) { return r.n; }),
+      pages: Object.keys(pages).sort(function (a, b) {
+        return pages[b] - pages[a] || a.localeCompare(b);
+      }).slice(0, 5).map(function (r) { return { route: r, people: pages[r] }; }),
+      total: shapes.length
+    };
+  }
+
+  // Catmull-Rom -> cubic bezier. A polyline reads as a chart; a smoothed one reads as a
+  // designed chart, and the shape of the data is unchanged.
+  function smoothPath(series, w, h, close) {
+    var hi = Math.max.apply(null, series) || 1, pad = 6;
+    var p = series.map(function (v, i) {
+      return [i * (w / Math.max(1, series.length - 1)),
+              pad + (h - pad) * (1 - v / hi)];
+    });
+    var d = "M" + p[0][0].toFixed(1) + "," + p[0][1].toFixed(1);
+    for (var i = 0; i < p.length - 1; i++) {
+      var p0 = i ? p[i - 1] : p[0], p1 = p[i], p2 = p[i + 1];
+      var p3 = (i + 2 < p.length) ? p[i + 2] : p2;
+      d += " C" + (p1[0] + (p2[0] - p0[0]) / 6).toFixed(1) + "," +
+                  (p1[1] + (p2[1] - p0[1]) / 6).toFixed(1) + " " +
+                  (p2[0] - (p3[0] - p1[0]) / 6).toFixed(1) + "," +
+                  (p2[1] - (p3[1] - p1[1]) / 6).toFixed(1) + " " +
+                  p2[0].toFixed(1) + "," + p2[1].toFixed(1);
+    }
+    if (close) d += " L" + p[p.length - 1][0].toFixed(1) + "," + h + " L" +
+                    p[0][0].toFixed(1) + "," + h + " Z";
+    return d;
+  }
+
+  function areaChart(series, w, h) {
+    var root = svg("svg", { viewBox: "0 0 " + w + " " + h, preserveAspectRatio: "none",
+                            width: "100%", height: String(h), class: "chart" });
+    var defs = svg("defs", {}, []);
+    var g = svg("linearGradient", { id: "ovg", x1: "0", y1: "0", x2: "0", y2: "1" }, [
+      svg("stop", { offset: "0", "stop-color": "var(--accent)", "stop-opacity": ".38" }),
+      svg("stop", { offset: "1", "stop-color": "var(--accent)", "stop-opacity": "0" })
+    ]);
+    var l = svg("linearGradient", { id: "ovl", x1: "0", y1: "0", x2: "1", y2: "0" }, [
+      svg("stop", { offset: "0", "stop-color": "var(--accent-2)" }),
+      svg("stop", { offset: "1", "stop-color": "var(--accent)" })
+    ]);
+    defs.appendChild(g); defs.appendChild(l); root.appendChild(defs);
+    for (var i = 0; i <= 4; i++) {
+      root.appendChild(svg("line", { x1: 0, y1: (h * i / 4).toFixed(0), x2: w,
+        y2: (h * i / 4).toFixed(0), stroke: "rgba(255,255,255,.045)" }));
+    }
+    root.appendChild(svg("path", { d: smoothPath(series, w, h, true), fill: "url(#ovg)" }));
+    root.appendChild(svg("path", { d: smoothPath(series, w, h), fill: "none",
+      stroke: "url(#ovl)", "stroke-width": "2.2", "stroke-linecap": "round" }));
+    return root;
+  }
+
+  function donut(rows, size) {
+    var thick = 15, r = (size - thick) / 2, c = size / 2, circ = 2 * Math.PI * r;
+    var total = rows.reduce(function (a, x) { return a + x.n; }, 0) || 1;
+    var root = svg("svg", { width: String(size), height: String(size),
+                            viewBox: "0 0 " + size + " " + size });
+    root.appendChild(svg("circle", { cx: c, cy: c, r: r.toFixed(2), fill: "none",
+      stroke: "rgba(255,255,255,.05)", "stroke-width": thick }));
+    var off = 0;
+    rows.forEach(function (row) {
+      var seg = circ * row.n / total;
+      root.appendChild(svg("circle", { cx: c, cy: c, r: r.toFixed(2), fill: "none",
+        stroke: "var(--s-" + row.st.id + ")", "stroke-width": thick,
+        "stroke-dasharray": (seg - 2).toFixed(2) + " " + (circ - seg + 2).toFixed(2),
+        "stroke-dashoffset": (-off).toFixed(2),
+        transform: "rotate(-90 " + c + " " + c + ")" }));
+      off += seg;
+    });
+    return root;
+  }
+
+  async function renderOverview() {
+    mountLoading(skeleton("board"));
+    var shapes, status;
+    try {
+      shapes = (await api("/shapes")).shapes || [];
+      status = await adminApi("/status").catch(function () { return lastStatus || {}; });
+      lastStatus = status;
+    } catch (e) { return mount(fail(e)); }
+
+    lastShapes = shapes;
+    renderStageNav();
+    if (!shapes.length) return mount(setupView(status));
+
+    var days = dayKeys(30);
+    var m = overviewMetrics(shapes, days);
+    var root = el("div", { class: "ov" });
+
+    // Hero: the one number that matters, and the constellation of what is behind it.
+    var top = shapes.slice().sort(function (a, b) {
+      return (b.occurrences || 0) - (a.occurrences || 0); }).slice(0, 6);
+    var POS = [[40, 24, 76], [3, 4, 42], [7, 60, 50], [72, 2, 44], [78, 56, 38], [28, 80, 36]];
+    var cst = el("div", { class: "cst" }, top.map(function (s, i) {
+      var p = POS[i] || POS[0];
+      var node = el("button", { class: "cnode" + (i ? "" : " lead"),
+        style: "left:" + p[0] + "%;top:" + p[1] + "%",
+        title: s.plain_summary || "",
+        onclick: function () { openShape(s.shape_id); } },
+        [glyph(s.fingerprint, p[2])]);
+      if (!i) node.appendChild(el("span", { class: "cl",
+        text: (s.plain_summary || "").split("—")[0].trim() }));
+      return node;
+    }));
+
+    root.appendChild(el("div", { class: "hero" }, [
+      el("div", {}, [
+        el("p", { class: "eyebrow", text: "Last 30 days" }),
+        el("h1", {}, [
+          el("b", { text: m.open + (m.open === 1 ? " failure" : " failures") }),
+          el("br"), document.createTextNode(m.open === 1 ? "is open right now."
+                                                         : "are open right now.")
+        ]),
+        el("p", { class: "lede", text: "They affected " + m.people.toLocaleString() +
+          (m.people === 1 ? " person. " : " people. ") + m.fixed +
+          (m.fixed === 1 ? " was" : " were") +
+          " proven fixed — each verified by a test that failed before the fix and passed " +
+          "after it. Nothing here was learned from anyone's screen." }),
+        el("div", { class: "cta" }, [
+          el("button", { class: "primary", text: "Work the queue",
+                         onclick: function () { go("board"); } }),
+          el("button", { class: "ghost", text: "See what agents can read",
+                         onclick: function () { go("agents"); } })
+        ])
+      ]),
+      cst
+    ]));
+
+    // Metric stripe.
+    var tiles = [
+      ["Open failures", String(m.open), m.total + " tracked in total"],
+      ["People affected", m.people.toLocaleString(), "across open failures"],
+      ["Proven fixed", String(m.fixed), "red then green, verified"],
+      ["Repeat rate", m.repeat + "%", "shapes you had fixed before"]
+    ];
+    root.appendChild(el("div", { class: "stripe" }, tiles.map(function (t) {
+      return el("div", { class: "st" }, [
+        el("div", { class: "k", text: t[0] }),
+        el("div", { class: "v", text: t[1] }),
+        el("div", { class: "d", text: t[2] })
+      ]);
+    })));
+
+    // Trend + stage mix.
+    var avg = (m.series.reduce(function (a, b) { return a + b; }, 0) / days.length).toFixed(1);
+    root.appendChild(el("div", { class: "two" }, [
+      el("div", { class: "card accent" }, [
+        el("div", { class: "ch" }, [
+          el("h2", { text: "New failures" }),
+          el("span", { class: "sub", text: "per day, last 30 days" }),
+          el("span", { class: "rt", text: avg + " daily average" })
+        ]),
+        areaChart(m.series, 660, 170),
+        el("div", { class: "axis" }, [
+          el("span", { text: days[0] }), el("span", { text: days[14] }),
+          el("span", { text: "today" })
+        ])
+      ]),
+      el("div", { class: "card" }, [
+        el("div", { class: "ch" }, [
+          el("h2", { text: "Where they stand" }),
+          el("span", { class: "sub", text: m.open + " open" })
+        ]),
+        el("div", { class: "ringwrap" }, [
+          donut(m.stages, 132),
+          el("div", { class: "ringmid" }, [
+            el("div", { class: "b", text: String(m.open) }),
+            el("div", { class: "s", text: "open" })
+          ]),
+          el("div", { class: "legend" }, m.stages.map(function (row) {
+            return el("div", { class: "lg" }, [
+              el("span", { class: "sw", style: "background:var(--s-" + row.st.id + ")" }),
+              el("span", { text: tech ? row.st.label : row.st.plain }),
+              el("span", { class: "n", text: String(row.n) })
+            ]);
+          }))
+        ])
+      ])
+    ]));
+
+    // Worst-hit pages + latest.
+    var hi = m.pages.length ? m.pages[0].people : 1;
+    root.appendChild(el("div", { class: "two" }, [
+      el("div", { class: "card" }, [
+        el("div", { class: "ch" }, [
+          el("h2", { text: "Worst-hit pages" }),
+          el("span", { class: "sub", text: "by people affected" })
+        ]),
+        el("div", {}, m.pages.map(function (p) {
+          return el("div", { class: "prow" }, [
+            el("span", { class: "nm", text: tech ? p.route : pageName(p.route) }),
+            el("span", { class: "bar" }, [
+              el("span", { class: "fill",
+                           style: "width:" + Math.round(p.people / hi * 100) + "%" })
+            ]),
+            el("span", { class: "n", text: p.people + (p.people === 1 ? " person" : " people") })
+          ]);
+        }))
+      ]),
+      el("div", { class: "card" }, [
+        el("div", { class: "ch" }, [
+          el("h2", { text: "Latest" }),
+          el("span", { class: "sub", text: "newest first" }),
+          el("span", { class: "rt", text: "View all", onclick: function () { go("board"); },
+                       style: "cursor:pointer" })
+        ]),
+        el("div", {}, shapes.slice(0, 5).map(function (s) {
+          return el("button", { class: "orow",
+                                onclick: function () { openShape(s.shape_id); } }, [
+            glyph(s.fingerprint, 22),
+            el("span", { class: "t", text: headlineFor(s) }),
+            el("span", { class: "pp", text: (s.occurrences || 0) +
+              ((s.occurrences || 0) === 1 ? " person" : " people") }),
+            el("span", { class: "wh", text: relativeDay(s.last_seen) || "" })
+          ]);
+        }))
+      ])
+    ]));
+
+    mount(root);
+  }
+
+  // "/accounts/:id/transfer" -> "Transfer". Mirrors humanize.page_name.
+  function pageName(route) {
+    var segs = String(route || "").split("/").filter(Boolean);
+    for (var i = segs.length - 1; i >= 0; i--) {
+      if (!/^[:{*]/.test(segs[i]) && !/^\d+$/.test(segs[i])) {
+        var w = segs[i].replace(/[-_.]+/g, " ");
+        return w.charAt(0).toUpperCase() + w.slice(1);
+      }
+    }
+    return "Home";
   }
 
   // ---- board ----------------------------------------------------------------------------
@@ -1890,7 +2247,7 @@ DASHBOARD_HTML = r"""<!doctype html>
   // ---- boot -----------------------------------------------------------------------------
   renderNav();
   syncChrome();
-  if (token) { loadStatus(); go("board"); } else { renderGate(); }
+  if (token) { loadStatus(); go("overview"); } else { renderGate(); }
 })();
 </script>
 </body>
