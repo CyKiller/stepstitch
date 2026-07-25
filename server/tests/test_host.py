@@ -194,6 +194,60 @@ def test_dashboard_has_no_popout_and_closes_the_ci_loop():
     assert "/verify" in body and "pre_passed" in body and "post_passed" in body
 
 
+def test_dashboard_reads_plainly_by_default():
+    # The console has to be usable by the support lead who took the customer's call, not only by
+    # the engineer who will fix it. Plain wording ships alongside the technical wording, and the
+    # technical-detail toggle chooses between them.
+    client, _ = _client()
+    body = client.get("/dashboard").text
+    for plain in ("Waiting for a test run", "Seen before", "Test needs fixing",
+                  "Confirmed broken", "Still broken", "Fixed and proven"):
+        assert plain in body, f"missing plain column label: {plain}"
+    # Plain tab names, and the plain rendering of the pipeline banner.
+    for plain in ("What happened", "The test", "Proof it's fixed", "What an AI sees",
+                  "Someone reports a bug", "the fix is proven"):
+        assert plain in body, f"missing plain wording: {plain}"
+    # The toggle exists, is persisted, and defaults OFF — an operator who needs plain language
+    # is exactly the one who would not think to go looking for a switch.
+    assert 'id="techtoggle"' in body
+    assert 'var tech = pref("tech", false)' in body
+
+
+def test_dashboard_onboards_without_a_shell_command():
+    # An empty install used to be told to run `node scripts/seed-demo-trace.mjs`. A terminal
+    # command is not an onboarding experience for a non-developer.
+    client, _ = _client()
+    body = client.get("/dashboard").text
+    assert "seed-demo-trace" not in body, "onboarding must not hand the operator a shell command"
+    assert "Send a sample report" in body
+    for step in ("Connect to your host", "Receive your first report", "Let CI report results",
+                 "Connect an AI agent"):
+        assert step in body, f"setup checklist missing step: {step}"
+    # Each step is DETECTED, never ticked by hand, so the checklist cannot claim something false.
+    assert "(s.traces || 0) > 0" in body
+    assert "(s.verifications || 0) > 0" in body
+
+
+def test_dashboard_is_keyboard_navigable_and_announces_updates():
+    # There were no focus styles at all — keyboard users got no indication of position.
+    client, _ = _client()
+    body = client.get("/dashboard").text
+    assert ":focus-visible" in body, "every interactive element needs a visible focus ring"
+    assert 'aria-live="polite"' in body, "async regions must announce themselves"
+    # The tab roles are applied by el() at runtime rather than written as markup, so assert on
+    # how they are authored. The rendered attributes are checked in the browser.
+    assert 'role: "tablist"' in body and '"aria-controls": "tabpanel"' in body
+
+
+def test_dashboard_can_be_searched():
+    # /shapes returns up to 200; without a filter the board stops working on a real deployment.
+    client, _ = _client()
+    body = client.get("/dashboard").text
+    assert 'id="search"' in body
+    assert "function matchesQuery" in body
+    assert "Showing " in body
+
+
 def test_dashboard_states_the_privacy_boundary_ambiently():
     # The claim is permanent chrome, not a card you have to scroll to.
     client, _ = _client()
