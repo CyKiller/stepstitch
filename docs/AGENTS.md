@@ -2,9 +2,11 @@
 
 StepStitch is a capability **provider**, not an agent orchestrator. It perceives, scores,
 compiles a Playwright repro, and drafts — but never plans, acts autonomously, or writes to a
-system of record from the agent surface. Any agent network consumes the **same eight
+system of record from the agent surface. Any agent network consumes the **same thirteen
 read-only / draft operations** (`COPILOT_SAFE_OPERATIONS`), projected three ways from one
-source of truth:
+source of truth. Twelve are individual reads/drafts; the thirteenth, `get_agent_packet`, is the
+**Safe Agent Packet** — the same "safe packet to help fix it" data (summary, replayability,
+privacy posture, diagnostic, repro) composed into one call instead of five round-trips.
 
 | Consumer | Surface | How |
 |---|---|---|

@@ -44,6 +44,11 @@ How it works:
 - A 0–1 replayability score (and an A–F grade) tells you up front whether the
   report is actually reproducible before anyone spends time on it.
 
+It also ships production-grade draft connectors out of the box — GitHub Issues, Linear, and
+Slack for teams that live there, Jira and Zendesk, plus ServiceNow, Salesforce, and Genesys for
+regulated shops. All eight are draft-only: StepStitch builds the ticket/message body, your own
+integration decides whether to send it. Nothing here ever auto-files.
+
 Why it's built this way: it's aimed at teams that *can't* use session replay —
 financial services, healthcare — because they can't have screens and PII sitting
 in a vendor's database. The privacy boundary is the product, not a setting.

@@ -26,7 +26,7 @@ MCP/agent surface, the optional governed direct-write, and the reference ingest 
   writes require `get_user_id`. StepStitch core ships no auth — the host injects it
   (`server/auth.py` is a demo; swap for OIDC/JWT in production). Every operator read is
   audited.
-- **B3 — Agent/MCP surface.** Only the 8 read-only/draft operations are exposed; a hard
+- **B3 — Agent/MCP surface.** Only the 12 read-only/draft operations are exposed; a hard
   import-time guard (`assert_no_destructive_operation`) plus drift tests
   (`test_mcp_surface.py`) keep destructive/direct-write operations off it forever.
 - **B4 — Direct-write ↔ system of record (Mode B).** Off by default; admin-only `/deliver`

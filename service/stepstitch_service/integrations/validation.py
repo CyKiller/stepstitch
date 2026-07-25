@@ -19,9 +19,28 @@ SERVICENOW_IMPACT_URGENCY = frozenset({"1", "2", "3", "4", "5"})
 # Salesforce Case Priority stock picklist. Instances may customise; this is the safe set.
 SALESFORCE_PRIORITY = frozenset({"Low", "Medium", "High", "Critical"})
 
+# Jira stock issue types. Instances customise per project scheme; this is the safe default set.
+JIRA_ISSUE_TYPES = frozenset({"Bug", "Task", "Story", "Incident"})
+
+# Zendesk stock ticket type + priority picklists.
+ZENDESK_TYPE = frozenset({"problem", "incident", "question", "task"})
+ZENDESK_PRIORITY = frozenset({"low", "normal", "high", "urgent"})
+
+# Linear's numeric priority scale, as strings: 0=No priority, 1=Urgent, 2=High, 3=Normal,
+# 4=Low.
+LINEAR_PRIORITY = frozenset({"0", "1", "2", "3", "4"})
+
 # Stock field length limits.
 SERVICENOW_SHORT_DESCRIPTION_MAX = 160
 SALESFORCE_SUBJECT_MAX = 255
+JIRA_SUMMARY_MAX = 255
+ZENDESK_SUBJECT_MAX = 150
+# GitHub issue titles and Linear issue titles are both capped well below the APIs' hard
+# limits, matching the conservative-cap pattern used for every other adapter.
+GITHUB_TITLE_MAX = 256
+LINEAR_TITLE_MAX = 255
+# Slack block/text payload limit (a single `text` block tops out at 3000 chars).
+SLACK_TEXT_MAX = 3000
 
 # Marker appended to a value that had to be truncated, so the cut is never silent.
 _TRUNCATION_SUFFIX = "…"

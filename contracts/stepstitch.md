@@ -152,30 +152,70 @@ Rules (frozen):
 ## Copilot-safe surface
 
 `copilot/openapi-v2.json` exposes **only** read-only/draft operations to a Microsoft
-Copilot Studio agent: `ListRecentTraces`, `GetTraceSummary`, `GetReplayabilityScore`,
-`GetPrivacyPosture`, `GetDiagnosticSummary`, `GeneratePlaywrightRepro`,
-`CreateExportPreview`, `CreateFinancialServicesExportPreview`. It deliberately omits
-delete, retention/purge, kill-switch, the raw `GET /session/{id}` (carries
-`explanation`), and any direct system-of-record write. `copilot/action-policy.md` and
-`copilot/system-prompt.md` bound agent behavior. Guarded by
+Copilot Studio agent — the same **thirteen** operations the MCP server exposes
+(`COPILOT_SAFE_OPERATIONS`, the single source of truth for the OpenAPI pack, the MCP
+tools, and the live routes): `ListRecentTraces`, `GetTraceSummary`,
+`GetReplayabilityScore`, `GetPrivacyPosture`, `GetDiagnosticSummary`,
+`GeneratePlaywrightRepro`, `MatchVerifiedFixes`, `GetAttestation`, `GetFragilityMap`,
+`GenerateMinimalRepro`, `GetAgentPacket`, `CreateExportPreview`,
+`CreateFinancialServicesExportPreview`. It deliberately omits delete, retention/purge,
+kill-switch, the raw `GET /session/{id}` (carries `explanation`), the operator-only
+verify/verifications/corpus reads, the Repair Loop (`/github/issue`, `/github/pr`), and the
+optional governed direct-write (`/deliver`) — see the surface table below.
+`copilot/action-policy.md` and `copilot/system-prompt.md` bound agent behavior. Guarded by
 `test_copilot_surface.py::test_openapi_exposes_no_destructive_operation` and
-`::test_openapi_paths_are_real_routes` (every advertised path must map to a live route).
+`::test_openapi_paths_are_real_routes` (every advertised path must map to a live route),
+and by `test_mcp_surface.py` (the three surfaces cannot drift apart).
+
+### The Safe Agent Packet
+
+`GetAgentPacket` (`GET /session/{id}/agent-packet`) is the public name for "a safe packet to
+help fix it": one call composing `GetTraceSummary` + `GetReplayabilityScore` +
+`GetPrivacyPosture` + `GetDiagnosticSummary` + `GeneratePlaywrightRepro` into a single response.
+It adds no new data or capability over those five individually-agent-safe reads — it only
+removes the round-trips, so an agent handling a bug report for the first time makes one call
+instead of five. The individual operations remain available for callers that only need one
+field.
 
 ### Operator & maintenance surface (admin only, audited)
 
-| Method + path | Purpose | Audit action |
-|---|---|---|
-| `GET /sessions` | list traces | `stepstitch.list` |
-| `GET /session/{id}` | read one trace (includes `replayability`) | `stepstitch.read` |
-| `GET /session/{id}/replayability` | reproducibility score only | `stepstitch.replayability` |
-| `GET /session/{id}/summary` | sanitized, structure-derived summary (Copilot-safe) | `stepstitch.summary` |
-| `GET /session/{id}/diagnostic-summary` | sanitized frontend/API diagnostic summary | `stepstitch.diagnostic_summary` |
-| `GET /session/{id}/privacy-posture` | per-trace scrub report + never-captured list | `stepstitch.privacy_posture` |
-| `POST /session/{id}/export-preview` | build ServiceNow + Salesforce + Genesys drafts (sends nothing) | `stepstitch.export_preview` |
-| `POST /session/{id}/financial-services-export-preview` | named financial-services support draft pack (sends nothing) | `stepstitch.financial_services_export_preview` |
-| `GET /session/{id}/playwright` | compile repro | `stepstitch.compile` |
-| `DELETE /session/by-user/{id}` | right-to-delete bodies | `stepstitch.delete_by_user` |
-| `POST /maintenance/purge-expired` | split-retention body purge | `stepstitch.retention_purge` |
+Every operator route requires the admin role and emits an audit event. The **Agent
+surface** column says whether the route is also exposed to agents through the
+MCP/OpenAPI connector:
+
+- **✅ agent-safe** — one of the thirteen `COPILOT_SAFE_OPERATIONS`; read-only or draft-only,
+  NPI-free, exposed via the MCP server and `openapi-v2.json`.
+- **admin-only** — operator-only; never an agent/MCP tool (carries `explanation`, raw
+  bodies, or governance/verification reads).
+- **admin-only · human-gated** — a governed write loop; off unless the host injects it,
+  dry-run by default, requires a named approver, and never an agent tool.
+
+| Method + path | Purpose | Agent surface | Audit action |
+|---|---|---|---|
+| `GET /sessions` | list traces (no bodies) | ✅ agent-safe | `stepstitch.list` |
+| `GET /session/{id}/summary` | sanitized, structure-derived summary | ✅ agent-safe | `stepstitch.summary` |
+| `GET /session/{id}/replayability` | reproducibility score only | ✅ agent-safe | `stepstitch.replayability` |
+| `GET /session/{id}/privacy-posture` | per-trace scrub report + never-captured list | ✅ agent-safe | `stepstitch.privacy_posture` |
+| `GET /session/{id}/diagnostic-summary` | sanitized frontend/API diagnostic summary | ✅ agent-safe | `stepstitch.diagnostic_summary` |
+| `GET /session/{id}/playwright` | compile repro (text only) | ✅ agent-safe | `stepstitch.compile` |
+| `GET /session/{id}/similar-fixes` | structural match to the verified-fix corpus (no NPI) | ✅ agent-safe | `stepstitch.similar_fixes` |
+| `GET /session/{id}/attestation` | signed, independently-verifiable evidence bundle (no NPI) | ✅ agent-safe | `stepstitch.attestation` |
+| `GET /session/{id}/fragility` | per-step fragility ranking, worst-first (no NPI) | ✅ agent-safe | `stepstitch.fragility` |
+| `GET /session/{id}/minimal-repro` | smallest failing path compiled to Playwright (no NPI) | ✅ agent-safe | `stepstitch.minimal_repro` |
+| `GET /session/{id}/agent-packet` | Safe Agent Packet: summary + replayability + privacy posture + diagnostic + repro, composed | ✅ agent-safe | `stepstitch.agent_packet` |
+| `POST /session/{id}/export-preview` | build ServiceNow + Salesforce + Genesys drafts (sends nothing) | ✅ agent-safe (draft) | `stepstitch.export_preview` |
+| `POST /session/{id}/financial-services-export-preview` | named financial-services support draft pack (sends nothing) | ✅ agent-safe (draft) | `stepstitch.financial_services_export_preview` |
+| `GET /session/{id}` | read one raw trace (carries `explanation`; includes `replayability`) | admin-only | `stepstitch.read` |
+| `GET /correlation/{id}/summary` | reverse-lookup sanitized summary from `stepstitch:<trace_id>` | admin-only | `stepstitch.by_correlation` |
+| `GET /audit` | governance read of the durable audit trail | admin-only | `stepstitch.audit_read` |
+| `GET /session/{id}/verifications` | verification history for a trace | admin-only | `stepstitch.verifications` |
+| `GET /corpus` | regression corpus (reproduced failures by verdict) | admin-only | `stepstitch.corpus` |
+| `POST /session/{id}/verify` | CI reports the repro outcome; StepStitch derives + stores the verdict | admin-only | `stepstitch.verify` |
+| `POST /session/{id}/github/issue` | Repair Loop: open/label a GitHub issue from the summary (off unless a bridge is injected) | admin-only · human-gated | `stepstitch.github_issue` |
+| `POST /session/{id}/github/pr` | Repair Loop: open a regression-test PR (dry-run default; never merges) | admin-only · human-gated | `stepstitch.github_pr` |
+| `POST /session/{id}/deliver` | optional governed direct-write of the sanitized draft (off unless writers injected; dry-run default; named approver + idempotency key) | admin-only · human-gated | `stepstitch.deliver` |
+| `DELETE /session/by-user/{id}` | right-to-delete bodies | admin-only · destructive | `stepstitch.delete_by_user` |
+| `POST /maintenance/purge-expired` | split-retention body purge | admin-only · destructive | `stepstitch.retention_purge` |
 
 ### Replayability
 

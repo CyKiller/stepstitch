@@ -113,7 +113,10 @@ def test_playwright_repro_generated(bundle):
 
 def test_drafts_are_flat_and_carry_no_forbidden_key(bundle):
     drafts = bundle["steps"]["6_drafts"]
-    for name in ("servicenow", "salesforce", "genesys"):
+    for name in (
+        "servicenow", "salesforce", "genesys", "jira", "zendesk",
+        "github_issues", "linear", "slack",
+    ):
         draft = drafts[name]
         assert_flat(draft)  # raises on a nested or identity-leaking field
         for key in draft:

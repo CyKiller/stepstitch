@@ -1,7 +1,8 @@
 """Bundled system-of-record draft adapters — built-in pack (Apache-2.0).
 
-The concrete ServiceNow / Salesforce / Genesys draft builders. The core never imports this
-module; a host wires the adapters into the router:
+The concrete ServiceNow / Salesforce / Genesys / Jira / Zendesk / GitHub Issues / Linear /
+Slack draft builders. The core never imports this module; a host wires the adapters into
+the router:
 
     from stepstitch_service import create_stepstitch_router
     from stepstitch_service.integrations.bundle import default_draft_adapters
@@ -16,9 +17,14 @@ import logging
 from typing import List
 
 from .base import DraftAdapter
+from .contrib.jira import JiraAdapter, build_jira_issue_draft
+from .contrib.zendesk import ZendeskAdapter, build_zendesk_ticket_draft
 from .genesys import GenesysAdapter, build_genesys_context_draft
+from .github import GitHubIssuesAdapter, build_github_issue_draft
+from .linear import LinearAdapter, build_linear_issue_draft
 from .salesforce import SalesforceAdapter, build_case_draft
 from .servicenow import ServiceNowAdapter, build_incident_draft
+from .slack import SlackAdapter, build_slack_message_draft
 
 logger = logging.getLogger("stepstitch")
 
@@ -31,9 +37,19 @@ __all__ = [
     "ServiceNowAdapter",
     "SalesforceAdapter",
     "GenesysAdapter",
+    "JiraAdapter",
+    "ZendeskAdapter",
+    "GitHubIssuesAdapter",
+    "LinearAdapter",
+    "SlackAdapter",
     "build_incident_draft",
     "build_case_draft",
     "build_genesys_context_draft",
+    "build_jira_issue_draft",
+    "build_zendesk_ticket_draft",
+    "build_github_issue_draft",
+    "build_linear_issue_draft",
+    "build_slack_message_draft",
     "default_draft_adapters",
     "discovered_draft_adapters",
     "all_draft_adapters",
@@ -41,8 +57,19 @@ __all__ = [
 
 
 def default_draft_adapters() -> List[DraftAdapter]:
-    """The bundled financial-services support adapters, in canonical order."""
-    return [ServiceNowAdapter(), SalesforceAdapter(), GenesysAdapter()]
+    """The bundled draft adapters, in canonical order: enterprise support systems first
+    (ServiceNow, Salesforce, Genesys), then general ticketing (Jira, Zendesk), then
+    developer-first issue trackers (GitHub Issues, Linear), then chat notification (Slack)."""
+    return [
+        ServiceNowAdapter(),
+        SalesforceAdapter(),
+        GenesysAdapter(),
+        JiraAdapter(),
+        ZendeskAdapter(),
+        GitHubIssuesAdapter(),
+        LinearAdapter(),
+        SlackAdapter(),
+    ]
 
 
 def discovered_draft_adapters() -> List[DraftAdapter]:

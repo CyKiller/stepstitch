@@ -48,6 +48,8 @@ class QueryAwareDB:
         if not row:
             return None
         q = " ".join(query.split())
+        if q.startswith("SELECT footsteps, project_id, trace_metadata"):
+            return (row["footsteps"], row["project_id"], row["trace_metadata"])
         if q.startswith("SELECT footsteps, project_id"):
             return (row["footsteps"], row["project_id"])
         if q.startswith("SELECT trace_metadata"):
@@ -209,10 +211,16 @@ def test_dispatch_drives_service_sanitized_and_audited():
     assert fs["target_pack"] == "financial-services-support"
     assert "123-45-6789" not in json.dumps(fs)
 
+    packet = run(dispatch_tool("get_agent_packet", {"trace_id": tid}, call))
+    assert packet["agent_packet"]["summary"]["route"] == "/accounts/:id/distributions"
+    assert packet["agent_packet"]["replayability"]["grade"] in {"A", "B", "C", "D", "F"}
+    assert "123-45-6789" not in json.dumps(packet)
+
     # Every read went through the service's audit path.
     actions = {a[0] for a in db.audits}
     assert {"stepstitch.summary", "stepstitch.replayability", "stepstitch.compile",
-            "stepstitch.financial_services_export_preview"} <= actions
+            "stepstitch.financial_services_export_preview",
+            "stepstitch.agent_packet"} <= actions
 
 
 def test_dispatch_rejects_unknown_tool_and_missing_arg():

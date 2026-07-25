@@ -75,6 +75,12 @@ forbidden_modules = [
     "stepstitch_service.integrations.servicenow",
     "stepstitch_service.integrations.salesforce",
     "stepstitch_service.integrations.genesys",
+    "stepstitch_service.integrations.github",
+    "stepstitch_service.integrations.linear",
+    "stepstitch_service.integrations.slack",
+    "stepstitch_service.integrations.contrib",
+    "stepstitch_service.integrations.contrib.jira",
+    "stepstitch_service.integrations.contrib.zendesk",
     "stepstitch_service.integrations.bundle",
 ]
 
