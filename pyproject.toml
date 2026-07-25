@@ -25,6 +25,9 @@ select = ["E", "F", "I"]
 # db.py's SCHEMA_SQL is a verbatim SQL DDL string literal; one CREATE INDEX line exceeds
 # 100 cols and cannot be wrapped without altering the SQL, so E501 is not enforced here.
 "server/db.py" = ["E501"]
+# fonts.py is GENERATED (scripts/embed_console_font.py): a single ~93k-char base64 literal
+# holding the console's embedded typeface. It cannot be wrapped without corrupting the font.
+"server/fonts.py" = ["E501"]
 
 # Type gate for server/ (blocking in CI). Non-strict baseline, identical knobs to
 # service/pyproject.toml: a real, green floor we can ratchet up later.

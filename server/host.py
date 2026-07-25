@@ -35,6 +35,7 @@ from .agents import (
 )
 from .auth import _bearer
 from .dashboard import DASHBOARD_HTML
+from .fonts import GEIST_SANS_WOFF2_B64
 from .metrics import Metrics
 
 _SERVICE_PREFIX = "/api/stepstitch/v1"
@@ -183,13 +184,23 @@ def build_app(
         # request nonce gates the single inline <script>; default-src 'none' blocks every
         # other resource load, shrinking the blast radius of any markup-injection bug.
         nonce = secrets.token_urlsafe(16)
-        html = DASHBOARD_HTML.replace("__CSP_NONCE__", nonce)
+        html = (
+            DASHBOARD_HTML
+            .replace("__CSP_NONCE__", nonce)
+            # The typeface is embedded, not fetched — see server/fonts.py and the font-src
+            # directive below.
+            .replace("__FONT_SANS_B64__", GEIST_SANS_WOFF2_B64)
+        )
         csp = (
             "default-src 'none'; "
             f"script-src 'nonce-{nonce}'; "
             "style-src 'unsafe-inline'; "
             "connect-src 'self'; "
             "img-src 'self' data:; "
+            # The typeface is embedded in the page as a data: URI, never fetched. This
+            # directive grants no network reach — `default-src 'none'` still blocks every
+            # origin — it only permits the bytes already inside the document to be used.
+            "font-src data:; "
             "base-uri 'none'; "
             "frame-ancestors 'none'; "
             "form-action 'none'"
