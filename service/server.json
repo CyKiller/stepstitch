@@ -1,0 +1,37 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.CyKiller/stepstitch",
+  "title": "StepStitch",
+  "description": "Issue-to-repro infrastructure, not session replay. Turns a user-reported bug into a scrubbed event timeline, a replayability score, and a copyable Playwright reproduction — without ever capturing screens, keystrokes, input values, or page text. Exposes the Safe Agent Packet plus twelve individual read-only/draft tools; no destructive operation is ever on the agent surface.",
+  "repository": {
+    "url": "https://github.com/CyKiller/stepstitch",
+    "source": "github"
+  },
+  "version": "0.6.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "stepstitch-service",
+      "version": "0.6.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "STEPSTITCH_BASE_URL",
+          "description": "Base URL of your deployed StepStitch service, e.g. https://your-host/api/stepstitch/v1",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "STEPSTITCH_TOKEN",
+          "description": "Operator/admin bearer token for your StepStitch deployment. Every read is audited server-side.",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
