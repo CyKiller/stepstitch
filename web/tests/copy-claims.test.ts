@@ -12,6 +12,7 @@ const PAGES = [
   "privacy-vs-replay/page.tsx",
   "agents/page.tsx",
   "quickstart/page.tsx",
+  "who-its-for/page.tsx",
 ].map((p) => join(APP, p));
 
 // A capture verb immediately followed by a sensitive object.
