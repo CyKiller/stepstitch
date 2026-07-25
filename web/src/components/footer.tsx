@@ -9,7 +9,7 @@ const columns = [
       { href: "/#how", label: "How it works" },
       { href: "/who-its-for", label: "Who it's for" },
       { href: "/#demo", label: "Live demo" },
-      { href: "/who-its-for", label: "Who it's for" },
+      { href: "/agents", label: "Agents & MCP" },
       { href: "/financial-services-pilot", label: "Financial-services pilot" },
     ],
   },
