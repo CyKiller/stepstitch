@@ -21,9 +21,9 @@ const commercial = [
 
 export function OpenCore() {
   return (
-    <Section id="pricing" className="border-b border-line">
+    <Section id="open-core" className="border-b border-line">
       <SectionHeader
-        title="Open core. Self-host free, today."
+        title="Open core, and open all the way down."
         body="Everything in the repository is Apache-2.0 right now — there is no crippled free tier and no closed core. A managed edition may come later; it will be additive, and nothing open today will be retroactively closed."
       />
 
@@ -39,9 +39,6 @@ export function OpenCore() {
                 Apache-2.0
               </span>
             </div>
-            <p className="mt-2 text-2xl font-semibold tracking-tight text-fg">
-              Free, self-hosted
-            </p>
             <ul className="mt-6 space-y-3 text-[15px] text-muted">
               {openSource.map((f) => (
                 <li key={f} className="flex gap-2.5">
@@ -62,7 +59,8 @@ export function OpenCore() {
           </div>
         </Reveal>
 
-        {/* Commercial — honest "later / talk to us", never invented pricing. */}
+        {/* Commercial — an honest roadmap column. Deliberately carries no price
+            slot: what is coming is scope, not a tier you are being upsold into. */}
         <Reveal delay={0.08}>
           <div className="flex h-full flex-col rounded-2xl border border-line bg-surface p-7 md:p-8">
             <div className="flex items-baseline justify-between gap-3">
@@ -73,9 +71,6 @@ export function OpenCore() {
                 On the roadmap
               </span>
             </div>
-            <p className="mt-2 text-2xl font-semibold tracking-tight text-fg">
-              Talk to us
-            </p>
             <ul className="mt-6 space-y-3 text-[15px] text-muted">
               {commercial.map((f) => (
                 <li key={f} className="flex gap-2.5">

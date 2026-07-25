@@ -9,6 +9,7 @@ import {
 import type { Icon } from "@phosphor-icons/react";
 import { Reveal } from "./reveal";
 import { Section, SectionHeader } from "./section";
+import { ConsoleBoard } from "./console-board";
 
 type Panel = {
   icon: Icon;
@@ -64,11 +65,15 @@ export function Console() {
     <Section id="console" className="border-b border-line">
       <SectionHeader
         eyebrow="The operator console"
-        title="Govern what your AI agents are allowed to see"
-        body="You get full control over the API and MCP — the dashboard is an optional, opinionated reference, not a requirement. It's the self-hosted console for the part nobody else governs: which agent gets which evidence. Connect agents, scope their tokens, edit the scrub policy, and prove — to the byte — what reaches a model. Each panel points at the open-source code that implements it."
+        title="One bug, however many people reported it"
+        body="The self-hosted console groups traces by what actually broke — same route, same failure, same structure — so forty reports of one bug are one card and one decision. It moves through the pipeline as your CI reports back, and it governs the part nobody else does: which agent gets which evidence. Each panel points at the open-source code that implements it."
       />
 
-      <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <Reveal className="mt-12">
+        <ConsoleBoard />
+      </Reveal>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {panels.map((p, i) => {
           const Glyph = p.icon;
           return (

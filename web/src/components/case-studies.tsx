@@ -44,8 +44,8 @@ export function CaseStudies() {
   return (
     <Section id="production" className="border-b border-line">
       <SectionHeader
-        title="Running in production today"
-        body="StepStitch is not a demo. It is the evidence layer underneath real products — required at boot in one, and the agent swarm's source of truth in another."
+        title="Running in production — starting with our own"
+        body="StepStitch isn't a demo. We run it as a required, boot-blocking subsystem in our own products — the evidence layer one refuses to start without, and the source of truth an agent swarm acts on. Your team's deployment is next."
       />
 
       <div className="mt-12 grid gap-5 lg:grid-cols-2">
