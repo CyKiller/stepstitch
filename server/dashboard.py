@@ -1,9 +1,18 @@
-"""Read-only operator dashboard for the StepStitch ingest host.
+"""Operator console for the StepStitch ingest host.
 
 A single self-contained HTML page (no external assets, no build step) served at
-``GET /dashboard``. It calls only the **read-only / draft** operator endpoints with the
-admin bearer token the operator pastes in (kept in sessionStorage, never persisted). It can
-preview drafts and run a **dry-run** deliver, but exposes no destructive action.
+``GET /dashboard`` under ``default-src 'none'`` with a per-request script nonce. It calls only
+the **read-only / draft** operator endpoints with the admin bearer token the operator pastes in
+(kept in sessionStorage, never persisted). It can preview drafts and run a **dry-run** deliver,
+but exposes no destructive action.
+
+Organised around the **failure shape**, not the trace: traces that broke the same way collapse
+into one card on a pipeline board whose columns are derived from the verdict state machine in
+``stepstitch_service.verification.verdict``. Forty reports of one bug is one decision.
+
+All markup is built through ``el()``, which escapes by construction — there is no string
+concatenation into ``innerHTML`` anywhere in this file, which is what the XSS-guard tests in
+``server/tests/test_host.py`` exist to keep true.
 """
 
 DASHBOARD_HTML = r"""<!doctype html>
@@ -11,662 +20,1171 @@ DASHBOARD_HTML = r"""<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>StepStitch — operator dashboard</title>
+<title>StepStitch — operator console</title>
 <style>
-  :root { --bg:#0f1115; --panel:#171a21; --line:#272b35; --fg:#e6e8ec; --mut:#9aa3b2;
-          --acc:#5b9dff; --ok:#3fb950; --warn:#d29922; }
-  * { box-sizing: border-box; }
-  body { margin:0; font:14px/1.5 ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif;
-         background:var(--bg); color:var(--fg); }
-  header { display:flex; gap:10px; align-items:center; padding:12px 16px;
-           border-bottom:1px solid var(--line); flex-wrap:wrap; }
-  header h1 { font-size:15px; margin:0 12px 0 0; font-weight:600; }
-  header .spacer { flex:1; }
-  input, button, select { font:inherit; color:var(--fg); background:var(--panel);
-           border:1px solid var(--line); border-radius:6px; padding:6px 10px; }
-  button { cursor:pointer; }
-  button.primary { background:var(--acc); color:#0b1020; border-color:var(--acc); font-weight:600; }
-  .wrap { display:grid; grid-template-columns:340px 1fr; gap:0; height:calc(100vh - 53px); }
-  .list { border-right:1px solid var(--line); overflow:auto; }
-  .row { padding:10px 14px; border-bottom:1px solid var(--line); cursor:pointer; }
-  .row:hover { background:var(--panel); }
-  .row.sel { background:#1d2330; }
-  .row .id { font-family:ui-monospace,monospace; font-size:12px; color:var(--acc); }
-  .row .meta { color:var(--mut); font-size:12px; }
-  .detail { overflow:auto; padding:16px; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px;
-          padding:12px 14px; margin-bottom:12px; }
-  .card h3 { margin:0 0 8px; font-size:13px; color:var(--mut); text-transform:uppercase;
-             letter-spacing:.04em; }
-  .grade { font-weight:700; }
-  pre { white-space:pre-wrap; word-break:break-word; background:#0b0d12; border:1px solid var(--line);
-        border-radius:6px; padding:10px; font:12px/1.5 ui-monospace,monospace; max-height:340px;
-        overflow:auto; }
-  .pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px;
-          border:1px solid var(--line); color:var(--mut); }
-  .muted { color:var(--mut); }
-  .err { color:#f85149; }
-  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
-  .flow { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:8px 16px;
-          border-bottom:1px solid var(--line); font-size:12px; color:var(--mut);
-          background:var(--panel); }
+  /* Tokens mirror web/src/app/globals.css (dark) so the console reads as the same product as
+     the site. Density and calm only — none of the marketing motion. */
+  :root {
+    --bg:#09090b; --surface:#101013; --surface-2:#18181b; --line:#27272a;
+    --fg:#fafafa; --muted:#a1a1aa; --accent:#34d399; --accent-2:#2dd4bf;
+    --accent-fg:#04241a; --ok:#34d399; --bad:#f87171; --warn:#fbbf24;
+    --r-sm:6px; --r:10px; --r-lg:14px;
+    --ease:cubic-bezier(0.32,0.72,0,1);
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body {
+    margin:0; background:var(--bg); color:var(--fg);
+    font:14px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    display:flex; flex-direction:column;
+  }
+  code, .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  ::selection { background:color-mix(in oklab, var(--accent) 28%, transparent); }
+
+  /* ---- chrome ---- */
+  header.top {
+    display:flex; align-items:center; gap:14px; padding:0 18px; height:54px;
+    border-bottom:1px solid var(--line); background:var(--surface); flex:0 0 auto;
+  }
+  .brand { font-size:15px; font-weight:650; letter-spacing:-0.01em; }
+  .brand .dot { color:var(--accent); }
+  nav.main { display:flex; gap:2px; margin-left:10px; }
+  nav.main button {
+    background:none; border:none; color:var(--muted); font:inherit; font-size:13.5px;
+    padding:7px 13px; border-radius:999px; cursor:pointer;
+    transition:color .25s var(--ease), background-color .25s var(--ease);
+  }
+  nav.main button:hover { color:var(--fg); }
+  nav.main button[aria-current="page"] { color:var(--accent); background:color-mix(in oklab, var(--accent) 12%, transparent); }
+  .spacer { flex:1; }
+
+  /* Ambient privacy: the product's central claim, always on screen. */
+  .privacy {
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    padding:7px 18px; font-size:12px; color:var(--muted);
+    background:color-mix(in oklab, var(--accent) 5%, var(--bg));
+    border-bottom:1px solid var(--line); flex:0 0 auto;
+  }
+  .privacy strong { color:var(--fg); font-weight:600; }
+  .privacy .never { text-decoration:line-through; text-decoration-color:color-mix(in oklab, var(--bad) 60%, transparent); }
+
+  .flow {
+    display:flex; flex-wrap:wrap; align-items:center; gap:6px;
+    padding:7px 18px; font-size:11.5px; color:var(--muted);
+    border-bottom:1px solid var(--line); background:var(--surface); flex:0 0 auto;
+  }
   .flow b { color:var(--fg); font-weight:600; }
-  .flow .arr { color:var(--acc); }
-  .footer { padding:8px 16px; border-top:1px solid var(--line); font-size:11px;
-            color:var(--mut); background:var(--panel); }
-  .label { font-size:11px; color:var(--mut); margin-top:6px; font-style:italic; }
-  .kv { color:var(--fg); }
+  .flow .arr { color:var(--accent); }
+
+  main.view { flex:1 1 auto; overflow:auto; min-height:0; }
+  footer.bottom {
+    padding:9px 18px; font-size:11px; color:var(--muted);
+    border-top:1px solid var(--line); background:var(--surface); flex:0 0 auto;
+  }
+  .status { font-size:11.5px; color:var(--muted); }
+  .status b { color:var(--fg); font-weight:600; }
+
+  /* ---- controls ---- */
+  button, input, select, textarea {
+    font:inherit; color:var(--fg); background:var(--surface-2);
+    border:1px solid var(--line); border-radius:var(--r-sm); padding:6px 10px;
+  }
+  button { cursor:pointer; transition:border-color .25s var(--ease), transform .25s var(--ease); }
+  button:hover { border-color:color-mix(in oklab, var(--fg) 30%, transparent); }
+  button:active { transform:scale(0.98); }
+  button.primary {
+    background:var(--accent); border-color:var(--accent); color:var(--accent-fg); font-weight:600;
+  }
+  button.ghost { background:none; }
+  button.link { background:none; border:none; color:var(--accent); padding:0; text-decoration:underline; }
+  a { color:var(--accent); }
+
+  .pill {
+    display:inline-block; padding:1px 8px; border-radius:999px; font-size:11.5px;
+    border:1px solid var(--line); color:var(--muted); white-space:nowrap;
+  }
+  .pill.ok { color:var(--ok); border-color:color-mix(in oklab, var(--ok) 40%, transparent); }
+  .pill.bad { color:var(--bad); border-color:color-mix(in oklab, var(--bad) 40%, transparent); }
+  .pill.warn { color:var(--warn); border-color:color-mix(in oklab, var(--warn) 40%, transparent); }
+  .pill.acc { color:var(--accent); border-color:color-mix(in oklab, var(--accent) 40%, transparent); }
+  .muted { color:var(--muted); }
+  .err { color:var(--bad); }
+
+  /* ---- board ---- */
+  /* Columns share the width so the whole pipeline — including the Fixed win state — is on
+     screen at once. They only start scrolling below ~1300px. */
+  .board { display:flex; gap:14px; padding:18px; align-items:flex-start; min-height:100%; }
+  .col { flex:1 1 0; min-width:208px; max-width:360px; display:flex; flex-direction:column; gap:10px; }
+  .col-head { display:flex; align-items:baseline; gap:8px; padding:0 2px; }
+  .col-head h2 { margin:0; font-size:12px; font-weight:650; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
+  .col-head .n { font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .col-head .why { flex:1 1 100%; font-size:11.5px; color:var(--muted); margin-top:-2px; }
+  .col.s-known h2 { color:var(--accent); }
+  .col.s-fixed h2 { color:var(--ok); }
+  .col.s-repro_invalid h2, .col.s-fix_failed h2 { color:var(--warn); }
+
+  .card {
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg);
+    padding:13px 14px; text-align:left; width:100%; display:block;
+    transition:border-color .25s var(--ease), transform .25s var(--ease);
+  }
+  button.card:hover { border-color:color-mix(in oklab, var(--accent) 45%, transparent); transform:translateY(-1px); }
+  .card-top { display:flex; align-items:center; gap:10px; }
+  .card .route { font-size:12.5px; color:var(--fg); word-break:break-all; font-weight:550; }
+  .card .sub { margin-top:6px; font-size:11.5px; color:var(--muted); display:flex; flex-wrap:wrap; gap:4px 8px; }
+  .card .known { margin-top:9px; font-size:11.5px; color:var(--accent); }
+  .count { font-variant-numeric:tabular-nums; font-weight:650; }
+
+  .empty {
+    border:1px dashed var(--line); border-radius:var(--r-lg); padding:16px;
+    font-size:12.5px; color:var(--muted);
+  }
+  .empty p { margin:0 0 10px; }
+
+  /* ---- detail ---- */
+  .detail { padding:22px 26px 40px; max-width:1180px; }
+  .crumb { background:none; border:none; color:var(--muted); padding:0; font-size:12.5px; cursor:pointer; }
+  .crumb:hover { color:var(--fg); }
+  .verdict { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; margin-top:14px; }
+  .verdict .grade { font-size:44px; font-weight:680; line-height:1; letter-spacing:-0.03em; }
+  .verdict h1 { margin:0; font-size:23px; font-weight:640; letter-spacing:-0.015em; word-break:break-all; }
+  .verdict .facts { display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:9px; font-size:12.5px; color:var(--muted); }
+  .next {
+    margin-top:16px; padding:12px 14px; border-radius:var(--r);
+    border:1px solid color-mix(in oklab, var(--accent) 32%, transparent);
+    background:color-mix(in oklab, var(--accent) 7%, transparent); font-size:13.5px;
+  }
+  .next .lab { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); }
+
+  .tabs { display:flex; gap:2px; margin:22px 0 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .tabs button {
+    background:none; border:none; border-bottom:2px solid transparent; border-radius:0;
+    color:var(--muted); font-size:13px; padding:9px 13px; cursor:pointer;
+    transition:color .25s var(--ease), border-color .25s var(--ease);
+  }
+  .tabs button:hover { color:var(--fg); }
+  .tabs button[aria-selected="true"] { color:var(--fg); border-bottom-color:var(--accent); }
+  .panel { padding-top:18px; }
+
+  .box { background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); padding:15px 16px; margin-bottom:12px; }
+  .box h3 { margin:0 0 10px; font-size:11.5px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; }
+  pre {
+    white-space:pre-wrap; word-break:break-word; margin:0;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r);
+    padding:12px; font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;
+    max-height:420px; overflow:auto; color:color-mix(in oklab, var(--fg) 92%, transparent);
+  }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  th { text-align:left; color:var(--muted); font-weight:600; padding:4px 12px 6px 0; }
+  td { padding:4px 12px 4px 0; vertical-align:top; }
+  td.k { color:var(--muted); white-space:nowrap; }
+  ul.tight { margin:6px 0 0; padding-left:18px; font-size:12.5px; color:var(--muted); }
+  ul.tight li { margin-bottom:3px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .chip { border:1px solid var(--line); background:var(--surface-2); border-radius:var(--r-sm); padding:2px 7px; font-size:11.5px; color:var(--muted); }
+  .chip.strike { text-decoration:line-through; text-decoration-color:color-mix(in oklab, var(--bad) 55%, transparent); }
+  .row-actions { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .glyph { flex:0 0 auto; }
+  .note { font-size:11.5px; color:var(--muted); margin-top:9px; }
+  .gate { max-width:520px; margin:70px auto; }
+  .gate h1 { font-size:20px; margin:0 0 8px; font-weight:640; }
+  .gate p { color:var(--muted); font-size:13.5px; margin:0 0 16px; }
+  .gate .field { display:flex; gap:8px; }
+  .gate input { flex:1; }
 </style>
 </head>
 <body>
-<header>
-  <h1>StepStitch</h1>
+<header class="top">
+  <span class="brand">StepStitch<span class="dot">.</span></span>
   <span class="pill">operator console</span>
+  <nav class="main" id="nav"></nav>
   <span class="spacer"></span>
-  <input id="token" type="password" placeholder="admin bearer token" size="28" autocomplete="off">
-  <button id="save">Use token</button>
-  <button id="reload" class="primary">Load traces</button>
-  <button id="corpus">Show Corpus</button>
-  <button id="audit">Show Audit</button>
-  <button id="agents">Agents</button>
-  <button id="scrub">Scrub policy</button>
+  <span class="status" id="statusbar"></span>
+  <button id="tokenbtn" class="ghost">Token</button>
 </header>
+
+<div class="privacy" id="privacy">
+  <strong>Structural evidence only.</strong>
+  <span>StepStitch never captures, ever:</span>
+  <span class="never">screens</span>
+  <span class="never">input values</span>
+  <span class="never">page text</span>
+  <span class="never">raw URLs</span>
+  <span class="never">request bodies</span>
+  <span class="never">cookies &amp; headers</span>
+</div>
+
 <div class="flow">
-  <b>Customer bug</b><span class="arr">→</span>
-  <b>privacy scrub</b><span class="arr">→</span>
-  <b>replayability score</b><span class="arr">→</span>
-  <b>Playwright repro</b><span class="arr">→</span>
-  <b>draft ticket/PR</b><span class="arr">→</span>
+  <b>Customer bug</b><span class="arr">&rarr;</span>
+  <b>privacy scrub</b><span class="arr">&rarr;</span>
+  <b>replayability score</b><span class="arr">&rarr;</span>
+  <b>Playwright repro</b><span class="arr">&rarr;</span>
+  <b>draft ticket/PR</b><span class="arr">&rarr;</span>
   <b>verified fix</b>
 </div>
-<div class="footer" id="statusbar" style="border-top:none">Paste the admin token, then “Use token”, to see host status.</div>
-<div class="wrap">
-  <div class="list" id="list"><div class="row muted">Paste the admin token, then “Load traces”.</div></div>
-  <div class="detail" id="detail"><p class="muted">Select a trace to inspect its sanitized evidence.</p></div>
-</div>
-<div class="footer">Operator console · every read and config change is audited · records are scrubbed server-side before storage · drafts are previews, nothing is sent · evidence is never edited or deleted here.</div>
+
+<main class="view" id="view"></main>
+
+<footer class="bottom">Operator console &middot; every read and config change is audited &middot; records are scrubbed server-side before storage &middot; drafts are previews, nothing is sent &middot; evidence is never edited or deleted here.</footer>
+
 <script nonce="__CSP_NONCE__">
 (function () {
-  var API = "/api/stepstitch/v1";
-  var tokenEl = document.getElementById("token");
-  var listEl = document.getElementById("list");
-  var detailEl = document.getElementById("detail");
-  var selected = null;
+  "use strict";
 
-  tokenEl.value = sessionStorage.getItem("ss_token") || "";
-  document.getElementById("save").onclick = function () {
-    sessionStorage.setItem("ss_token", tokenEl.value.trim());
-    loadStatus();
+  var API = "/api/stepstitch/v1";
+  var viewEl = document.getElementById("view");
+  var navEl = document.getElementById("nav");
+  var token = sessionStorage.getItem("ss_token") || "";
+
+  // ---- DOM construction -----------------------------------------------------------------
+  // Everything is built through el(). Text is set via textContent and attributes via
+  // setAttribute, so values escape by construction and no markup string is ever concatenated.
+  function el(tag, attrs, kids) {
+    var node = document.createElement(tag);
+    if (attrs) {
+      Object.keys(attrs).forEach(function (k) {
+        var v = attrs[k];
+        if (v === null || v === undefined || v === false) return;
+        if (k === "text") node.textContent = String(v);
+        else if (k === "class") node.className = v;
+        else if (k.slice(0, 2) === "on") node[k] = v;
+        else node.setAttribute(k, String(v));
+      });
+    }
+    (kids || []).forEach(function (kid) {
+      if (kid === null || kid === undefined || kid === false) return;
+      node.appendChild(typeof kid === "string" ? document.createTextNode(kid) : kid);
+    });
+    return node;
+  }
+  function svg(tag, attrs, kids) {
+    var node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) { node.setAttribute(k, String(attrs[k])); });
+    (kids || []).forEach(function (kid) { node.appendChild(kid); });
+    return node;
+  }
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+  function esc(s) { return String(s === null || s === undefined ? "" : s); }
+  function escAttr(s) { return esc(s); }
+  // Only http(s) links are ever rendered; anything else (javascript:, data:) becomes null.
+  function safeUrl(u) {
+    if (!u) return null;
+    var s = String(u).trim();
+    return (/^https?:\/\//i).test(s) ? s : null;
+  }
+  // The rendered href is the value safeUrl() returned, never the caller's raw input — so the
+  // scheme gate cannot be bypassed by a later edit that drops the early return.
+  function extLink(rawUrl, label) {
+    var runUrl = safeUrl(rawUrl);
+    if (!runUrl) return null;
+    return el("a", { href: escAttr(runUrl), target: "_blank", rel: "noopener noreferrer",
+                     text: label || "CI run" });
+  }
+
+  // ---- fingerprint glyph ----------------------------------------------------------------
+  // Six fingerprint fields become a 3x2 mark. Same shape, same glyph, always — so "these two
+  // bugs are the same failure" is an eyeball operation across the whole board. A null field
+  // renders hollow, which makes a thin fingerprint visibly thin.
+  var FP_KEYS = ["route", "diagnostic_type", "failing_status", "exception_type",
+                 "diagnostic_endpoint", "terminal_selector"];
+  function hash32(str) {           // FNV-1a, deterministic and dependency-free
+    var h = 2166136261;
+    for (var i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0;
+    }
+    return h >>> 0;
+  }
+  function glyph(fp, size) {
+    var s = size || 30, cell = s / 3, pad = cell * 0.18, r = cell / 2 - pad;
+    var root = svg("svg", { width: s, height: s * 2 / 3, viewBox: "0 0 " + s + " " + (s * 2 / 3),
+                            class: "glyph", "aria-hidden": "true" });
+    FP_KEYS.forEach(function (key, i) {
+      var cx = (i % 3) * cell + cell / 2, cy = Math.floor(i / 3) * cell + cell / 2;
+      var raw = (fp || {})[key];
+      if (raw === null || raw === undefined || raw === "") {
+        root.appendChild(svg("circle", { cx: cx, cy: cy, r: r * 0.55,
+          fill: "none", stroke: "var(--line)", "stroke-width": 1 }));
+        return;
+      }
+      var h = hash32(key + ":" + String(raw));
+      var shade = ["var(--accent)", "var(--accent-2)", "color-mix(in oklab, var(--accent) 55%, var(--fg))"][h % 3];
+      var form = (h >> 3) % 4;
+      if (form === 0) {
+        root.appendChild(svg("circle", { cx: cx, cy: cy, r: r, fill: shade }));
+      } else if (form === 1) {
+        root.appendChild(svg("rect", { x: cx - r, y: cy - r, width: r * 2, height: r * 2,
+          rx: r * 0.32, fill: shade }));
+      } else if (form === 2) {
+        root.appendChild(svg("polygon", {
+          points: [cx, cy - r, cx + r, cy + r, cx - r, cy + r].join(" "), fill: shade }));
+      } else {
+        root.appendChild(svg("rect", { x: cx - r, y: cy - r * 0.42, width: r * 2,
+          height: r * 0.84, rx: r * 0.42, fill: shade }));
+      }
+    });
+    return root;
+  }
+
+  // ---- transport ------------------------------------------------------------------------
+  function hdr() { return { "Authorization": "Bearer " + token }; }
+  async function req(base, path, opts) {
+    var o = opts || {};
+    var res = await fetch(base + path, {
+      method: o.method || "GET",
+      headers: Object.assign({}, hdr(), o.headers || {}),
+      body: o.body
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status + " on " + path);
+    return res.json();
+  }
+  function api(path, opts) { return req(API, path, opts); }
+  function adminApi(path, opts) { return req("/admin", path, opts); }
+  function jsonPost(body) {
+    return { method: "POST", headers: { "Content-Type": "application/json" },
+             body: JSON.stringify(body) };
+  }
+
+  // ---- shared pieces --------------------------------------------------------------------
+  function box(title, kids) {
+    return el("div", { class: "box" }, [title ? el("h3", { text: title }) : null].concat(kids || []));
+  }
+  function kvTable(obj) {
+    var body = el("tbody", {}, Object.keys(obj || {}).map(function (k) {
+      var v = obj[k];
+      return el("tr", {}, [
+        el("td", { class: "k", text: k }),
+        el("td", { text: v === null || v === undefined ? "—" : String(v) })
+      ]);
+    }));
+    return el("table", {}, [body]);
+  }
+  function copyBtn(getText, label) {
+    var b = el("button", { class: "ghost", text: label || "Copy" });
+    b.onclick = function () {
+      if (navigator.clipboard) navigator.clipboard.writeText(getText());
+      b.textContent = "Copied";
+      setTimeout(function () { b.textContent = label || "Copy"; }, 1500);
+    };
+    return b;
+  }
+  function emptyState(message, actionLabel, onAction) {
+    var kids = [el("p", { text: message })];
+    if (actionLabel) kids.push(el("button", { class: "primary", text: actionLabel, onclick: onAction }));
+    return el("div", { class: "empty" }, kids);
+  }
+  function spinner(label) { return el("p", { class: "muted", text: label || "Loading…" }); }
+  function fail(e) { return el("p", { class: "err", text: e && e.message ? e.message : String(e) }); }
+
+  // The ambient privacy strip is static markup in <head>'s sibling chrome, not built here:
+  // it never varies, so it should survive a JS failure and be readable to anything that can
+  // read HTML.
+
+  // ---- routing --------------------------------------------------------------------------
+  var ROUTES = [
+    { id: "board", label: "Board", render: renderBoard },
+    { id: "agents", label: "Agents", render: renderAgents },
+    { id: "governance", label: "Governance", render: renderGovernance }
+  ];
+  var current = "board";
+
+  function renderNav() {
+    clear(navEl);
+    ROUTES.forEach(function (r) {
+      var b = el("button", { text: r.label, onclick: function () { go(r.id); } });
+      if (r.id === current) b.setAttribute("aria-current", "page");
+      navEl.appendChild(b);
+    });
+  }
+  function go(id) {
+    current = id;
+    renderNav();
+    if (!token) return renderGate();
+    loadStatus();   // counts move as you work — refresh them on every navigation
+    var route = ROUTES.filter(function (r) { return r.id === id; })[0] || ROUTES[0];
+    route.render();
+  }
+  function mount(node) { clear(viewEl); viewEl.appendChild(node); viewEl.scrollTop = 0; }
+
+  // ---- token gate -----------------------------------------------------------------------
+  function renderGate() {
+    var input = el("input", { type: "password", placeholder: "admin bearer token",
+                              autocomplete: "off", "aria-label": "admin bearer token" });
+    function submit() {
+      var v = input.value.trim();
+      if (!v) return;
+      token = v;
+      sessionStorage.setItem("ss_token", v);
+      loadStatus();
+      go(current);
+    }
+    input.onkeydown = function (e) { if (e.key === "Enter") submit(); };
+    mount(el("div", { class: "gate" }, [
+      el("h1", { text: "Connect to your host" }),
+      el("p", { text: "Paste the admin bearer token this host was started with " +
+                      "(STEPSTITCH_ADMIN_TOKEN). It is kept in sessionStorage for this tab only " +
+                      "and is never sent anywhere but your own host." }),
+      el("div", { class: "field" }, [input, el("button", { class: "primary", text: "Connect",
+                                                           onclick: submit })]),
+      el("p", { class: "note", text: "No agent ever receives this credential — agents get their " +
+                                     "own scoped, revocable tokens from the Agents tab." })
+    ]));
+    input.focus();
+  }
+  document.getElementById("tokenbtn").onclick = function () {
+    token = "";
+    sessionStorage.removeItem("ss_token");
+    document.getElementById("statusbar").textContent = "";
+    renderGate();
   };
 
   async function loadStatus() {
+    var bar = document.getElementById("statusbar");
     try {
       var s = await adminApi("/status");
-      document.getElementById("statusbar").innerHTML =
-        'Host status · profile <b class="kv">' + esc(s.profile) + '</b> · retention ' +
-        esc(s.retention_days) + 'd · traces <b class="kv">' + esc(s.traces) +
-        '</b> · agents <b class="kv">' + esc(s.agents_active) + '/' + esc(s.agents_total) +
-        '</b> active · audit events <b class="kv">' + esc(s.audit_events) + '</b>';
-    } catch (e) { /* leave the prompt text */ }
-  }
-  document.getElementById("reload").onclick = loadTraces;
-  document.getElementById("corpus").onclick = loadCorpus;
-  document.getElementById("audit").onclick = loadAudit;
-  document.getElementById("agents").onclick = loadAgents;
-  document.getElementById("scrub").onclick = loadScrub;
-
-  // /admin/* routes (agent connections) live outside the service prefix.
-  async function adminApi(path, opts) {
-    var r = await fetch("/admin" + path, Object.assign({ headers: hdr() }, opts || {}));
-    if (!r.ok) throw new Error("HTTP " + r.status + " on /admin" + path);
-    return r.json();
+      clear(bar);
+      [["profile", s.profile], ["retention", s.retention_days + "d"],
+       ["traces", s.traces], ["agents", s.agents_active + "/" + s.agents_total],
+       ["audit", s.audit_events]].forEach(function (pair, i) {
+        if (i) bar.appendChild(document.createTextNode(" · "));
+        bar.appendChild(document.createTextNode(pair[0] + " "));
+        bar.appendChild(el("b", { text: String(pair[1]) }));
+      });
+    } catch (e) { clear(bar); }
   }
 
-  function hdr() { return { "Authorization": "Bearer " + (tokenEl.value.trim()) }; }
-  function esc(s) { return String(s == null ? "" : s).replace(/[&<>]/g, function (c) {
-    return { "&":"&amp;", "<":"&lt;", ">":"&gt;" }[c]; }); }
-  // esc() is HTML-text-only. Use escAttr() for any value placed inside a quoted attribute,
-  // and safeUrl() to gate hrefs to http(s) so a javascript:/data: scheme can never execute.
-  function escAttr(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
-    return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]; }); }
-  function safeUrl(u) { u = String(u == null ? "" : u).trim();
-    return /^https?:\/\//i.test(u) ? u : ""; }
+  // ---- board ----------------------------------------------------------------------------
+  // An empty column is information too: "nothing invalid" is a different sentence from
+  // "nothing fixed yet", so each says its own.
+  var STAGES = [
+    { id: "untriaged", label: "Untriaged", why: "no CI result reported yet",
+      blank: "Nothing waiting — every shape has a CI result." },
+    { id: "known_shape", label: "Known shape", why: "you have fixed this shape before",
+      blank: "No repeats. Every shape here is new to you." },
+    { id: "repro_invalid", label: "Repro invalid", why: "the test passed before the fix",
+      blank: "Every repro reproduced its bug." },
+    { id: "reproduced", label: "Reproduced", why: "red confirmed, awaiting a fix",
+      blank: "Nothing confirmed-broken is waiting on a fix." },
+    { id: "fix_failed", label: "Fix failed", why: "still red after the fix",
+      blank: "No fix has regressed." },
+    { id: "fixed", label: "Fixed", why: "red to green, recorded in the corpus",
+      blank: "Nothing confirmed fixed yet — report a CI result to fill the corpus." }
+  ];
+  var ALWAYS_SHOWN = { untriaged: 1, known_shape: 1, reproduced: 1, fixed: 1 };
 
-  async function api(path, opts) {
-    var r = await fetch(API + path, Object.assign({ headers: hdr() }, opts || {}));
-    if (!r.ok) throw new Error("HTTP " + r.status + " on " + path);
-    return r.json();
+  function shapeCard(shape) {
+    var fp = shape.fingerprint || {};
+    var facts = [];
+    if (fp.failing_status) facts.push("HTTP " + fp.failing_status);
+    if (fp.exception_type) facts.push(fp.exception_type);
+    if (fp.diagnostic_type) facts.push(fp.diagnostic_type);
+    facts.push(shape.occurrences + (shape.occurrences === 1 ? " report" : " reports"));
+
+    var kids = [
+      el("div", { class: "card-top" }, [
+        glyph(fp, 30),
+        el("div", { class: "route mono", text: fp.route || "(no route)" })
+      ]),
+      el("div", { class: "sub" }, facts.map(function (f) { return el("span", { text: f }); }))
+    ];
+    if (shape.prior_fixes && shape.prior_fixes.length) {
+      var top = shape.prior_fixes[0];
+      kids.push(el("div", { class: "known", text: "Seen before · " +
+        (top.fix_ref || top.trace_id) + " · " + Math.round((top.similarity || 0) * 100) + "% match" }));
+    }
+    return el("button", { class: "card", onclick: function () { openShape(shape.shape_id); } }, kids);
   }
 
-  async function loadTraces() {
-    listEl.innerHTML = '<div class="row muted">Loading…</div>';
-    try {
-      var data = await api("/sessions?limit=100");
-      var items = data.sessions || [];
+  async function renderBoard() {
+    mount(spinner("Loading shapes…"));
+    var data;
+    try { data = await api("/shapes"); }
+    catch (e) { return mount(fail(e)); }
+
+    var shapes = data.shapes || [];
+    var columns = data.board || {};
+    if (!shapes.length) {
+      return mount(el("div", { class: "detail" }, [
+        box("No failure shapes yet", [
+          el("p", { class: "muted", text: "A shape appears as soon as one trace is ingested. " +
+                                          "Seed a sample to see the board with real evidence in it:" }),
+          el("pre", { text: "node scripts/seed-demo-trace.mjs" }),
+          el("div", { class: "row-actions" }, [
+            copyBtn(function () { return "node scripts/seed-demo-trace.mjs"; }, "Copy command"),
+            el("button", { class: "primary", text: "Reload", onclick: renderBoard })
+          ])
+        ])
+      ]));
+    }
+
+    var board = el("div", { class: "board" });
+    STAGES.forEach(function (stage) {
+      var items = columns[stage.id] || [];
+      if (!items.length && !ALWAYS_SHOWN[stage.id]) return;   // noise columns collapse
+      var col = el("div", { class: "col s-" + stage.id }, [
+        el("div", { class: "col-head" }, [
+          el("h2", { text: stage.label }),
+          el("span", { class: "n", text: String(items.length) }),
+          el("span", { class: "why", text: stage.why })
+        ])
+      ]);
       if (!items.length) {
-        listEl.innerHTML = '<div class="row muted">No traces yet. Seed a sample:<br>' +
-          '<code style="font-size:11px">node scripts/seed-demo-trace.mjs</code></div>';
-        return;
+        col.appendChild(el("div", { class: "empty" }, [el("p", { text: stage.blank })]));
+      } else {
+        items.forEach(function (s) { col.appendChild(shapeCard(s)); });
       }
-      listEl.innerHTML = "";
-      items.forEach(function (it) {
-        var d = document.createElement("div");
-        d.className = "row";
-        var preview = it.explanation ? esc(String(it.explanation).slice(0, 60)) : esc(it.trace_id);
-        d.innerHTML = '<div class="id">' + preview + '</div>' +
-          '<div class="meta">' + esc(it.app_id || "—") + ' · ' + esc(it.project_id || "—") +
-          ' · ' + esc(it.created_at || "") + '</div>';
-        d.onclick = function () { select(it.trace_id, d); };
-        listEl.appendChild(d);
-      });
-    } catch (e) { listEl.innerHTML = '<div class="row err">' + esc(e.message) + '</div>'; }
+      board.appendChild(col);
+    });
+    mount(board);
   }
 
-  async function loadCorpus() {
-    listEl.innerHTML = '<div class="row muted">Loading Corpus…</div>';
+  // ---- shape detail ---------------------------------------------------------------------
+  // Sections render IN PLACE. Nothing is ever injected above what the operator is reading.
+  var GRADE_TONE = { A: "ok", B: "ok", C: "warn", D: "warn", E: "bad", F: "bad" };
+
+  async function openShape(shapeId) {
+    mount(spinner("Loading shape…"));
+    var shape, trace;
     try {
-      var data = await api("/corpus?limit=100");
-      var items = data.entries || [];
-      if (!items.length) { listEl.innerHTML = '<div class="row muted">No verified fixes in corpus.</div>'; return; }
-      listEl.innerHTML = "";
-      items.forEach(function (it) {
-        var d = document.createElement("div");
-        d.className = "row";
-        var fixText = it.fix_ref ? ' · Fix: ' + it.fix_ref : '';
-        d.innerHTML = '<div class="id">' + esc(it.trace_id) + '</div>' +
-          '<div class="meta"><span style="color:var(--ok)">' + esc(it.verdict) + '</span>' + esc(fixText) + '</div>';
-        d.onclick = function () { select(it.trace_id, d); };
-        listEl.appendChild(d);
-      });
-    } catch (e) { listEl.innerHTML = '<div class="row err">' + esc(e.message) + '</div>'; }
+      shape = (await api("/shapes/" + encodeURIComponent(shapeId))).shape;
+      trace = await loadTrace(shape.representative_trace_id);
+    } catch (e) { return mount(fail(e)); }
+    mount(shapeDetail(shape, trace));
   }
 
-  async function loadAudit() {
-    detailEl.innerHTML = '<p class="muted">Loading audit trail…</p>';
-    try {
-      var data = await api("/audit?limit=200");
-      var entries = data.entries || [];
-      if (!entries.length) { detailEl.innerHTML = '<div class="card"><p class="muted">No audit entries yet.</p></div>'; return; }
-      var rows = entries.map(function (e) {
-        var d = "";
-        if (e.detail && typeof e.detail === "object") {
-          d = e.detail.trace_id || e.detail.correlation_id || JSON.stringify(e.detail);
-        }
-        return '<tr>' +
-          '<td class="muted" style="white-space:nowrap;padding:4px 10px 4px 0">' + esc(e.created_at || "") + '</td>' +
-          '<td style="padding:4px 10px 4px 0"><span class="pill">' + esc(e.action) + '</span></td>' +
-          '<td style="padding:4px 10px 4px 0">' + esc(e.actor) + '</td>' +
-          '<td class="muted" style="padding:4px 0;font-family:ui-monospace,monospace;font-size:12px">' + esc(d) + '</td>' +
-          '</tr>';
-      }).join("");
-      detailEl.innerHTML = '<div class="card"><h3>Audit trail — every operator read is recorded</h3>' +
-        '<div class="muted" style="margin-bottom:8px">Newest first · ' + entries.length +
-        ' entries · detail carries structural ids only, never PII.</div>' +
-        '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
-        '<thead><tr style="text-align:left;color:var(--mut)">' +
-        '<th style="padding:4px 10px 4px 0">Time</th><th style="padding:4px 10px 4px 0">Action</th>' +
-        '<th style="padding:4px 10px 4px 0">Actor</th><th style="padding:4px 0">Detail</th></tr></thead>' +
-        '<tbody>' + rows + '</tbody></table></div>';
-    } catch (e) { detailEl.innerHTML = '<div class="card"><p class="err">' + esc(e.message) + '</p></div>'; }
+  // One parallel burst, not six serial round-trips.
+  async function loadTrace(id) {
+    var paths = ["/summary", "/replayability", "/privacy-posture", "/diagnostic-summary",
+                 "/verifications"];
+    var results = await Promise.all(paths.map(function (p) {
+      return api("/session/" + id + p).catch(function () { return {}; });
+    }));
+    return {
+      id: id,
+      summary: results[0].summary || {},
+      replayability: results[1].replayability || {},
+      privacy: results[2] || {},
+      diagnostic: (results[3].diagnostic || {}),
+      verifications: results[4].verifications || []
+    };
   }
 
-  async function loadAgents() {
-    detailEl.innerHTML = '<p class="muted">Loading agent connections…</p>';
-    try {
-      await refreshAgents(null);
-    } catch (e) {
-      detailEl.innerHTML = '<div class="card"><p class="err">' + esc(e.message) +
-        '</p><p class="muted">Agent connections require the admin token and shared-token mode.</p></div>';
+  function shapeDetail(shape, trace) {
+    var fp = shape.fingerprint || {};
+    var rep = trace.replayability || {};
+    var grade = rep.grade || "—";
+    var root = el("div", { class: "detail" });
+
+    root.appendChild(el("button", { class: "crumb", text: "← Board", onclick: renderBoard }));
+
+    // Verdict: the decision, above the fold.
+    var facts = [];
+    facts.push(shape.occurrences + (shape.occurrences === 1 ? " report" : " reports"));
+    if (rep.score !== undefined) facts.push("score " + rep.score);
+    if (fp.failing_status) facts.push("HTTP " + fp.failing_status);
+    if (fp.diagnostic_endpoint) facts.push(fp.diagnostic_endpoint);
+    if (shape.last_seen) facts.push("last seen " + String(shape.last_seen).slice(0, 10));
+
+    var stageMeta = STAGES.filter(function (s) { return s.id === shape.stage; })[0] || STAGES[0];
+    root.appendChild(el("div", { class: "verdict" }, [
+      glyph(fp, 58),
+      el("div", {}, [
+        el("h1", { class: "mono", text: fp.route || "(no route)" }),
+        el("div", { class: "facts" }, [
+          el("span", { class: "pill " + (shape.stage === "fixed" ? "ok" : "acc"), text: stageMeta.label })
+        ].concat(facts.map(function (f) { return el("span", { text: f }); })))
+      ]),
+      el("div", { class: "grade" }, [
+        el("span", { class: "pill " + (GRADE_TONE[grade] || ""), text: "grade " + grade })
+      ])
+    ]));
+
+    if (shape.prior_fixes && shape.prior_fixes.length) {
+      var pf = shape.prior_fixes[0];
+      root.appendChild(el("div", { class: "next" }, [
+        el("div", { class: "lab", text: "You have fixed this shape before" }),
+        el("div", {}, [
+          el("span", { text: (pf.fix_ref || pf.trace_id) + " — " +
+                             Math.round((pf.similarity || 0) * 100) + "% structural match (" +
+                             (pf.reasons || []).join(", ") + "). " }),
+          extLink(pf.run_url, "CI run")
+        ])
+      ]));
+    } else if (trace.diagnostic.recommended_next_step) {
+      root.appendChild(el("div", { class: "next" }, [
+        el("div", { class: "lab", text: "Recommended next step" }),
+        el("div", { text: trace.diagnostic.recommended_next_step })
+      ]));
     }
-  }
 
-  async function refreshAgents(justIssued) {
-    var data = await adminApi("/agents");
-    renderAgents(data.agents || [], justIssued, await agentActivity());
-  }
-
-  // Roll up recent agent reads + denials per agent from the audit trail (best-effort).
-  async function agentActivity() {
-    var act = {};
-    function bump(id, when, key) {
-      if (!id) return;
-      var a = act[id] || (act[id] = { reads: 0, denials: 0, last: "" });
-      a[key] += 1; if (!a.last || (when || "") > a.last) a.last = when || "";
+    // Sections
+    var TABS = [
+      { id: "evidence", label: "Evidence", render: function () { return panelEvidence(shape, trace); } },
+      { id: "repro", label: "Repro", render: function () { return panelRepro(trace); } },
+      { id: "verify", label: "Verify", render: function () { return panelVerify(shape, trace); } },
+      { id: "drafts", label: "Drafts", render: function () { return panelDrafts(trace); } },
+      { id: "agent", label: "Agent view", render: function () { return panelAgent(trace); } },
+      { id: "attest", label: "Attestation", render: function () { return panelAttest(trace); } }
+    ];
+    var tabs = el("div", { class: "tabs" });
+    var panel = el("div", { class: "panel" });
+    var active = "evidence";
+    function select(id) {
+      active = id;
+      Array.prototype.forEach.call(tabs.children, function (btn) {
+        btn.setAttribute("aria-selected", btn.dataset.tab === id ? "true" : "false");
+      });
+      clear(panel);
+      var out = TABS.filter(function (t) { return t.id === id; })[0].render();
+      if (out instanceof Promise) {
+        panel.appendChild(spinner());
+        out.then(function (node) { clear(panel); panel.appendChild(node); })
+           .catch(function (e) { clear(panel); panel.appendChild(fail(e)); });
+      } else {
+        panel.appendChild(out);
+      }
     }
-    try {
-      var acc = await api("/audit?action=stepstitch.agent_access&limit=500");
-      (acc.entries || []).forEach(function (e) { bump((e.detail || {}).agent_id, e.created_at, "reads"); });
-      var den = await api("/audit?action=stepstitch.agent_denied&limit=500");
-      (den.entries || []).forEach(function (e) { bump((e.detail || {}).agent_id, e.created_at, "denials"); });
-    } catch (e) { /* activity is best-effort */ }
-    return act;
+    TABS.forEach(function (t) {
+      var b = el("button", { text: t.label, onclick: function () { select(t.id); } });
+      b.dataset.tab = t.id;
+      tabs.appendChild(b);
+    });
+    root.appendChild(tabs);
+    root.appendChild(panel);
+    select(active);
+    return root;
   }
 
-  function renderAgents(agents, justIssued, activity) {
-    var scopes = ["summaries", "repros", "drafts", "none"];
-    var opts = scopes.map(function (s) {
-      return '<option value="' + escAttr(s) + '">' + esc(s) + '</option>';
-    }).join("");
-    var tokenHtml = "";
-    if (justIssued) {
-      // Ready-to-paste MCP client config, carrying THIS agent's scoped token (not the
-      // admin token) + this host's own origin. Connect any MCP client (Claude, Copilot,
-      // OpenAI, Vertex, Bedrock, LangGraph) with no bespoke wiring.
-      var mcpConfig = JSON.stringify({
+  function panelEvidence(shape, trace) {
+    var rep = trace.replayability || {};
+    var wrap = el("div", {});
+
+    // Replayability warnings, grouped. Six identical "templated route" warnings is one line,
+    // not a thirty-line JSON array.
+    var byCode = {};
+    (rep.warnings || []).forEach(function (w) {
+      (byCode[w.code] = byCode[w.code] || []).push(w);
+    });
+    var warnRows = Object.keys(byCode).map(function (code) {
+      var group = byCode[code];
+      var steps = group.map(function (w) { return w.step_index; })
+                       .filter(function (s) { return s !== undefined && s !== null; });
+      return el("div", { style: "margin-bottom:8px" }, [
+        el("div", {}, [
+          el("span", { class: "pill warn", text: group.length + "×" }),
+          el("span", { text: " " + code.replace(/_/g, " ") })
+        ]),
+        el("div", { class: "note", text: (group[0].detail || "") +
+          (steps.length ? "  (steps " + steps.join(", ") + ")" : "") })
+      ]);
+    });
+
+    var signals = rep.signals || {};
+    wrap.appendChild(el("div", { class: "grid2" }, [
+      box("Replayability", [
+        el("div", {}, [
+          el("span", { class: "pill " + (GRADE_TONE[rep.grade] || ""), text: "grade " + (rep.grade || "—") }),
+          el("span", { class: "muted", text: "  score " + (rep.score !== undefined ? rep.score : "—") })
+        ]),
+        el("div", { class: "note", text: [signals.steps + " steps", signals.interactive + " interactive",
+                                          signals.stable_selectors + " stable selectors"].join(" · ") }),
+        warnRows.length ? el("div", { style: "margin-top:12px" }, warnRows) : null
+      ]),
+      privacyProof(trace)
+    ]));
+
+    wrap.appendChild(box("Fingerprint — how this shape is identified", [
+      el("div", { style: "display:flex;gap:14px;align-items:center" }, [
+        glyph(shape.fingerprint, 44),
+        el("div", { class: "note", text: "Templated routes and structural selectors only. " +
+          "Nothing here can identify a person, which is why the shape — and its fix — stay " +
+          "matchable after retention purges the trace body." })
+      ]),
+      kvTable(shape.fingerprint)
+    ]));
+
+    if (shape.trace_ids && shape.trace_ids.length > 1) {
+      wrap.appendChild(box(shape.occurrences + " traces share this shape", [
+        el("ul", { class: "tight mono" }, shape.trace_ids.map(function (t) {
+          return el("li", { text: t });
+        }))
+      ]));
+    }
+    return wrap;
+  }
+
+  // Privacy proof — plain-language narrative, backed by the same scrubbed_fields data the
+  // server reports. Never a raw JSON dump: this is the panel a compliance reviewer reads.
+  function privacyProof(trace) {
+    var scrub = (trace.privacy || {}).scrub || {};
+    var fields = scrub.scrubbed_fields || [];
+    var never = (trace.privacy || {}).never_captured || [];
+    var narrative = fields.length
+      ? "Before this report was stored, StepStitch stripped " + fields.length + " field" +
+        (fields.length === 1 ? "" : "s") + " that could have carried sensitive information — " +
+        "the original values were never written to disk."
+      : "Nothing in this report needed scrubbing — no SSNs, account numbers, emails, or other " +
+        "sensitive patterns were found in the text StepStitch kept.";
+    return box("Privacy proof", [
+      el("div", { text: narrative }),
+      fields.length ? el("div", { class: "note", text: "What was scrubbed:" }) : null,
+      fields.length ? el("ul", { class: "tight mono" }, fields.map(function (f) {
+        return el("li", { text: f });
+      })) : null,
+      never.length ? el("div", { class: "note", text: "Regardless of this trace, StepStitch never captures, ever:" }) : null,
+      never.length ? el("div", { class: "chips" }, never.map(function (n) {
+        return el("span", { class: "chip strike", text: n });
+      })) : null,
+      el("div", { class: "note", text: "Verified by the server-side scrubber — independent of " +
+        "the SDK — on every ingest." })
+    ]);
+  }
+
+  async function panelRepro(trace) {
+    var wrap = el("div", {});
+    var full = await api("/session/" + trace.id + "/playwright").catch(function () { return {}; });
+    var code = full.playwright_code || "";
+    wrap.appendChild(box("Deterministic Playwright reproduction", [
+      el("div", { class: "row-actions" }, [copyBtn(function () { return code; }, "Copy test")]),
+      el("pre", { text: code }),
+      el("div", { class: "note", text: "Text only. StepStitch never runs this — your CI does." })
+    ]));
+    var min = await api("/session/" + trace.id + "/minimal-repro").catch(function () { return null; });
+    if (min && min.playwright_code) {
+      wrap.appendChild(box("Minimal repro", [
+        el("div", { class: "muted", text: "Reduced from " + min.original_steps + " to " +
+                                          min.reduced_steps + " steps (the failing path)." }),
+        el("div", { class: "row-actions", style: "margin-top:10px" },
+           [copyBtn(function () { return min.playwright_code; }, "Copy minimal test")]),
+        el("pre", { text: min.playwright_code })
+      ]));
+    }
+    var frag = await api("/session/" + trace.id + "/fragility").catch(function () { return null; });
+    if (frag && (frag.fragility || []).length) {
+      var rows = frag.fragility.map(function (f) {
+        var pct = Math.round((f.risk || 0) * 100);
+        var tone = pct >= 70 ? "bad" : (pct >= 40 ? "warn" : "ok");
+        return el("tr", {}, [
+          el("td", { class: "k", text: "step " + f.step_index }),
+          el("td", {}, [el("span", { class: "pill " + tone, text: pct + "%" })]),
+          el("td", { text: f.stability }),
+          el("td", { class: "muted", text: f.recommendation })
+        ]);
+      });
+      wrap.appendChild(box("Fragility — what is most likely to break", [
+        el("table", {}, [el("tbody", {}, rows)])
+      ]));
+    }
+    return wrap;
+  }
+
+  // Closing the loop: the console used to dead-end here. Fix Memory stays empty until CI
+  // reports a pre/post result, so the snippet that does it is generated inline.
+  async function panelVerify(shape, trace) {
+    var wrap = el("div", {});
+    // Verification is a property of the SHAPE, not of one trace: the header can read "Fixed"
+    // because a sibling trace went red->green. Gather every member's runs so the panel agrees
+    // with the column the card is sitting in.
+    var perTrace = await Promise.all((shape.trace_ids || [trace.id]).map(function (tid) {
+      return api("/session/" + tid + "/verifications")
+        .then(function (r) { return (r.verifications || []); })
+        .catch(function () { return []; });
+    }));
+    var list = [].concat.apply([], perTrace).sort(function (a, b) {
+      return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+    });
+    var origin = window.location.origin;
+    var snippet =
+      "# StepStitch: report the repro outcome so the fix is provable.\n" +
+      "# Run the generated test BEFORE the fix (expect fail) and AFTER (expect pass).\n" +
+      "curl -sS -X POST \\\n" +
+      "  " + origin + API + "/session/" + trace.id + "/verify \\\n" +
+      "  -H \"Authorization: Bearer $STEPSTITCH_ADMIN_TOKEN\" \\\n" +
+      "  -H 'Content-Type: application/json' \\\n" +
+      "  -d '{\"pre_passed\": false, \"post_passed\": true,\n" +
+      "       \"fix_ref\": \"'\"$GIT_COMMIT\"'\", \"run_url\": \"'\"$CI_RUN_URL\"'\"}'\n" +
+      "\n# Only pre=fail -> post=pass is recorded as confirmed_fixed.";
+
+    if (list.length) {
+      var rows = list.map(function (v) {
+        var tone = v.verdict === "confirmed_fixed" ? "ok"
+                 : (v.verdict === "not_reproduced" ? "warn" : "bad");
+        return el("tr", {}, [
+          el("td", {}, [el("span", { class: "pill " + tone, text: v.verdict })]),
+          el("td", { class: "k mono", text: v.trace_id || "—" }),
+          el("td", { class: "k", text: v.fix_ref || "—" }),
+          el("td", {}, [extLink(v.run_url, "CI run") || el("span", { class: "muted", text: "—" })]),
+          el("td", { class: "muted", text: String(v.created_at || "").slice(0, 19) })
+        ]);
+      });
+      wrap.appendChild(box("Verification history for this shape", [
+        el("table", {}, [
+          el("thead", {}, [el("tr", {}, ["Verdict", "Trace", "Fix", "Run", "When"]
+            .map(function (h) { return el("th", { text: h }); }))]),
+          el("tbody", {}, rows)
+        ]),
+        el("div", { class: "note", text: "confirmed_fixed derives only from pre_passed=false " +
+                                         "plus post_passed=true. StepStitch never runs code and " +
+                                         "never merges." })
+      ]));
+    } else {
+      wrap.appendChild(box("No CI result reported yet", [
+        el("div", { class: "muted", text: "This shape stays untriaged — and the verified-fix " +
+          "corpus stays empty — until your CI reports whether the repro failed before the fix " +
+          "and passed after it. Wire this once:" })
+      ]));
+    }
+    wrap.appendChild(box("Report from CI", [
+      el("div", { class: "row-actions" }, [copyBtn(function () { return snippet; }, "Copy snippet")]),
+      el("pre", { text: snippet })
+    ]));
+    return wrap;
+  }
+
+  var CONNECTORS = { servicenow: "ServiceNow", salesforce: "Salesforce", genesys: "Genesys",
+                     jira: "Jira", zendesk: "Zendesk", github_issues: "GitHub Issues",
+                     linear: "Linear", slack: "Slack" };
+
+  async function panelDrafts(trace) {
+    var wrap = el("div", {});
+    var r = await api("/session/" + trace.id + "/export-preview", { method: "POST" })
+      .catch(function () { return { drafts: {} }; });
+    var drafts = r.drafts || {};
+    var names = Object.keys(drafts);
+    wrap.appendChild(el("div", { class: "note", style: "margin-bottom:12px",
+      text: "Draft-only — every field below is flat and sanitized; drafts are previews, " +
+            "nothing is sent to the connector." }));
+    if (!names.length) {
+      wrap.appendChild(emptyState("No draft adapters are configured on this host."));
+    } else {
+      var grid = el("div", { class: "grid2" }, names.map(function (n) {
+        return box(CONNECTORS[n] || n, [kvTable(drafts[n])]);
+      }));
+      wrap.appendChild(grid);
+    }
+
+    var prBtn = el("button", { class: "ghost", text: "Preview regression PR (dry run)" });
+    var prOut = el("div", {});
+    prBtn.onclick = async function () {
+      clear(prOut); prOut.appendChild(spinner());
+      try {
+        var pr = await api("/session/" + trace.id + "/github/pr?dry_run=true",
+          jsonPost({ approved_by: "console-preview", idempotency_key: "preview-pr-" + trace.id,
+                     dry_run: true }));
+        clear(prOut);
+        prOut.appendChild(kvTable(pr.would_open || pr));
+      } catch (e) {
+        clear(prOut);
+        prOut.appendChild(el("div", { class: "muted", text: e.message +
+          " — the GitHub bridge is not configured on this host, which is expected." }));
+      }
+    };
+    var delBtn = el("button", { class: "ghost", text: "Preview delivery (dry run)" });
+    var delOut = el("div", {});
+    delBtn.onclick = async function () {
+      clear(delOut); delOut.appendChild(spinner());
+      try {
+        var d = await api("/session/" + trace.id + "/deliver?dry_run=true",
+          jsonPost({ approved_by: "console-preview", idempotency_key: "preview-" + trace.id }));
+        clear(delOut);
+        delOut.appendChild(kvTable(d));
+      } catch (e) {
+        clear(delOut);
+        delOut.appendChild(el("div", { class: "muted", text: e.message +
+          " — direct-write may be disabled on this host, which is expected." }));
+      }
+    };
+    wrap.appendChild(box("Dry runs", [
+      el("div", { class: "row-actions" }, [prBtn, delBtn]), prOut, delOut,
+      el("div", { class: "note", text: "A human reviews and merges. StepStitch never does." })
+    ]));
+    return wrap;
+  }
+
+  // The model's-eye view: the literal payload an agent receives. This is the one place raw JSON
+  // is the right rendering — the bytes ARE the claim.
+  async function panelAgent(trace) {
+    var tools = [
+      ["get_trace_summary", "/summary"],
+      ["get_replayability_score", "/replayability"],
+      ["get_privacy_posture", "/privacy-posture"],
+      ["get_diagnostic_summary", "/diagnostic-summary"],
+      ["generate_playwright_repro", "/playwright"]
+    ];
+    var results = await Promise.all(tools.map(function (t) {
+      return api("/session/" + trace.id + t[1]).catch(function (e) { return { error: e.message }; });
+    }));
+    var wrap = el("div", {});
+    wrap.appendChild(el("div", { class: "note", style: "margin-bottom:12px",
+      text: "This is the entire payload any connected LLM or agent can receive for this trace, " +
+            "over the read-only MCP tools. Nothing outside this leaves your boundary." }));
+    tools.forEach(function (t, i) {
+      wrap.appendChild(box(null, [
+        el("div", {}, [
+          el("span", { class: "pill acc mono", text: t[0] }),
+          el("span", { class: "muted mono", text: "  /session/{trace_id}" + t[1] })
+        ]),
+        el("pre", { style: "margin-top:10px", text: JSON.stringify(results[i], null, 2) })
+      ]));
+    });
+    var never = (trace.privacy || {}).never_captured || [];
+    if (never.length) {
+      wrap.appendChild(box("Never reaches the model", [
+        el("div", { class: "chips" }, never.map(function (n) {
+          return el("span", { class: "chip strike", text: n });
+        }))
+      ]));
+    }
+    return wrap;
+  }
+
+  async function panelAttest(trace) {
+    var r = await api("/session/" + trace.id + "/attestation");
+    return el("div", {}, [
+      box("Signed evidence attestation", [
+        el("div", { text: "A canonical, tamper-evident evidence bundle" +
+          (r.signed ? " signed with the tenant key." : " (unsigned — hash only).") +
+          " Anyone can verify it independently; StepStitch holds no key." }),
+        el("div", { style: "margin-top:10px" },
+           [el("span", { class: "pill ok mono", text: r.bundle_sha256 || "" })]),
+        el("pre", { style: "margin-top:10px", text: JSON.stringify(r.bundle, null, 2) }),
+        r.signature ? el("div", { class: "note", text: "signature" }) : null,
+        r.signature ? el("pre", { text: r.signature }) : null,
+        el("div", { class: "note", text: r.verify_recipe || "" })
+      ])
+    ]);
+  }
+
+  // ---- agents ---------------------------------------------------------------------------
+  var SCOPES = [
+    ["none", "registered, no access"],
+    ["summaries", "summaries · score · privacy posture"],
+    ["repros", "+ the Playwright reproduction"],
+    ["drafts", "+ sanitized ticket drafts"]
+  ];
+
+  async function renderAgents(justIssued) {
+    mount(spinner("Loading agents…"));
+    var agents = [], activity = {};
+    try {
+      agents = (await adminApi("/agents")).agents || [];
+      var audit = await api("/audit?limit=500").catch(function () { return { entries: [] }; });
+      (audit.entries || []).forEach(function (e) {
+        var d = e.detail || {};
+        var id = d.agent_id || d.actor_id;
+        if (!id) return;
+        var a = activity[id] = activity[id] || { reads: 0, denials: 0, last: null };
+        if (String(e.action).indexOf("denied") >= 0) a.denials++; else a.reads++;
+        if (!a.last) a.last = e.created_at;
+      });
+    } catch (e) { return mount(fail(e)); }
+
+    var root = el("div", { class: "detail" });
+    var name = el("input", { placeholder: "agent name (e.g. Claude Desktop)",
+                             "aria-label": "agent name" });
+    var scope = el("select", { "aria-label": "scope" }, SCOPES.map(function (s) {
+      return el("option", { value: s[0], text: s[0] + " — " + s[1] });
+    }));
+    scope.value = "summaries";
+    var issued = el("div", {});
+
+    var register = el("button", { class: "primary", text: "Issue token" });
+    register.onclick = async function () {
+      if (!name.value.trim()) return;
+      try {
+        var r = await adminApi("/agents", jsonPost({ name: name.value.trim(), scope: scope.value }));
+        loadStatus();
+        renderAgents(r);
+      } catch (e) { clear(issued); issued.appendChild(fail(e)); }
+    };
+
+    root.appendChild(box("Connect an agent", [
+      el("div", { class: "muted", text: "Each agent gets its own scoped, revocable token. " +
+        "The scope is the ceiling on what it can read over MCP — the host refuses an " +
+        "out-of-scope call rather than silently allowing it. Your admin credential is never shared." }),
+      el("div", { class: "row-actions", style: "margin-top:12px" }, [name, scope, register]),
+      issued
+    ]));
+
+    if (justIssued && justIssued.token) {
+      var cfg = JSON.stringify({
         mcpServers: {
           stepstitch: {
-            command: "python",
-            args: ["-m", "stepstitch_service.mcp_cli"],
-            env: {
-              STEPSTITCH_BASE_URL: window.location.origin + "/api/stepstitch/v1",
-              STEPSTITCH_TOKEN: justIssued.token
-            }
+            command: "python", args: ["-m", "stepstitch_service.mcp_cli"],
+            env: { STEPSTITCH_BASE_URL: window.location.origin + API,
+                   STEPSTITCH_TOKEN: justIssued.token }
           }
         }
       }, null, 2);
-      tokenHtml =
-        '<div class="card" style="border-color:var(--acc)">' +
-        '<h3 style="color:var(--acc)">New token for ' + esc(justIssued.name) +
-        ' (' + esc(justIssued.scope) + ')</h3>' +
-        '<div class="muted" style="margin-bottom:6px">Copy now — shown once, stored only as a hash.</div>' +
-        '<pre>' + esc(justIssued.token) + '</pre>' +
-        '<div class="muted" style="margin:10px 0 6px">MCP client config — paste into Claude / Copilot / any MCP client:</div>' +
-        '<button id="ag-copy-mcp" style="margin-bottom:6px">Copy config</button>' +
-        '<pre id="ag-mcp">' + esc(mcpConfig) + '</pre></div>';
+      root.appendChild(box("New token — shown once, stored only as a hash", [
+        el("pre", { text: justIssued.token }),
+        el("div", { class: "row-actions" }, [copyBtn(function () { return justIssued.token; }, "Copy token")]),
+        el("div", { class: "note", text: "MCP client config — paste into Claude, Copilot, or any MCP client:" }),
+        el("pre", { text: cfg }),
+        el("div", { class: "row-actions" }, [copyBtn(function () { return cfg; }, "Copy config")])
+      ]));
     }
-    var rows = agents.map(function (a) {
-      var act = (activity || {})[a.id] || { reads: 0, denials: 0, last: "" };
-      var status = a.revoked
-        ? '<span class="muted">revoked</span>'
-        : '<span style="color:var(--ok)">active</span>';
-      var denials = act.denials
-        ? '<span style="color:var(--warn)">' + act.denials + '</span>' : '0';
-      var btn = a.revoked ? ''
-        : '<button class="ag-revoke" data-id="' + escAttr(a.id) + '">Revoke</button>';
-      return '<tr>' +
-        '<td style="padding:4px 10px 4px 0">' + esc(a.name) + '</td>' +
-        '<td style="padding:4px 10px 4px 0"><span class="pill">' + esc(a.scope) + '</span></td>' +
-        '<td style="padding:4px 10px 4px 0">' + status + '</td>' +
-        '<td style="padding:4px 10px 4px 0">' + act.reads + '</td>' +
-        '<td style="padding:4px 10px 4px 0">' + denials + '</td>' +
-        '<td class="muted" style="padding:4px 10px 4px 0;font-size:11px">' + esc(act.last || "—") + '</td>' +
-        '<td style="padding:4px 0">' + btn + '</td></tr>';
-    }).join("");
-    detailEl.innerHTML =
-      '<div class="card"><h3>Connect an agent</h3>' +
-      '<div class="muted" style="margin-bottom:8px">Each agent gets its own scoped token. ' +
-      'Scope limits what it can read over MCP: summaries · repros · drafts · none.</div>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
-      '<input id="ag-name" placeholder="agent name (e.g. Claude repro)" size="22">' +
-      '<select id="ag-scope">' + opts + '</select>' +
-      '<button id="ag-add" class="primary">Register</button></div></div>' +
-      tokenHtml +
-      '<div class="card"><h3>Registered agents</h3>' +
-      (agents.length
-        ? '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead>' +
-          '<tr style="text-align:left;color:var(--mut)">' +
-          '<th style="padding:4px 10px 4px 0">Name</th><th style="padding:4px 10px 4px 0">Scope</th>' +
-          '<th style="padding:4px 10px 4px 0">Status</th><th style="padding:4px 10px 4px 0">Reads</th>' +
-          '<th style="padding:4px 10px 4px 0">Denials</th><th style="padding:4px 10px 4px 0">Last seen</th>' +
-          '<th></th></tr></thead><tbody>' +
-          rows + '</tbody></table>'
-        : '<p class="muted">No agents registered yet.</p>') +
-      '</div>';
-    document.getElementById("ag-add").onclick = registerAgent;
-    var cp = document.getElementById("ag-copy-mcp");
-    if (cp) cp.onclick = function () {
-      var t = document.getElementById("ag-mcp").textContent;
-      if (navigator.clipboard) navigator.clipboard.writeText(t);
-    };
-    Array.prototype.forEach.call(document.querySelectorAll(".ag-revoke"), function (b) {
-      b.onclick = function () { revokeAgent(b.getAttribute("data-id")); };
-    });
-  }
 
-  async function registerAgent() {
-    var name = document.getElementById("ag-name").value.trim();
-    var scope = document.getElementById("ag-scope").value;
-    if (!name) { return; }
-    try {
-      var res = await adminApi("/agents", { method: "POST",
-        headers: Object.assign({ "Content-Type": "application/json" }, hdr()),
-        body: JSON.stringify({ name: name, scope: scope }) });
-      await refreshAgents(res);
-    } catch (e) { show("Could not register agent", e.message); }
-  }
-
-  async function revokeAgent(id) {
-    try {
-      await adminApi("/agents/" + encodeURIComponent(id) + "/revoke",
-        { method: "POST", headers: hdr() });
-      await refreshAgents(null);
-    } catch (e) { show("Could not revoke agent", e.message); }
-  }
-
-  var scrubState = { patterns: [], keys: [] };
-  async function loadScrub() {
-    detailEl.innerHTML = '<p class="muted">Loading scrub policy…</p>';
-    try {
-      var cfg = await adminApi("/config/scrub");
-      scrubState.patterns = (cfg.extra_redactions || []).map(function (p) { return [p[0], p[1]]; });
-      scrubState.keys = (cfg.extra_forbidden_keys || []).slice();
-      renderScrub(cfg.base_profile);
-    } catch (e) { detailEl.innerHTML = '<div class="card"><p class="err">' + esc(e.message) + '</p></div>'; }
-  }
-
-  function renderScrub(baseProfile) {
-    var patRows = scrubState.patterns.map(function (p, i) {
-      return '<tr><td style="padding:3px 10px 3px 0">' + esc(p[0]) + '</td>' +
-        '<td style="padding:3px 10px 3px 0"><code>' + esc(p[1]) + '</code></td>' +
-        '<td><button class="sc-del-pat" data-i="' + i + '">Remove</button></td></tr>';
-    }).join("");
-    var keyRows = scrubState.keys.map(function (k, i) {
-      return '<span class="pill" style="margin:0 6px 6px 0">' + esc(k) +
-        ' <button class="sc-del-key" data-i="' + i + '" ' +
-        'style="border:none;background:none;color:var(--mut);padding:0 0 0 4px">×</button></span>';
-    }).join("");
-    detailEl.innerHTML =
-      '<div class="card"><h3>Scrub policy</h3><div class="muted">Base profile ' +
-      '<b class="kv">' + esc(baseProfile) + '</b>. Additions below can only ' +
-      '<strong>tighten</strong> — they add redaction, never remove the built-in PII rules.</div></div>' +
-      '<div class="card"><h3>Custom redaction patterns</h3>' +
-      (scrubState.patterns.length
-        ? '<table style="font-size:13px;border-collapse:collapse"><thead><tr style="text-align:left;color:var(--mut)">' +
-          '<th style="padding:3px 10px 3px 0">Label</th><th style="padding:3px 10px 3px 0">Regex</th><th></th></tr></thead><tbody>' +
-          patRows + '</tbody></table>'
-        : '<p class="muted">None yet.</p>') +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">' +
-      '<input id="sc-label" placeholder="label (e.g. empid)" size="16">' +
-      '<input id="sc-regex" placeholder="regex (e.g. EMP-\\d+)" size="22">' +
-      '<button id="sc-add-pat">Add pattern</button></div></div>' +
-      '<div class="card"><h3>Extra dropped metadata keys</h3>' +
-      '<div style="margin-bottom:6px">' + (keyRows || '<span class="muted">None.</span>') + '</div>' +
-      '<div style="display:flex;gap:8px"><input id="sc-key" placeholder="metadata key" size="16">' +
-      '<button id="sc-add-key">Add key</button></div></div>' +
-      '<div class="card"><h3>Redaction preview</h3>' +
-      '<div class="muted" style="margin-bottom:6px">What the current (unsaved) patterns would redact:</div>' +
-      '<textarea id="sc-pv-in" rows="2" placeholder="paste sample free text…" ' +
-      'style="width:100%;box-sizing:border-box;background:#0b0d12;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px;font:inherit"></textarea>' +
-      '<button id="sc-pv-btn" style="margin-top:6px">Preview</button>' +
-      '<pre id="sc-pv-out"></pre></div>' +
-      '<div class="actions"><button id="sc-save" class="primary">Save scrub policy</button></div>';
-
-    document.getElementById("sc-add-pat").onclick = function () {
-      var l = document.getElementById("sc-label").value.trim();
-      var r = document.getElementById("sc-regex").value;
-      if (l && r) { scrubState.patterns.push([l, r]); renderScrub(baseProfile); }
-    };
-    document.getElementById("sc-add-key").onclick = function () {
-      var k = document.getElementById("sc-key").value.trim();
-      if (k) { scrubState.keys.push(k); renderScrub(baseProfile); }
-    };
-    Array.prototype.forEach.call(document.querySelectorAll(".sc-del-pat"), function (b) {
-      b.onclick = function () { scrubState.patterns.splice(+b.getAttribute("data-i"), 1); renderScrub(baseProfile); };
-    });
-    Array.prototype.forEach.call(document.querySelectorAll(".sc-del-key"), function (b) {
-      b.onclick = function () { scrubState.keys.splice(+b.getAttribute("data-i"), 1); renderScrub(baseProfile); };
-    });
-    document.getElementById("sc-pv-btn").onclick = async function () {
-      try {
-        var res = await adminApi("/scrub/preview", { method: "POST",
-          headers: Object.assign({ "Content-Type": "application/json" }, hdr()),
-          body: JSON.stringify({ text: document.getElementById("sc-pv-in").value,
-                                 extra_redactions: scrubState.patterns }) });
-        document.getElementById("sc-pv-out").textContent = res.redacted || "";
-      } catch (e) { document.getElementById("sc-pv-out").textContent = e.message; }
-    };
-    document.getElementById("sc-save").onclick = async function () {
-      try {
-        await adminApi("/config/scrub", { method: "PUT",
-          headers: Object.assign({ "Content-Type": "application/json" }, hdr()),
-          body: JSON.stringify({ extra_redactions: scrubState.patterns,
-                                 extra_forbidden_keys: scrubState.keys }) });
-        show("Saved", "Scrub policy updated. New traces are scrubbed with these rules.");
-      } catch (e) { show("Could not save scrub policy", e.message); }
-    };
-  }
-
-  function card(title, bodyHtml) {
-    return '<div class="card"><h3>' + esc(title) + '</h3>' + bodyHtml + '</div>';
-  }
-
-  async function select(id, el) {
-    if (selected) selected.classList.remove("sel");
-    selected = el; el.classList.add("sel");
-    detailEl.innerHTML = '<p class="muted">Loading ' + esc(id) + '…</p>';
-    try {
-      var s = await api("/session/" + id + "/summary");
-      var rep = await api("/session/" + id + "/replayability");
-      var pp = await api("/session/" + id + "/privacy-posture");
-      var diag = await api("/session/" + id + "/diagnostic-summary");
-      var verif = await api("/session/" + id + "/verifications").catch(function() { return { verifications: [] }; });
-      var similar = await api("/session/" + id + "/similar-fixes").catch(function() { return { similar_fixes: [] }; });
-      var sm = s.summary || {};
-      var rr = rep.replayability || {};
-      var html = "";
-      html += '<div class="actions">' +
-        '<button id="act-modelview" class="primary">What the model sees</button>' +
-        '<button id="act-attest">Signed evidence</button>' +
-        '<button id="act-fragility">Fragility</button>' +
-        '<button id="act-minrepro">Minimal repro</button>' +
-        '<button id="act-repro">View Playwright repro</button>' +
-        '<button id="act-drafts">Preview drafts</button>' +
-        '<button id="act-github">Dry-run GitHub PR</button>' +
-        '<button id="act-deliver">Dry-run deliver</button>' +
-        '</div>';
-      html += card("Summary",
-        '<div>' + esc(sm.headline || "") + '</div>' +
-        '<div class="muted">route ' + esc(sm.route) + ' · steps ' + esc(sm.step_count) +
-        ' · ' + esc(sm.privacy_status || "") + '</div>');
-
-      var vhtml = "";
-      var vlist = verif.verifications || [];
-      if (vlist.length) {
-        var current = vlist[0];
-        var color = current.verdict === "confirmed_fixed" ? "var(--ok)" : "var(--warn)";
-        vhtml += '<div>Status: <span style="font-weight:700;color:' + color + '">' + esc(current.verdict) + '</span></div>';
-        vhtml += '<ul style="margin:8px 0 0;padding-left:20px;font-size:12px;color:var(--mut)">';
-        vlist.forEach(function (v) {
-          var ref = v.fix_ref ? ' (Fix: ' + v.fix_ref + ')' : '';
-          var runUrl = safeUrl(v.run_url);
-          var link = runUrl ? ' · <a href="' + escAttr(runUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--acc)">CI Run</a>' : '';
-          vhtml += '<li style="margin-bottom:4px"><strong>' + esc(v.verdict) + '</strong>' + esc(ref) + link + ' · ' + esc(v.created_at || "") + '</li>';
-        });
-        vhtml += '</ul>';
-      } else {
-        vhtml += '<div class="muted">No verification runs recorded yet. Run the Playwright test in CI to report results.</div>';
-      }
-      html += card("Verification & Fix Status", vhtml);
-
-      var simList = similar.similar_fixes || [];
-      if (simList.length) {
-        var simHtml = '<div class="muted" style="margin-bottom:6px">This bug matches ' +
-          simList.length + ' previously verified fix' + (simList.length > 1 ? 'es' : '') +
-          ' by structure:</div><ul style="margin:0;padding-left:18px;font-size:12px;color:var(--mut)">';
-        simList.forEach(function (m) {
-          var pct = Math.round((m.similarity || 0) * 100);
-          var run = safeUrl(m.run_url);
-          var link = run ? ' · <a href="' + escAttr(run) +
-            '" target="_blank" rel="noopener noreferrer" style="color:var(--acc)">CI</a>' : '';
-          simHtml += '<li style="margin-bottom:4px"><strong>' + pct + '%</strong> · ' +
-            esc(m.fix_ref || m.trace_id) + ' <span class="muted">(' +
-            esc((m.reasons || []).join(", ")) + ')</span>' + link + '</li>';
-        });
-        simHtml += '</ul>';
-        html += card("Seen before? — Fix Memory", simHtml);
-      }
-
-      html += card("Replayability",
-        '<span class="grade">' + esc(rr.grade) + '</span> · score ' + esc(rr.score) +
-        (rr.warnings && rr.warnings.length ? '<pre>' + esc(JSON.stringify(rr.warnings, null, 2)) + '</pre>' : ''));
-      var diagBits = [];
-      if (sm.failing_status != null) diagBits.push('HTTP <span class="kv">' + esc(sm.failing_status) + '</span>');
-      if (sm.exception_type) diagBits.push('exception <span class="kv">' + esc(sm.exception_type) + '</span>');
-      if (sm.diagnostic_endpoint) diagBits.push('endpoint <span class="kv">' + esc(sm.diagnostic_endpoint) + '</span>');
-      html += card("Diagnostic — sanitized",
-        (diagBits.length ? '<div class="muted">' + diagBits.join(' · ') + '</div>' : '') +
-        '<div style="margin-top:6px">' + esc((diag.diagnostic || {}).recommended_next_step || "") + '</div>');
-
-      var scrub = pp.scrub || {};
-      var fields = scrub.scrubbed_fields || [];
-      var scrubStatus = scrub.scrub_status || "—";
-      var fieldsHtml = fields.length
-        ? '<div class="muted" style="margin-top:6px">Fields scrubbed before storage:</div><pre>' + esc(JSON.stringify(fields, null, 2)) + '</pre>'
-        : '<div class="muted" style="margin-top:6px">No fields required scrubbing on this trace.</div>';
-      html += card("Privacy posture",
-        '<div>Scrub status: <span class="grade" style="color:var(--ok)">' + esc(scrubStatus) + '</span></div>' +
-        fieldsHtml +
-        '<div class="muted" style="margin-top:8px">Never captured:</div>' +
-        '<pre>' + esc(JSON.stringify(pp.never_captured || [], null, 2)) + '</pre>' +
-        '<div class="label">All records are scrubbed server-side before storage — only field names are kept, never the values.</div>');
-      detailEl.innerHTML = html;
-      // Wire actions via closures (no trace_id interpolated into inline onclick markup).
-      document.getElementById("act-modelview").onclick = function () { ssModelView(id); };
-      document.getElementById("act-attest").onclick = function () { ssAttest(id); };
-      document.getElementById("act-fragility").onclick = function () { ssFragility(id); };
-      document.getElementById("act-minrepro").onclick = function () { ssMinRepro(id); };
-      document.getElementById("act-repro").onclick = function () { ssRepro(id); };
-      document.getElementById("act-drafts").onclick = function () { ssDrafts(id); };
-      document.getElementById("act-github").onclick = function () { ssGithub(id); };
-      document.getElementById("act-deliver").onclick = function () { ssDeliver(id); };
-    } catch (e) { detailEl.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
-  }
-
-  window.ssRepro = async function (id) {
-    try { var r = await api("/session/" + id + "/playwright");
-      show("Playwright reproduction", r.playwright_code || "", true);
-    } catch (e) { show("Error", e.message); }
-  };
-  window.ssDrafts = async function (id) {
-    try { var r = await api("/session/" + id + "/export-preview", { method: "POST" });
-      show("Export preview (drafts — nothing sent)", JSON.stringify(r.drafts || {}, null, 2));
-    } catch (e) { show("Error", e.message); }
-  };
-  window.ssGithub = async function (id) {
-    try { var r = await api("/session/" + id + "/github/pr?dry_run=true",
-        { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, hdr()),
-          body: JSON.stringify({ approved_by: "dashboard-preview", idempotency_key: "preview-pr-" + id, dry_run: true }) });
-      show("Dry-run GitHub PR (nothing opened)", JSON.stringify(r.would_open || r, null, 2));
-    } catch (e) { show("Dry-run GitHub PR", e.message + "  (GitHub bridge not configured — that is expected)"); }
-  };
-  window.ssDeliver = async function (id) {
-    try { var r = await api("/session/" + id + "/deliver?dry_run=true",
-        { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, hdr()),
-          body: JSON.stringify({ approved_by: "dashboard-preview", idempotency_key: "preview-" + id }) });
-      show("Dry-run deliver (nothing sent)", JSON.stringify(r, null, 2));
-    } catch (e) { show("Dry-run deliver", e.message + "  (direct-write may be disabled — that is expected)"); }
-  };
-
-  // The model's-eye view: compose the exact MCP read-only tool outputs an agent receives
-  // for this trace, so an operator can see — and prove — precisely what reaches an LLM
-  // before approving a connection. Every tool here maps 1:1 to a Copilot-safe MCP tool
-  // (mcp_server.COPILOT_SAFE_OPERATIONS); nothing else is exposed to an agent.
-  window.ssModelView = async function (id) {
-    show("What an AI agent receives (MCP payload)", "Composing the model's-eye view…");
-    var tools = [
-      ["get_trace_summary", "/session/" + id + "/summary"],
-      ["get_replayability_score", "/session/" + id + "/replayability"],
-      ["get_privacy_posture", "/session/" + id + "/privacy-posture"],
-      ["get_diagnostic_summary", "/session/" + id + "/diagnostic-summary"],
-      ["generate_playwright_repro", "/session/" + id + "/playwright"]
-    ];
-    var results = await Promise.all(tools.map(function (t) {
-      return api(t[1]).catch(function (e) { return { error: String(e.message) }; });
-    }));
-    var pp = results[2] || {};
-    var never = pp.never_captured || [];
-    var body = '<div class="label" style="font-style:normal;margin:0 0 10px">This is the ' +
-      '<strong>entire</strong> payload any connected LLM or agent can receive for this trace, ' +
-      'over the read-only MCP tools. Nothing outside this leaves your boundary.</div>';
-    tools.forEach(function (t, i) {
-      body += '<div style="margin-top:10px">' +
-        '<span class="pill" style="color:var(--acc);border-color:var(--acc)">' + esc(t[0]) + '</span> ' +
-        '<span class="muted" style="font-size:11px">' + esc(t[1].replace(id, "{trace_id}")) + '</span></div>';
-      body += '<pre>' + esc(JSON.stringify(results[i], null, 2)) + '</pre>';
-    });
-    if (never.length) {
-      body += '<div class="card" style="margin-top:12px;border-color:var(--ok)">' +
-        '<h3 style="color:var(--ok)">Never reaches the model</h3>' +
-        '<pre>' + esc(JSON.stringify(never, null, 2)) + '</pre></div>';
+    if (!agents.length) {
+      root.appendChild(box("No agents connected", [
+        el("div", { class: "muted", text: "Nothing can read this host over MCP until you issue " +
+          "a scoped token above. That is the point: access is granted per agent, not per host." })
+      ]));
+    } else {
+      var rows = agents.map(function (a) {
+        var act = activity[a.id] || { reads: 0, denials: 0, last: null };
+        var revoke = el("button", { class: "link", text: a.revoked ? "revoked" : "Revoke" });
+        revoke.disabled = !!a.revoked;
+        revoke.onclick = async function () {
+          try { await adminApi("/agents/" + encodeURIComponent(a.id) + "/revoke", { method: "POST" }); }
+          finally { renderAgents(); }
+        };
+        return el("tr", {}, [
+          el("td", { text: a.name }),
+          el("td", {}, [el("span", { class: "pill acc", text: a.scope })]),
+          el("td", {}, [el("span", { class: "pill " + (a.revoked ? "bad" : "ok"),
+                                     text: a.revoked ? "revoked" : "active" })]),
+          el("td", { class: "mono", text: String(act.reads) }),
+          el("td", { class: "mono", text: String(act.denials) }),
+          el("td", { class: "muted", text: act.last ? String(act.last).slice(0, 19) : "—" }),
+          el("td", {}, [revoke])
+        ]);
+      });
+      root.appendChild(box("Connected agents", [
+        el("table", {}, [
+          el("thead", {}, [el("tr", {}, ["Name", "Scope", "Status", "Reads", "Denials", "Last seen", ""]
+            .map(function (h) { return el("th", { text: h }); }))]),
+          el("tbody", {}, rows)
+        ])
+      ]));
     }
-    showHtml("What an AI agent receives (MCP payload)", body);
-  };
 
-  // Evidence Attestation: a canonical, tamper-evident bundle anyone can verify independently.
-  window.ssAttest = async function (id) {
-    show("Signed evidence attestation", "Composing the attestation…");
-    try {
-      var r = await api("/session/" + id + "/attestation");
-      var body = '<div class="label" style="font-style:normal;margin:0 0 8px">A canonical, ' +
-        'tamper-evident evidence bundle' +
-        (r.signed ? ' <strong>signed with the tenant key</strong>' : ' (unsigned — hash only)') +
-        '. Anyone can verify it independently — recompute the hash, and (if signed) ' +
-        '<code>cosign verify-blob</code> with your public key.</div>' +
-        '<div style="margin-bottom:6px"><span class="pill" style="color:var(--ok);border-color:var(--ok)">' +
-        esc(r.bundle_sha256 || "") + '</span></div>' +
-        '<pre>' + esc(JSON.stringify(r.bundle, null, 2)) + '</pre>' +
-        (r.signature ? '<div class="muted" style="margin-top:8px">signature:</div><pre>' +
-          esc(r.signature) + '</pre>' : '') +
-        '<div class="label" style="margin-top:8px">' + esc(r.verify_recipe || "") + '</div>';
-      showHtml("Signed evidence attestation", body);
-    } catch (e) { show("Attestation", e.message); }
-  };
-
-  // Fragility Radar: which steps are most likely to break, ranked worst-first.
-  window.ssFragility = async function (id) {
-    try {
-      var r = await api("/session/" + id + "/fragility");
-      var rows = (r.fragility || []).map(function (f) {
-        var pct = Math.round((f.risk || 0) * 100);
-        var color = pct >= 70 ? "#f85149" : (pct >= 40 ? "var(--warn)" : "var(--ok)");
-        return '<tr><td style="padding:3px 10px 3px 0">step ' + esc(f.step_index) + '</td>' +
-          '<td style="padding:3px 10px 3px 0"><span class="pill">' + esc(f.stability) + '</span></td>' +
-          '<td style="padding:3px 10px 3px 0;color:' + color + '">' + pct + '%</td>' +
-          '<td class="muted" style="padding:3px 0;font-size:11px">' + esc(f.recommendation) + '</td></tr>';
-      }).join("");
-      var body = rows
-        ? '<div class="muted" style="margin-bottom:6px">' + esc(r.interactive_steps) +
-          ' interactive steps, ranked by how likely they are to break:</div>' +
-          '<table style="width:100%;border-collapse:collapse;font-size:12.5px"><tbody>' + rows + '</tbody></table>'
-        : '<p class="muted">No interactive steps to assess.</p>';
-      showHtml("Fragility radar", body);
-    } catch (e) { show("Fragility", e.message); }
-  };
-
-  // Minimal repro: the smallest failing path, compiled to Playwright.
-  window.ssMinRepro = async function (id) {
-    try {
-      var r = await api("/session/" + id + "/minimal-repro");
-      var body = '<div class="muted" style="margin-bottom:6px">Reduced from ' +
-        esc(r.original_steps) + ' to <strong>' + esc(r.reduced_steps) +
-        '</strong> steps (the failing-route path):</div><pre>' + esc(r.playwright_code || "") + '</pre>';
-      showHtml("Minimal repro", body);
-    } catch (e) { show("Minimal repro", e.message); }
-  };
-
-  // Insert a popout whose body is already-built, esc()-sanitized HTML (vs show(), which
-  // treats its body as plain text). Every dynamic value above passes through esc().
-  function showHtml(title, bodyHtml) {
-    var top = detailEl.querySelector("#popout");
-    if (top) top.remove();
-    var div = document.createElement("div");
-    div.id = "popout"; div.className = "card";
-    div.innerHTML = '<h3>' + esc(title) + '</h3>' + bodyHtml;
-    detailEl.insertBefore(div, detailEl.firstChild);
+    root.appendChild(box("What no agent can ever do", [
+      el("div", { class: "chips" }, ["delete or purge traces", "change retention",
+        "trigger the kill switch", "read raw traces or user identity", "write to a system of record",
+        "open, approve, or merge a pull request"].map(function (t) {
+          return el("span", { class: "chip strike", text: t });
+        }))
+    ]));
+    mount(root);
   }
 
-  function show(title, body, copyable) {
-    var top = detailEl.querySelector("#popout");
-    if (top) top.remove();
-    var div = document.createElement("div");
-    div.id = "popout"; div.className = "card";
-    div.innerHTML = '<h3>' + esc(title) + '</h3>' +
-      (copyable ? '<button id="cp" style="margin-bottom:8px">Copy</button>' : '') +
-      '<pre>' + esc(body) + '</pre>';
-    detailEl.insertBefore(div, detailEl.firstChild);
-    if (copyable) document.getElementById("cp").onclick = function () {
-      navigator.clipboard && navigator.clipboard.writeText(body); };
+  // ---- governance -----------------------------------------------------------------------
+  async function renderGovernance() {
+    mount(spinner("Loading governance…"));
+    var cfg, audit;
+    try {
+      cfg = await adminApi("/config/scrub");
+      audit = await api("/audit?limit=200");
+    } catch (e) { return mount(fail(e)); }
+
+    var root = el("div", { class: "detail" });
+    var overrides = cfg.overrides || {};
+    var patterns = overrides.patterns || [];
+    var keys = overrides.forbidden_keys || [];
+
+    // Scrub policy
+    var label = el("input", { placeholder: "label (e.g. empid)", "aria-label": "pattern label" });
+    var regex = el("input", { placeholder: "regex (e.g. EMP-\\d+)", "aria-label": "pattern regex" });
+    var keyIn = el("input", { placeholder: "metadata key", "aria-label": "metadata key" });
+    var pending = { patterns: patterns.slice(), forbidden_keys: keys.slice() };
+    var listNode = el("div", {});
+
+    function drawLists() {
+      clear(listNode);
+      listNode.appendChild(el("div", { class: "note", text: "Custom redaction patterns" }));
+      listNode.appendChild(pending.patterns.length
+        ? el("div", { class: "chips" }, pending.patterns.map(function (p) {
+            return el("span", { class: "chip mono", text: (p.label || "?") + " · " + (p.regex || "") });
+          }))
+        : el("div", { class: "muted", text: "None yet." }));
+      listNode.appendChild(el("div", { class: "note", text: "Extra dropped metadata keys" }));
+      listNode.appendChild(pending.forbidden_keys.length
+        ? el("div", { class: "chips" }, pending.forbidden_keys.map(function (k) {
+            return el("span", { class: "chip mono", text: k });
+          }))
+        : el("div", { class: "muted", text: "None yet." }));
+    }
+    drawLists();
+
+    var addPat = el("button", { class: "ghost", text: "Add pattern", onclick: function () {
+      if (!label.value.trim() || !regex.value.trim()) return;
+      pending.patterns.push({ label: label.value.trim(), regex: regex.value.trim() });
+      label.value = ""; regex.value = ""; drawLists();
+    } });
+    var addKey = el("button", { class: "ghost", text: "Add key", onclick: function () {
+      if (!keyIn.value.trim()) return;
+      pending.forbidden_keys.push(keyIn.value.trim()); keyIn.value = ""; drawLists();
+    } });
+
+    var previewIn = el("textarea", { rows: 3, style: "width:100%",
+      "aria-label": "text to preview", placeholder: "Paste sample text to see what would be redacted…" });
+    var previewOut = el("pre", { text: "" });
+    var previewBtn = el("button", { class: "ghost", text: "Preview redaction",
+      onclick: async function () {
+        try {
+          var r = await adminApi("/scrub/preview", jsonPost({ text: previewIn.value,
+            overrides: pending }));
+          previewOut.textContent = r.redacted || "";
+        } catch (e) { previewOut.textContent = e.message; }
+      } });
+    var saveBtn = el("button", { class: "primary", text: "Save scrub policy",
+      onclick: async function () {
+        try { await adminApi("/config/scrub", jsonPost(pending)); renderGovernance(); }
+        catch (e) { previewOut.textContent = e.message; }
+      } });
+
+    root.appendChild(box("Scrub policy", [
+      el("div", { class: "muted", text: "Base profile " + (cfg.profile || cfg.base_profile || "—") +
+        ". Additions can only TIGHTEN the boundary — they add redaction and can never remove a " +
+        "built-in PII rule." }),
+      el("div", { class: "row-actions", style: "margin-top:12px" }, [label, regex, addPat]),
+      el("div", { class: "row-actions" }, [keyIn, addKey]),
+      listNode,
+      el("div", { style: "margin-top:14px" }, [previewIn]),
+      el("div", { class: "row-actions" }, [previewBtn, saveBtn]),
+      previewOut
+    ]));
+
+    // Audit
+    var entries = audit.entries || [];
+    if (!entries.length) {
+      root.appendChild(box("Audit trail", [
+        el("div", { class: "muted", text: "No entries yet — the trail fills as soon as anyone " +
+          "reads evidence. Open a shape and come back." }),
+        el("div", { class: "row-actions", style: "margin-top:10px" },
+           [el("button", { class: "primary", text: "Open the board", onclick: function () { go("board"); } })])
+      ]));
+    } else {
+      var arows = entries.map(function (e) {
+        var d = e.detail || {};
+        var ref = d.trace_id || d.correlation_id || d.shape_id || d.agent_id || "";
+        return el("tr", {}, [
+          el("td", { class: "k mono", text: String(e.created_at || "").slice(0, 19) }),
+          el("td", {}, [el("span", { class: "pill", text: e.action })]),
+          el("td", { text: e.actor }),
+          el("td", { class: "muted mono", text: ref })
+        ]);
+      });
+      root.appendChild(box("Audit trail — every operator read is recorded", [
+        el("div", { class: "muted", text: "Newest first · " + entries.length +
+          " entries · detail carries structural ids only, never PII." }),
+        el("table", { style: "margin-top:10px" }, [
+          el("thead", {}, [el("tr", {}, ["Time", "Action", "Actor", "Reference"].map(function (h) {
+            return el("th", { text: h });
+          }))]),
+          el("tbody", {}, arows)
+        ])
+      ]));
+    }
+    mount(root);
   }
+
+  // ---- boot -----------------------------------------------------------------------------
+  renderNav();
+  if (token) { loadStatus(); go("board"); } else { renderGate(); }
 })();
 </script>
 </body>

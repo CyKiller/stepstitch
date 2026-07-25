@@ -147,8 +147,10 @@ def test_dashboard_is_non_destructive_and_carries_audit_labels():
     assert "every read and config change is audited" in body
     assert "drafts are previews, nothing is sent" in body
     assert "evidence is never edited or deleted here" in body
-    # Privacy posture surfaces the scrub report (status + scrubbed field names).
-    assert "scrubbed_fields" in body and "Scrub status" in body
+    # Privacy proof surfaces the scrub report as a plain-language narrative (not raw JSON),
+    # backed by the same scrubbed-field data.
+    assert "scrubbed_fields" in body and "Privacy proof" in body
+    assert "never captures, ever" in body
     # No destructive operation is wired into the UI.
     assert "/maintenance/purge" not in body
     assert "/by-user/" not in body
@@ -156,6 +158,49 @@ def test_dashboard_is_non_destructive_and_carries_audit_labels():
     # Any deliver/PR action the UI exposes is dry-run only.
     assert "/deliver?dry_run=true" in body
     assert "/github/pr?dry_run=true" in body
+
+
+def test_dashboard_is_organised_around_failure_shapes():
+    # The console's primary object is the failure SHAPE, not the trace: it reads /shapes and
+    # lays the pipeline out in the columns derived from the verdict state machine.
+    client, _ = _client()
+    body = client.get("/dashboard").text
+    assert 'api("/shapes")' in body, "the board must read the clustered shapes endpoint"
+    for stage in ("untriaged", "known_shape", "repro_invalid", "reproduced", "fix_failed",
+                  "fixed"):
+        assert f'"{stage}"' in body, f"board missing stage column: {stage}"
+    # Three destinations, not a row of equal-weight buttons.
+    for dest in ("Board", "Agents", "Governance"):
+        assert f'label: "{dest}"' in body
+
+
+def test_dashboard_builds_dom_instead_of_concatenating_markup():
+    # Every node goes through el(), which sets textContent / setAttribute. Nothing may reach
+    # innerHTML — that is the structural version of the XSS guarantee the tests above grep for.
+    client, _ = _client()
+    body = client.get("/dashboard").text
+    script = body.split("<script", 1)[1]
+    assert "innerHTML" not in script, "console markup must be built via el(), never innerHTML"
+    assert "function el(tag, attrs, kids)" in script
+
+
+def test_dashboard_has_no_popout_and_closes_the_ci_loop():
+    # Sections render in place; nothing is injected above what the operator is reading.
+    client, _ = _client()
+    body = client.get("/dashboard").text
+    assert "insertBefore" not in body, "sections must render in place, not as injected popouts"
+    # The console must hand the operator the snippet that reports a repro outcome back to
+    # /verify — without it the corpus never fills and Fix Memory has nothing to match.
+    assert "/verify" in body and "pre_passed" in body and "post_passed" in body
+
+
+def test_dashboard_states_the_privacy_boundary_ambiently():
+    # The claim is permanent chrome, not a card you have to scroll to.
+    client, _ = _client()
+    body = client.get("/dashboard").text
+    header_region = body.split('<main class="view"', 1)[0]
+    assert "never captures, ever" in header_region
+    assert 'class="privacy"' in header_region
 
 
 def test_ingest_requires_bearer():
