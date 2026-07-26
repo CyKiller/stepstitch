@@ -7,7 +7,8 @@
       "include-component-in-tag": false,
       "extra-files": [
         "src/tracker.ts",
-        "service/pyproject.toml"
+        "service/pyproject.toml",
+        "web/src/lib/version.ts"
       ]
     }
   }
