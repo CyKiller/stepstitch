@@ -6,6 +6,12 @@ import { GITHUB_URL } from "@/lib/links";
 
 type Item = { icon: Icon; title: string; desc: string; proof: string; href: string };
 
+// The version this section describes. Deliberately PINNED, not tracked to the current
+// release: these three moats landed in 0.6, and auto-bumping the label would claim they
+// are new in whatever ships next. When a later release earns its own section, change this
+// literal and the items together — never one without the other.
+const SHIPPED_IN = "0.6";
+
 // Three moats shipped in 0.6 — each a first-class API + MCP tool, structural and NPI-free.
 const items: Item[] = [
   {
@@ -35,7 +41,7 @@ export function WhatsNew() {
   return (
     <Section id="whats-new" className="border-b border-line">
       <SectionHeader
-        eyebrow="New in 0.6"
+        eyebrow={`New in ${SHIPPED_IN}`}
         title="Three moats nobody else has"
         body="Built on the primitives only StepStitch holds — a deterministic compiler, a provable scrubber, a verified-fix corpus, and supply-chain signing. Each is an open-source API and an MCP tool."
       />
@@ -65,12 +71,12 @@ export function WhatsNew() {
 
       <Reveal className="mt-6">
         <a
-          href={`${GITHUB_URL}/releases/tag/v0.6.0`}
+          href={`${GITHUB_URL}/releases/tag/v${SHIPPED_IN}.0`}
           target="_blank"
           rel="noreferrer"
           className="text-sm font-semibold text-accent hover:underline"
         >
-          See the 0.6.0 release →
+          See the {SHIPPED_IN}.0 release →
         </a>
       </Reveal>
     </Section>
