@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Has Railway token?
         id: tok
         run: echo "has=${{ secrets.RAILWAY_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
@@ -34,7 +34,7 @@ jobs:
         run: railway up --ci --service stepstitch-api --environment "pr-${PR}"
       - name: Comment preview info
         if: steps.tok.outputs.has == 'true'
-        uses: marocchino/sticky-pull-request-comment@v3
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
           message: |
             🚀 Preview deployed to Railway environment `pr-${{ github.event.pull_request.number }}`.
