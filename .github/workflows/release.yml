@@ -29,8 +29,8 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           # Node 20 for consistency with CI (publish job runs tsc-only `npm run release`).
           node-version: "20"
@@ -70,8 +70,8 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with: { python-version: "3.11" }
       - run: pip install build
       - run: python -m build ./service --outdir dist
@@ -80,7 +80,7 @@ jobs:
         run: echo "has=${{ secrets.PYPI_API_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
       - name: Publish to PyPI
         if: steps.tok.outputs.has == 'true'
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # v1.14.1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
           packages-dir: dist
@@ -91,21 +91,21 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
       - name: Compute version + lowercase owner
         id: meta
         run: |
           echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Ingest API image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           file: Dockerfile
@@ -115,7 +115,7 @@ jobs:
             ghcr.io/${{ steps.meta.outputs.owner }}/stepstitch-api:${{ steps.meta.outputs.version }}
             ghcr.io/${{ steps.meta.outputs.owner }}/stepstitch-api:latest
       - name: MCP connector image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: service
           file: service/Dockerfile.mcp
