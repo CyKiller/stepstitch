@@ -4,6 +4,23 @@ All notable changes to StepStitch are recorded here. Versions are repo-wide tags
 SDK (`@stepstitch/tracker`) and the backend (`stepstitch_service`) are versioned in
 lockstep per `RELEASE.md`.
 
+## [0.7.0](https://github.com/CyKiller/stepstitch/compare/v0.6.0...v0.7.0) (2026-07-26)
+
+
+### Features
+
+* **service:** connector platform — GitHub, Linear, Slack + Safe Agent Packet ([78afb33](https://github.com/CyKiller/stepstitch/commit/78afb3385d545109dac397e67c9a1df0ca2c5570))
+* **service:** failure shapes — cluster traces by structural fingerprint ([afb242a](https://github.com/CyKiller/stepstitch/commit/afb242ab25bc7279302e54f7776b725ba18f496c))
+* **web:** drop the pricing frame, surface the console board ([023fa9c](https://github.com/CyKiller/stepstitch/commit/023fa9cd73b74930f3a7ba301cdd19c8dbd2a919))
+* **web:** positioning reframe — moat-led hero + 'New in 0.6' section ([645f2a8](https://github.com/CyKiller/stepstitch/commit/645f2a87fb3defff32ac1b399c273daeb7e9ae8b))
+
+
+### Bug Fixes
+
+* **web:** match the console's plain wording on the site board ([10d52f7](https://github.com/CyKiller/stepstitch/commit/10d52f7b8b7aea12125c2ab09c2eece380349d5a))
+* **web:** remove the duplicated footer link ([63d94ff](https://github.com/CyKiller/stepstitch/commit/63d94ffb7bf73a9da85a07b8bc71acb089aa36a6))
+* **web:** single-source the released version so the site cannot go stale ([4f28465](https://github.com/CyKiller/stepstitch/commit/4f2846535977753ac732df557b4e0ff79621a238))
+
 ## [0.6.0](https://github.com/CyKiller/stepstitch/compare/v0.5.0...v0.6.0) (2026-06-28)
 
 
