@@ -4,6 +4,19 @@ All notable changes to StepStitch are recorded here. Versions are repo-wide tags
 SDK (`@stepstitch/tracker`) and the backend (`stepstitch_service`) are versioned in
 lockstep per `RELEASE.md`.
 
+## [0.8.0](https://github.com/CyKiller/stepstitch/compare/v0.7.0...v0.8.0) (2026-07-26)
+
+
+### Features
+
+* **server:** rebuild the console as a dashboard — overview, plain language, shape-first ([#52](https://github.com/CyKiller/stepstitch/issues/52)) ([fb62332](https://github.com/CyKiller/stepstitch/commit/fb62332cfe0c4ef06aa8b2b45e6e337956072179))
+
+
+### Bug Fixes
+
+* **docs:** let release-please bump the release named in STATUS.md ([#65](https://github.com/CyKiller/stepstitch/issues/65)) ([f9b46e2](https://github.com/CyKiller/stepstitch/commit/f9b46e23c0510fc47397695c5cad2efafd3fcecb))
+* **hooks:** scope the authorship gate to commits not already on the remote ([e7b2519](https://github.com/CyKiller/stepstitch/commit/e7b2519ebacf0ead3b604ce541186961f2d55e97))
+
 ## [0.7.0](https://github.com/CyKiller/stepstitch/compare/v0.6.0...v0.7.0) (2026-07-26)
 
 
