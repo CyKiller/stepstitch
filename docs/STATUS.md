@@ -11,8 +11,8 @@ CI gate re-run as the release gate before any artifact is pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **264** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **46** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Service (compiler, router, privacy, connectors) | **337** | `PYTHONPATH=service pytest service/tests/` |
+| Host (auth, dashboard, real Postgres) | **65** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **22** | `npx vitest run` |
 | Web (marketing site + copy claims) | **38** | `cd web && npx vitest run` |
 
@@ -54,6 +54,8 @@ import-linter layering contract.
 | Editable scrub policy | `server/` scrub config | `test_scrub_config.py` |
 | Observability | `server/metrics.py` | `test_observability.py` |
 | Operator console (read-only, CSP `default-src 'none'`) | `server/dashboard.py` | `test_host.py` |
+| Overview dashboard — metrics, charts, glyph constellation | `metrics.py` (served on `/shapes`, not recomputed client-side) | `test_metrics.py`, `test_shapes_endpoints.py`, `test_dashboard_charts.py` |
+| Plain-language layer (technical detail behind a toggle) | `humanize.py` | `test_humanize.py` |
 
 ### Moats (0.6)
 

@@ -54,6 +54,11 @@ source_modules = [
     "stepstitch_service.router",
     "stepstitch_service.scrubber",
     "stepstitch_service.compiler",
+    # The console's pure layers. metrics is now served on /shapes rather than mirrored in the
+    # dashboard's JavaScript, so it is core and belongs under the same boundary as the rest.
+    "stepstitch_service.shapes",
+    "stepstitch_service.metrics",
+    "stepstitch_service.humanize",
     "stepstitch_service.replayability",
     "stepstitch_service.retention",
     "stepstitch_service.profiles",

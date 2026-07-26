@@ -200,3 +200,51 @@ def test_board_places_each_shape_in_exactly_one_column():
     assert sum(len(v) for v in columns.values()) == len(shapes) == 2
     assert columns[STAGE_FIXED][0]["fingerprint"]["route"] == "/accounts/:id/transfer"
     assert columns[STAGE_UNTRIAGED][0]["fingerprint"]["route"] == "/checkout"
+
+
+# ---- daily tally ------------------------------------------------------------------------
+# The overview chart plots people-per-day, which only exists because cluster() keeps each
+# trace's date instead of collapsing them to first_seen/last_seen. These guard that tally.
+
+def test_daily_counts_traces_per_day():
+    shapes = cluster([
+        _trace("t1", TRANSFER, created="2026-07-01T09:00:00+00:00"),
+        _trace("t2", TRANSFER, created="2026-07-01T22:30:00+00:00"),
+        _trace("t3", TRANSFER, created="2026-07-03T04:00:00+00:00"),
+    ])
+    assert shapes[0]["daily"] == {"2026-07-01": 2, "2026-07-03": 1}
+
+
+def test_daily_sums_to_occurrences():
+    """The invariant that keeps the chart and the metric tiles telling the same story:
+    every trace counted in `occurrences` is also counted on exactly one day."""
+    shapes = cluster([
+        _trace("t1", TRANSFER, created="2026-07-01T00:00:00+00:00"),
+        _trace("t2", TRANSFER, created="2026-07-02T00:00:00+00:00"),
+        _trace("t3", TRANSFER, created="2026-07-02T00:00:00+00:00"),
+        _trace("t4", CHECKOUT, created="2026-07-05T00:00:00+00:00"),
+    ])
+    assert len(shapes) == 2
+    for shape in shapes:
+        assert sum(shape["daily"].values()) == shape["occurrences"]
+
+
+def test_daily_omits_days_with_no_traces():
+    """Absent, not zero. The consumer supplies the date axis, so only it knows which quiet
+    days fall inside the window worth drawing."""
+    shapes = cluster([
+        _trace("t1", TRANSFER, created="2026-07-01T00:00:00+00:00"),
+        _trace("t2", TRANSFER, created="2026-07-04T00:00:00+00:00"),
+    ])
+    assert sorted(shapes[0]["daily"]) == ["2026-07-01", "2026-07-04"]
+
+
+def test_daily_skips_traces_with_no_timestamp():
+    """A null created_at must not become a bogus bucket — but the trace still counts as an
+    occurrence, so daily can legitimately sum to less than occurrences here."""
+    shapes = cluster([
+        _trace("t1", TRANSFER, created=None),
+        _trace("t2", TRANSFER, created="2026-07-02T00:00:00+00:00"),
+    ])
+    assert shapes[0]["daily"] == {"2026-07-02": 1}
+    assert shapes[0]["occurrences"] == 2

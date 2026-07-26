@@ -5,6 +5,8 @@ a fingerprint, that traces sharing one collapse into a single shape, that verifi
 between columns, and that the reads are audited. Its DB fake tracks the real column order (the
 one in test_verification_endpoints.py predates the fingerprint columns).
 """
+from datetime import datetime, timezone
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -193,3 +195,46 @@ def test_shapes_expose_no_trace_body():
     raw = client.get(f"{_PFX}/shapes").text
     for leaked in ("explanation", "footsteps", "trace_metadata", "_scrub"):
         assert leaked not in raw
+
+
+# ---- overview ---------------------------------------------------------------------------
+# The console renders these numbers rather than recomputing them. Before this, metrics.py was
+# fully tested and imported by nothing, while the console mirrored the same maths in
+# JavaScript — so the arithmetic actually on screen was the one copy under no test at all.
+
+def test_shapes_serves_the_overview_block():
+    client, _ = _build()
+    for _ in range(3):
+        _ingest(client)
+    _ingest(client, route="/checkout", status=422, selector="[data-testid=apply-promo]")
+
+    ov = client.get(f"{_PFX}/shapes").json()["overview"]
+    assert ov["total"] == 2                 # two distinct shapes
+    assert ov["open"] == 2
+    assert ov["people_affected"] == 4       # 3 transfer reports + 1 checkout
+    assert ov["pages"][0] == {"route": "/accounts/:id/transfer", "people": 3}
+
+
+def test_overview_axis_is_thirty_days_ending_today():
+    client, _ = _build()
+    _ingest(client)
+    ov = client.get(f"{_PFX}/shapes").json()["overview"]
+    assert len(ov["days"]) == 30
+    assert ov["days"] == sorted(ov["days"]), "axis must run oldest-first"
+    assert ov["days"][-1] == datetime.now(timezone.utc).date().isoformat()
+    # Both series are keyed to that axis, so they line up on the same x-positions.
+    assert len(ov["series"]) == len(ov["new_shapes_series"]) == 30
+
+
+def test_overview_charts_people_not_shape_count():
+    """Four reports of one bug is one shape but four people — the chart must show four.
+
+    This is the whole point of the series change: plotting new-shapes-per-day drew a flat
+    line on real data because a deployment yields a handful of distinct failures a month.
+    """
+    client, _ = _build()
+    for _ in range(4):
+        _ingest(client)
+    ov = client.get(f"{_PFX}/shapes").json()["overview"]
+    assert sum(ov["series"]) == 4            # people
+    assert sum(ov["new_shapes_series"]) == 1  # distinct failures
