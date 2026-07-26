@@ -1,79 +1,119 @@
 # StepStitch — completion status & definition of done
 
-This is the acceptance ledger for the enterprise evidence-layer plan. "Done" means:
-backed by code **and** proven by a named test/gate. The single end-to-end acceptance
-test is `service/tests/test_golden_path.py`.
+This is the acceptance ledger. "Done" means backed by code **and** proven by a named
+test or gate that exists in this repository — a row with no runnable proof does not
+belong here. The single end-to-end acceptance test is `service/tests/test_golden_path.py`.
 
-## Scoring
+**Current release: 0.7.0** — published to npm, PyPI and GHCR (multi-arch), with the full
+CI gate re-run as the release gate before any artifact is pushed.
 
-- **100% of engineering-completable scope is done.** Everything that can be built and
-  proven without external credentials or a product decision is shipped and green.
-- The remaining items are **decision-gated** or **credential-gated**, not engineering
-  work. They are listed below with their exact unblocker.
+## Gates
+
+| Suite | Tests | Command |
+|---|---|---|
+| Service (compiler, router, privacy, connectors) | **264** | `PYTHONPATH=service pytest service/tests/` |
+| Host (auth, dashboard, real Postgres) | **46** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| SDK (type-check + redaction proof) | **22** | `npx vitest run` |
+| Web (marketing site + copy claims) | **38** | `cd web && npx vitest run` |
+
+Counts are the number pytest/vitest **collect**, and they are enforced: each suite verifies
+its own row (`test_status_ledger.py`, `test_status_ledger_host.py`),
+so CI fails if this table drifts or cites a test that does not exist. The check is split
+per suite deliberately — the Service job does not install the host's dependencies, so
+counting `server/tests` from there under-reports without erroring. The old version of this
+doc sat a month stale claiming "183 service + 31 host" and naming a proof that was not in
+the repository.
+
+Also blocking: `ruff`, `mypy`, `tsc --noEmit`, `eslint`, CodeQL, the executable-repro proof
+(`scripts/prove-repro-executes.mjs`), the compliance-evidence drift guard, and the
+import-linter layering contract.
 
 ## Shipped — done (proven)
+
+### Core evidence layer
 
 | Capability | Code | Proof |
 |---|---|---|
 | Privacy-by-default SDK + redaction | `src/` | `tests/redaction-proof.test.ts` |
-| Deterministic Playwright compiler | `service/.../compiler.py` | `service/tests/test_compiler.py`, `scripts/prove-repro-executes.mjs` |
-| Decoupled router (host injects auth/DB) | `service/.../router.py` | `service/tests/test_router_smoke.py` |
-| **Per-operator OIDC SSO + RBAC (host)** | `server/oidc.py` (RS256/JWKS verifier + `require_roles`); `router.py` injected `require_destructive` | `server/tests/test_oidc.py` (real audit actor per operator; operator denied destructive, admin allowed) + `server/tests/test_pg_integration.py` (real Postgres) |
-| Consent / GPC / DNT, kill switch, split retention | SDK + `router.py` + `retention.py` | router + retention tests |
-| **Server-side scrubber (NPI trust boundary)** | `scrubber.py` | `test_scrubber.py` |
-| **Replayability score** | `replayability.py` | `test_replayability.py` |
-| **Deployment profiles** | `profiles.py` + `profiles/*.json` | `test_profiles.py` (incl. drift guard) |
-| **Sanitized frontend diagnostics** | SDK + `scrubber.py` + router | SDK tests + `test_scrubber.py` |
-| **Financial-services support drafts (ServiceNow/Salesforce/Genesys)** | `integrations/` | `test_integrations.py` |
-| **Copilot-safe surface + OpenAPI pack** | router + `copilot/` | `test_copilot_surface.py` |
-| **MCP universal connector** (PRODUCT-PLAN P0+P1) | `mcp_server.py`, `mcp_cli.py` | `test_mcp_surface.py` (3-way parity + no-destructive + E2E dispatch) |
-| **Connector enablement (MCP + OpenAPI)** (PRODUCT-PLAN P2) | `copilot/MCP-SETUP.md`, `copilot/SETUP.md` | `test_copilot_pack.py` (tool-SSOT drift + MCP path linked) |
-| **Open-core split** (PRODUCT-PLAN P3) | adapters injected (`router.py` + `integrations/bundle.py`); Apache-2.0 `LICENSE` + `COMMERCIAL.md`; `Dockerfile.mcp` + `docs/DEPLOY.md` | `test_open_core_boundary.py` + `.importlinter` (contract KEPT) |
-| **Compliance pack** (PRODUCT-PLAN P4) | regulatory crosswalk + MRM section generated from live policy (`compliance.py`); profile-aware (Reg S-P + 2026 MRM / HIPAA) | `test_compliance.py` (crosswalk + drift guard) |
-| **Reproduction-quality eval gate** (PRODUCT-PLAN P5) | quality oracle on compiler + scorer; `release-gate:evidence` npm script | `test_repro_eval.py` |
-| **Compliance evidence (generated)** | `compliance.py` | `test_compliance.py` (drift guard) |
-| **End-to-end golden path** | (all of the above) | `test_golden_path.py` |
-| Supply chain (SBOM, SRI, signed tag) | `scripts/`, `RELEASE.md` | `sbom.cdx.json`, release tag |
-| Reference integration | re-vendored @ v0.3.0 | reference app `test_stepstitch_*` (incl. real-Postgres proof) |
+| Deterministic Playwright compiler | `service/.../compiler.py` | `test_compiler.py`, `scripts/prove-repro-executes.mjs` |
+| Decoupled router (host injects auth/DB) | `service/.../router.py` | `test_router_smoke.py` |
+| Server-side scrubber (NPI trust boundary) | `scrubber.py` | `test_scrubber.py`, `test_scrub_overrides.py` |
+| Replayability score | `replayability.py` | `test_replayability.py` |
+| Deployment profiles | `profiles.py` + `profiles/*.json` | `test_profiles.py` (incl. drift guard) |
+| Consent / GPC / DNT, kill switch, split retention | SDK + `router.py` + `retention.py` | `test_retention.py`, `test_retention_job.py` |
+| Reproduction-quality eval gate | quality oracle on compiler + scorer | `test_repro_eval.py` |
+| End-to-end golden path | (all of the above) | `test_golden_path.py` |
 
-Gates: **183 service + 31 host (incl. OIDC/RBAC + real-Postgres) + 22 SDK tests green; type-check clean; executable repro proof green; import-linter contract KEPT.**
+### Host, governance and operations
 
-## Architecture decision: StepStitch core, integrations via Copilot
+| Capability | Code | Proof |
+|---|---|---|
+| Per-operator OIDC SSO + RBAC | `server/oidc.py` (RS256/JWKS + `require_roles`) | `test_oidc.py`, `test_pg_integration.py` (real Postgres) |
+| Scoped, revocable agent tokens | `server/agents.py` | `test_agents.py`, `test_agent_enforcement.py` |
+| Durable audit trail | `server/audit.py` | `test_audit_endpoint.py` |
+| Editable scrub policy | `server/` scrub config | `test_scrub_config.py` |
+| Observability | `server/metrics.py` | `test_observability.py` |
+| Operator console (read-only, CSP `default-src 'none'`) | `server/dashboard.py` | `test_host.py` |
 
-**Chosen model:** StepStitch is the core privacy engine. The "supporting areas"
-(ServiceNow, Salesforce, Genesys workflows, …) are reached through a **Microsoft Copilot
-Studio** agent using Microsoft's **native connectors** or governed Power Platform flows
-— *not* through StepStitch-built HTTP adapters. StepStitch exposes sanitized reads,
-sanitized diagnostics, and flat connector-ready **drafts**; the agent's native
-connector/flow performs the governed, human-approved create or handoff.
+### Moats (0.6)
 
-Consequence: the **default** model builds no outbound CRM send layer — the agent's native
-connector/flow performs the governed create. The enablement is documentation + Copilot
-configuration, shipped in `copilot/`: `SETUP.md`, `connector-field-map.md`,
-`openapi-v2.json`, `system-prompt.md`, `action-policy.md`.
+| Capability | Code | Proof |
+|---|---|---|
+| Fix Memory — match a new bug against the verified-fix corpus | `fix_memory.py` | `test_fix_memory.py`, `test_similar_fixes.py` |
+| Evidence Attestation — canonical, tamper-evident, tenant-signed | `attestation.py` | `test_attestation.py`, `test_attestation_endpoint.py` |
+| Fragility Radar + minimal repro | `fragility.py` | `test_fragility.py`, `test_fragility_endpoints.py` |
+| Verified-fix engine (red→green verdict + corpus) | `verification/verdict.py` | `test_verdict.py`, `test_verification_endpoints.py` |
 
-**Update (path-to-100):** an *optional* governed direct-write
-(`service/stepstitch_service/delivery/`) is being added for customers not on Power Platform.
-It is **off by default**, human-approval-gated, audited, and deliberately **excluded from the
-agent/MCP surface** — so the draft-only default and the no-NPI guarantee are unchanged.
+### Connectors and agent surface (0.7)
 
-## Current PR scope
+| Capability | Code | Proof |
+|---|---|---|
+| MCP universal connector | `mcp_server.py`, `mcp_cli.py` | `test_mcp_surface.py` (3-way parity, no-destructive, E2E dispatch) |
+| Copilot-safe surface + OpenAPI pack | router + `copilot/` | `test_copilot_surface.py`, `test_copilot_pack.py` |
+| Connector platform — GitHub, Linear, Slack | `integrations/{github,linear,slack}.py` | `test_connector_platform.py` |
+| Safe Agent Packet + adapter conformance | `integrations/{validation,conformance}.py` | `test_adapter_profile_robustness.py`, `test_integrations.py` |
+| Draft adapters — ServiceNow, Salesforce, Genesys | `integrations/` | `test_integrations.py` |
+| Repair Loop / GitHub bridge | `github_bridge/` | `test_github_{bridge,client,content,endpoints}.py` |
+| Governed direct-write (opt-in, off by default) | `delivery/` | `test_delivery.py`, `test_delivery_clients.py` |
+| **Failure shapes** — cluster traces by structural fingerprint | `shapes.py`, migration `0005` | `test_shapes.py`, `test_shapes_endpoints.py` |
 
-The v0.4.0 scope is the generic financial-services support pack: sanitized frontend
-diagnostics, ServiceNow/Salesforce/Genesys draft previews, and Copilot/Power Platform
-workflow docs. It intentionally contains no customer naming or unrelated platform scope.
+### Licensing, compliance, supply chain
+
+| Capability | Code | Proof |
+|---|---|---|
+| Open-core split (adapters injected, never imported by core) | `router.py` + `integrations/bundle.py` | `test_open_core_boundary.py` + import-linter contract |
+| Compliance pack — regulatory crosswalk + MRM, profile-aware | `compliance.py` | `test_compliance.py` (crosswalk + drift guard) |
+| Supply chain — SBOM, SRI, provenance-signed publish | `scripts/`, `RELEASE.md`, `.github/workflows/release.yml` | `sbom.cdx.json`, signed release assets |
+
+## Architecture decision: StepStitch core, integrations at the edge
+
+StepStitch is the core privacy engine. Supporting systems (ServiceNow, Salesforce,
+Genesys, and now GitHub/Linear/Slack) are reached either through an agent's own native
+connectors or through StepStitch's flat, connector-ready **drafts** — the agent performs
+the governed, human-approved create or handoff.
+
+The **default** builds no outbound send layer. An *optional* governed direct-write
+(`delivery/`) exists for customers not on Power Platform: off by default,
+human-approval-gated, audited, and deliberately excluded from the agent/MCP surface, so
+the draft-only default and the no-NPI guarantee are unchanged.
 
 ## Remaining — gated (not engineering)
 
 | Item | Why it's not "done" | Exact unblocker | Owner |
 |---|---|---|---|
-| **Stand up the Copilot agent** | The blueprint + connector field map are shipped; building the agent is a Power Platform configuration task in the customer tenant. | Follow `copilot/SETUP.md` in Copilot Studio: import the connector, attach native ServiceNow/Salesforce connectors, apply DLP + approval. | **You** (tenant config) |
-| ~~**OSS split** (public core vs. private adapters)~~ **— DECIDED** | Resolved: the project is **fully Apache-2.0 for now** (incl. the ServiceNow/Salesforce/Genesys adapters). The import boundary is kept as a *layering* rule, not a license one. A commercial edition may return later (`COMMERCIAL.md`). | Done. | **Decided** |
-| **Additional SDK framework packages** (react/vue/angular) | Deliberately deferred — premature breadth with no consumer. The current SDK + reference app is the only proven need. | A real consumer asks for one. | **Pull-driven** |
+| **Stand up the Copilot agent** | The blueprint + connector field map are shipped; building the agent is a Power Platform configuration task in the customer tenant. | Follow `copilot/SETUP.md`: import the connector, attach native adapters, apply DLP + approval. | **You** (tenant config) |
+| **Additional SDK framework packages** (react/vue/angular) | Deliberately deferred — premature breadth with no consumer. | A real consumer asks for one. | **Pull-driven** |
+| ~~**OSS split** (public core vs. private adapters)~~ | **Decided:** fully Apache-2.0, adapters included. The import boundary is kept as a *layering* rule, not a licensing one. | Done — see `COMMERCIAL.md`. | **Decided** |
+
+## Known gaps
+
+- **`scripts/backfill_fingerprints.py` does not exist.** Migration `0005` adds
+  `fingerprint` with no backfill, so traces stored before it have `NULL` and will not
+  cluster into a shape. Harmless on a fresh install; real for an existing deployment.
 
 ## Definition of 100%
 
-Literal 100% of the original maximalist plan = the three gated items above. None can be
+Literal 100% of the original maximalist plan = the gated items above. Neither can be
 *truthfully* marked complete by engineering alone — each needs a credential or a
-decision. Until then, the product is **feature-complete and production-proven** for the
+decision. Until then the product is feature-complete and production-proven for the
 standalone evidence-layer use case, which is the responsible "done."
