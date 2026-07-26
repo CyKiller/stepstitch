@@ -1,0 +1,19 @@
+# Canonical identity for the project's history.
+#
+# Commits were made from a few different machines and setups over time, which left the
+# same person recorded under five name/email combinations. GitHub already collapses these
+# into one contributor because it matches on the account's verified addresses, but local
+# tooling does not: `git shortlog`, `git log --author`, and anything counting contributors
+# would otherwise report five people.
+#
+# This file is display-only. It rewrites nothing, changes no commit, and breaks no link —
+# git simply reads through it when showing an author. The alternative, rewriting history
+# to correct the recorded names, would change every commit id and permanently break the
+# commit links in CHANGELOG.md and in the published releases.
+#
+# Format: Canonical Name <canonical@email>  Recorded Name <recorded@email>
+
+CyKiller <cykiller@msn.com>  CyKiller <Cykiller@msn.com>
+CyKiller <cykiller@msn.com>  Aaron Johnson <Cykiller@msn.com>
+CyKiller <cykiller@msn.com>  CyKiller <devway83@gmail.com>
+CyKiller <cykiller@msn.com>  StepStitch <devway83@gmail.com>
