@@ -11,15 +11,18 @@ CI gate re-run as the release gate before any artifact is pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **265** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **45** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Service (compiler, router, privacy, connectors) | **264** | `PYTHONPATH=service pytest service/tests/` |
+| Host (auth, dashboard, real Postgres) | **46** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **22** | `npx vitest run` |
 | Web (marketing site + copy claims) | **38** | `cd web && npx vitest run` |
 
-Counts are the number pytest/vitest **collect**, and are enforced — see
-`service/tests/test_status_ledger.py`, which fails CI if this table drifts from reality or
-cites a test that does not exist. The old version of this doc sat a month stale claiming
-"183 service + 31 host" and naming a proof that was not in the repository.
+Counts are the number pytest/vitest **collect**, and they are enforced: each suite verifies
+its own row (`service/tests/test_status_ledger.py`, `server/tests/test_status_ledger.py`),
+so CI fails if this table drifts or cites a test that does not exist. The check is split
+per suite deliberately — the Service job does not install the host's dependencies, so
+counting `server/tests` from there under-reports without erroring. The old version of this
+doc sat a month stale claiming "183 service + 31 host" and naming a proof that was not in
+the repository.
 
 Also blocking: `ruff`, `mypy`, `tsc --noEmit`, `eslint`, CodeQL, the executable-repro proof
 (`scripts/prove-repro-executes.mjs`), the compliance-evidence drift guard, and the

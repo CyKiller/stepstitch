@@ -57,33 +57,45 @@ def test_stated_release_matches_package_json():
     )
 
 
-def _collected(path: Path) -> int:
-    """Ask pytest itself how many tests live under `path`."""
+def stated_count(label: str) -> int:
+    """The number the Gates table claims for a suite."""
+    row = re.search(rf"^\|\s*{label}\b[^|]*\|\s*\*\*(\d+)\*\*", _doc(), re.M)
+    assert row, f"no Gates row for {label} in STATUS.md"
+    return int(row.group(1))
+
+
+def collected_count(suite: str) -> int:
+    """Ask pytest itself how many tests live under `suite`.
+
+    Only ever call this for the suite the *current* environment owns. Counting another
+    suite from here is unreliable: CI's Service job does not install the host's
+    dependencies, so collecting server/tests there silently reports 36 instead of 45 —
+    modules that cannot import are not counted. That produced a red build on the very
+    commit that introduced this file, which is the whole argument for the split.
+    """
     proc = subprocess.run(
-        [sys.executable, "-m", "pytest", str(path), "--collect-only", "-q", "--no-header",
-         "-p", "no:cacheprovider"],
-        capture_output=True, text=True, cwd=REPO,
-        env={"PYTHONPATH": str(REPO / "service"), "PATH": "/usr/bin:/bin"},
-        timeout=180,
+        [sys.executable, "-m", "pytest", str(REPO / suite), "--collect-only", "-q",
+         "--no-header", "-p", "no:cacheprovider"],
+        capture_output=True, text=True, cwd=REPO, timeout=180,
     )
+    # Gate on the exit code, never on the word "error" appearing in stdout: `-q` prints
+    # every collected test id, and plenty of them are named things like
+    # `test_api_error_metadata`, so a substring check matches always and silently skips.
+    # pytest exits 0 on a clean collection and 2 when collection itself fails.
     m = re.search(r"(\d+)\s+tests?\s+collected", proc.stdout)
-    if not m:
-        pytest.skip(f"could not collect {path.name}: {proc.stdout[-200:]}")
+    if proc.returncode != 0 or not m:
+        pytest.skip(f"cannot collect {suite} here (rc={proc.returncode}): {proc.stdout[-200:]}")
     return int(m.group(1))
 
 
-@pytest.mark.parametrize("suite,label", [("service/tests", "Service"), ("server/tests", "Host")])
-def test_stated_test_counts_are_real(suite: str, label: str):
-    """The counts in the Gates table must match what pytest actually collects.
+def test_stated_service_count_is_real():
+    """The Service row must match what pytest collects here.
 
-    Runs pytest in a subprocess purely to count — the alternative is a number in prose
-    that drifts the moment anyone adds a test, which is precisely what happened.
+    The Host row is checked by `server/tests/test_status_ledger.py`, which runs in the job
+    that actually has the host's dependencies installed.
     """
-    row = re.search(rf"^\|\s*{label}\b[^|]*\|\s*\*\*(\d+)\*\*", _doc(), re.M)
-    assert row, f"no Gates row for {label} in STATUS.md"
-    stated = int(row.group(1))
-    actual = _collected(REPO / suite)
+    stated, actual = stated_count("Service"), collected_count("service/tests")
     assert stated == actual, (
-        f"STATUS.md says {label} has {stated} tests; pytest collects {actual}. "
+        f"STATUS.md says Service has {stated} tests; pytest collects {actual}. "
         "Update the Gates table."
     )
