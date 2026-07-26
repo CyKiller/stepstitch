@@ -1,5 +1,6 @@
 version: 2
 updates:
+  # The SDK (root package.json).
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -9,6 +10,30 @@ updates:
       prefix: "chore(deps)"
     groups:
       npm-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # TypeScript 7 is the native-port rewrite, not a version bump: it fails the SDK
+      # type-check and the executable-repro proof outright. Migrating is its own piece of
+      # work, and until it is scheduled a weekly PR that can never go green is noise that
+      # trains us to ignore dependabot. Minor and patch TS updates still flow.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+  # The marketing site (web/package.json) — its own lockfile, its own dependency tree.
+  # It was not covered here at all, so Next, React and everything under them went
+  # unwatched, security advisories included.
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      web-minor-patch:
         applies-to: version-updates
         update-types:
           - "minor"
