@@ -1167,14 +1167,22 @@ DASHBOARD_HTML = r"""<!doctype html>
       return [i * (w / Math.max(1, series.length - 1)),
               pad + (h - pad) * (1 - v / hi)];
     });
+    // Catmull-Rom tangents are derived from a point's NEIGHBOURS, so a spiky series
+    // (0 -> peak -> 0, the normal shape here) throws control points well outside the
+    // plot band — measured -21 and +197 in a 170-tall box, which spilled the area fill
+    // under the baseline and clipped the stroke at the top. A cubic bezier is contained
+    // in the convex hull of its control points, so clamping their y into [pad, h] is a
+    // guarantee of containment, not a nudge. x needs no clamp: it is monotonic by
+    // construction and the ends repeat their endpoint.
+    function clampY(y) { return y < pad ? pad : (y > h ? h : y); }
     var d = "M" + p[0][0].toFixed(1) + "," + p[0][1].toFixed(1);
     for (var i = 0; i < p.length - 1; i++) {
       var p0 = i ? p[i - 1] : p[0], p1 = p[i], p2 = p[i + 1];
       var p3 = (i + 2 < p.length) ? p[i + 2] : p2;
       d += " C" + (p1[0] + (p2[0] - p0[0]) / 6).toFixed(1) + "," +
-                  (p1[1] + (p2[1] - p0[1]) / 6).toFixed(1) + " " +
+                  clampY(p1[1] + (p2[1] - p0[1]) / 6).toFixed(1) + " " +
                   (p2[0] - (p3[0] - p1[0]) / 6).toFixed(1) + "," +
-                  (p2[1] - (p3[1] - p1[1]) / 6).toFixed(1) + " " +
+                  clampY(p2[1] - (p3[1] - p1[1]) / 6).toFixed(1) + " " +
                   p2[0].toFixed(1) + "," + p2[1].toFixed(1);
     }
     if (close) d += " L" + p[p.length - 1][0].toFixed(1) + "," + h + " L" +
