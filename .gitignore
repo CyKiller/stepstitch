@@ -9,6 +9,15 @@ coverage/
 .env
 .env.*
 !.env.example
+# Registry and key material. None of this has ever been committed; these rules exist so a
+# stray `npm login` or a downloaded signing key cannot become the first time.
+.npmrc
+.pypirc
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
 
 __pycache__/
 *.pyc
@@ -23,8 +32,10 @@ playwright-report/
 .agents/
 service/build/
 skills-lock.json
-.claude/*
-!.claude/settings.json
+# Editor/assistant workspace config is personal to each machine and never published.
+# No negation here on purpose: nothing under .claude/ belongs in a public repo, and an
+# exception is how a local file with real paths or tokens gets committed by accident.
+.claude/
 
 # Superpowers brainstorm scratch (visual companion mockups)
 .superpowers/
