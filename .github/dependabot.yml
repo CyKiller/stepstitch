@@ -38,6 +38,21 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # Ignores are per-ecosystem, not per-repo. The TypeScript-major ignore added with this
+      # entry covered the ROOT npm package only, so dependabot immediately re-raised the same
+      # failing bump here as #64. Both majors below are blocked upstream, not by our code:
+      #
+      #   typescript 7 — the native-port rewrite; fails the web type-check outright (#58, #64)
+      #   eslint 10    — dies inside eslint-config-next, which bundles an eslint-plugin-react
+      #                  calling the removed `contextOrFilename.getFilename` API (#63)
+      #
+      # Both have tracking issues so these ignores are removed deliberately rather than
+      # forgotten. Minor and patch updates keep flowing for both packages.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"
     directory: "/service"
