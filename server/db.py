@@ -21,11 +21,15 @@ CREATE TABLE IF NOT EXISTS stepstitch_traces (
     trace_metadata       TEXT NOT NULL,
     consent_version      TEXT,
     retention_expires_at TIMESTAMPTZ,
-    created_at           TIMESTAMPTZ NOT NULL
+    created_at           TIMESTAMPTZ NOT NULL,
+    -- Structural fingerprint (Failure Shapes). Derived from already-scrubbed fields only, so it
+    -- carries no NPI; stored outside the body so a shape stays matchable after retention purge.
+    fingerprint          TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_stepstitch_created_at  ON stepstitch_traces (created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_stepstitch_user_id     ON stepstitch_traces (user_id);
 CREATE INDEX IF NOT EXISTS ix_stepstitch_retention   ON stepstitch_traces (retention_expires_at);
+CREATE INDEX IF NOT EXISTS ix_stepstitch_traces_fingerprint ON stepstitch_traces (fingerprint);
 
 -- Audit trail (Reg S-P recordkeeping). Kept on a separate, longer retention clock than
 -- trace bodies; never carries NPI (actions + ids only).

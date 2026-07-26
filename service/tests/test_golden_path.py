@@ -137,7 +137,10 @@ def test_golden_path_end_to_end():
 
     # 6. EXPORT PREVIEW builds sanitized drafts (sends nothing).
     drafts = client.post(f"{_PFX}/session/{tid}/export-preview").json()["drafts"]
-    assert set(drafts) == {"servicenow", "salesforce", "genesys"}
+    assert set(drafts) == {
+        "servicenow", "salesforce", "genesys", "jira", "zendesk",
+        "github_issues", "linear", "slack",
+    }
     assert drafts["servicenow"]["correlation_id"] == f"stepstitch:{tid}"
     assert drafts["genesys"]["trace_correlation_id"] == f"stepstitch:{tid}"
     assert "123-45-6789" not in json.dumps(drafts)

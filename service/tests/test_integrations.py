@@ -13,7 +13,13 @@ from stepstitch_service.integrations.bundle import (
     ServiceNowAdapter,
     build_case_draft,
     build_genesys_context_draft,
+    build_github_issue_draft,
     build_incident_draft,
+    build_jira_issue_draft,
+    build_linear_issue_draft,
+    build_slack_message_draft,
+    build_zendesk_ticket_draft,
+    default_draft_adapters,
 )
 
 
@@ -75,10 +81,95 @@ def test_genesys_context_draft_flat_and_queue_oriented():
     assert_flat(draft)
 
 
+def test_jira_draft_flat_and_correlated():
+    s = build_trace_summary("trace_123", _footsteps())
+    draft = build_jira_issue_draft(s)
+    assert draft["stepstitch_trace_id"] == "trace_123"
+    assert draft["issuetype"] == "Bug"
+    assert draft["project_key"] == "SUP"
+    assert_flat(draft)
+
+
+def test_jira_rejects_out_of_range_issue_type():
+    s = build_trace_summary("trace_123", _footsteps())
+    with pytest.raises(ValueError):
+        build_jira_issue_draft(s, issue_type="Epic")
+
+
+def test_zendesk_draft_flat_and_priority_escalates_on_500():
+    s = build_trace_summary("trace_123", _footsteps())
+    draft = build_zendesk_ticket_draft(s)
+    assert draft["external_id"] == "stepstitch:trace_123"
+    assert draft["priority"] == "urgent"  # 500 -> urgent
+    assert draft["type"] == "problem"
+    assert_flat(draft)
+
+
+def test_zendesk_rejects_out_of_range_type():
+    s = build_trace_summary("trace_123", _footsteps())
+    with pytest.raises(ValueError):
+        build_zendesk_ticket_draft(s, ticket_type="feature-request")
+
+
+def test_github_issue_draft_flat_and_correlated():
+    s = build_trace_summary("trace_123", _footsteps())
+    draft = build_github_issue_draft(s)
+    assert draft["external_id"] == "stepstitch:trace_123"
+    assert "stepstitch:trace_123" in draft["body"]
+    assert draft["labels"] == "stepstitch,bug"
+    assert_flat(draft)
+
+
+def test_github_issue_caps_title_explicitly():
+    long = build_trace_summary("trace_123", _long_route_footsteps())
+    draft = build_github_issue_draft(long)
+    assert len(draft["title"]) <= 256
+    assert draft["title"].endswith("…")
+    assert "truncated to 256" in draft["body"]
+    assert_flat(draft)
+
+
+def test_linear_draft_flat_and_priority_escalates_on_500():
+    s = build_trace_summary("trace_123", _footsteps())
+    draft = build_linear_issue_draft(s)
+    assert draft["external_id"] == "stepstitch:trace_123"
+    assert draft["priority"] == "1"  # 500 -> Urgent
+    assert draft["team_key"] == "SUP"
+    assert_flat(draft)
+
+
+def test_linear_priority_stays_in_stock_scale():
+    from stepstitch_service.integrations.validation import LINEAR_PRIORITY
+    for s in (build_trace_summary("a", _footsteps()),
+              build_trace_summary("b", _long_route_footsteps()),
+              build_trace_summary("c", [{"timestamp": "t", "type": "navigation",
+                                         "route": "/d", "label": "[masked]"}])):
+        assert build_linear_issue_draft(s)["priority"] in LINEAR_PRIORITY
+
+
+def test_slack_message_draft_flat_and_severity_marker():
+    s = build_trace_summary("trace_123", _footsteps())
+    draft = build_slack_message_draft(s)
+    assert draft["channel"] == "#bugs"
+    assert draft["unfurl_links"] is False
+    assert "stepstitch:trace_123" in draft["text"]
+    assert ":red_circle:" in draft["text"]  # 500 -> red
+    assert_flat(draft)
+
+
+def test_slack_message_caps_text_explicitly():
+    long = build_trace_summary("trace_123", _long_route_footsteps())
+    draft = build_slack_message_draft(long)
+    assert len(draft["text"]) <= 3000
+    assert_flat(draft)
+
+
 def test_drafts_never_carry_raw_trace_internals():
     s = build_trace_summary("trace_123", _footsteps())
     for draft in (build_incident_draft(s), build_case_draft(s),
-                  build_genesys_context_draft(s)):
+                  build_genesys_context_draft(s), build_jira_issue_draft(s),
+                  build_zendesk_ticket_draft(s), build_github_issue_draft(s),
+                  build_linear_issue_draft(s), build_slack_message_draft(s)):
         keys = set(draft.keys())
         for forbidden in ("footsteps", "explanation", "user_id", "target", "raw_url"):
             assert forbidden not in keys
@@ -104,6 +195,17 @@ def test_export_preview_builds_financial_services_pack():
     assert preview["servicenow"]["correlation_id"] == "stepstitch:trace_123"
     assert preview["salesforce"]["StepStitchTraceId__c"] == "trace_123"
     assert preview["genesys"]["trace_correlation_id"] == "stepstitch:trace_123"
+
+
+def test_export_preview_includes_every_bundled_adapter():
+    s = build_trace_summary("trace_123", _footsteps())
+    preview = export_preview(s, default_draft_adapters())
+    assert set(preview.keys()) == {
+        "servicenow", "salesforce", "genesys", "jira", "zendesk",
+        "github_issues", "linear", "slack",
+    }
+    for draft in preview.values():
+        assert_flat(draft)
 
 
 def _long_route_footsteps():

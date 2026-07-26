@@ -93,6 +93,14 @@
         "responses": { "200": { "description": "Minimal repro" }, "404": { "description": "Not found" } }
       }
     },
+    "/session/{trace_id}/agent-packet": {
+      "get": {
+        "operationId": "GetAgentPacket",
+        "summary": "Safe Agent Packet: summary + replayability + privacy posture + diagnostic + Playwright repro, composed into one call (no NPI).",
+        "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Agent packet" }, "404": { "description": "Not found" } }
+      }
+    },
     "/session/{trace_id}/export-preview": {
       "post": {
         "operationId": "CreateExportPreview",

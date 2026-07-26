@@ -35,8 +35,11 @@ full-permission agents (1-in-12 marketplace skills were malicious). We're the le
 attestable evidence layer. Best played *with* them: a StepStitch MCP skill gives their agent a
 scrubbed, scoped repro instead of raw access.
 
-**vs. Sentry / Datadog** — *Match on repro, concede breadth.* They own scale + dashboards; we own
-the reproducible, privacy-safe, agent-ready evidence they stop short of.
+**vs. Sentry / Datadog** — *Match on repro, close the breadth gap.* They own scale + dashboards;
+we own the reproducible, privacy-safe, agent-ready evidence they stop short of — and we now ship
+draft connectors for GitHub Issues, Linear, Slack, Jira, and Zendesk alongside ServiceNow,
+Salesforce, and Genesys, so "does this plug into what I already use" isn't a reason to pick them
+over us anymore.
 
 ## Objection handling
 - *"Isn't this just session replay with masking?"* → No. Masking is record-then-redact (the data
@@ -52,7 +55,11 @@ the reproducible, privacy-safe, agent-ready evidence they stop short of.
 ## Proof points (all open-source, verifiable)
 - `tests/redaction-proof.test.ts` (client) + `test_scrubber.py` (server) — NPI never egresses.
 - Deterministic compiler — same trace → same test, every time.
-- 12 read-only/draft MCP tools; no destructive op on the agent surface (`test_mcp_surface.py`).
+- 13 read-only/draft MCP tools (the Safe Agent Packet + twelve individual reads/drafts); no
+  destructive op on the agent surface (`test_mcp_surface.py`).
+- 8 bundled draft connectors — ServiceNow, Salesforce, Genesys, Jira, Zendesk, GitHub Issues,
+  Linear, Slack — all draft-only, none auto-files (`test_integrations.py`,
+  `test_adapter_profile_robustness.py`).
 - Provenance, SBOM, SRI on every release; npm + PyPI + Docker public.
 
 ## Timing

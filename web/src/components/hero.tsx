@@ -71,7 +71,7 @@ export function Hero() {
                       Replayability {SAMPLE_TRACE.replayability.grade}
                     </span>
                   </div>
-                  <pre className="overflow-x-auto px-4 py-4 font-mono text-[12.5px] leading-relaxed text-fg/90">
+                  <pre className="overflow-x-auto px-4 py-4 font-mono text-[12.5px] leading-relaxed text-fg/90 [mask-image:linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)]">
                     <code>{SAMPLE_TRACE.playwright_code}</code>
                   </pre>
                   <figcaption className="border-t border-line px-4 py-2.5 font-mono text-[11px] text-muted">

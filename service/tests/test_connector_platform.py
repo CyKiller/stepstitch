@@ -20,8 +20,10 @@ def test_reference_adapters_are_conformant():
 
 def test_builtin_adapters_are_conformant():
     # The shipped pack must itself pass the kit it advertises.
-    assert set(conformant_adapters(default_draft_adapters())) == \
-        {"servicenow", "salesforce", "genesys"}
+    assert set(conformant_adapters(default_draft_adapters())) == {
+        "servicenow", "salesforce", "genesys", "jira", "zendesk",
+        "github_issues", "linear", "slack",
+    }
 
 
 def test_conformance_rejects_non_flat_adapter():
@@ -66,4 +68,7 @@ def test_discovery_returns_list_without_plugins():
 
 def test_all_adapters_includes_builtins():
     names = {a.name for a in all_draft_adapters()}
-    assert {"servicenow", "salesforce", "genesys"} <= names
+    assert {
+        "servicenow", "salesforce", "genesys", "jira", "zendesk",
+        "github_issues", "linear", "slack",
+    } <= names

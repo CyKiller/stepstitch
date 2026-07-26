@@ -13,7 +13,7 @@ read-only/draft surface with no bespoke adapter. The server is
 > network; the trust boundary (server-side scrubber), admin auth, and `stepstitch.*`
 > read-audit all stay in the StepStitch service behind the connector.
 
-## The twelve tools (identical to the OpenAPI pack)
+## The thirteen tools (identical to the OpenAPI pack)
 
 | MCP tool | Service route | Returns |
 |---|---|---|
@@ -27,8 +27,17 @@ read-only/draft surface with no bespoke adapter. The server is
 | `get_attestation` | `GET /session/{id}/attestation` | signed, independently-verifiable evidence bundle (no NPI) |
 | `get_fragility_map` | `GET /session/{id}/fragility` | per-step fragility ranking, worst-first (no NPI) |
 | `generate_minimal_repro` | `GET /session/{id}/minimal-repro` | smallest failing path compiled to Playwright (no NPI) |
+| `get_agent_packet` (**Safe Agent Packet**) | `GET /session/{id}/agent-packet` | the six rows above, composed into one call |
 | `create_export_preview` | `POST /session/{id}/export-preview` | ServiceNow/Salesforce/Genesys **drafts** |
 | `create_fs_export_preview` | `POST /session/{id}/financial-services-export-preview` | named FS support **draft** pack |
+
+### The Safe Agent Packet
+
+`get_agent_packet` is the one name behind the "safe packet to help fix it" pitch: instead of an
+agent making five separate round-trips (summary, replayability, privacy posture, diagnostic,
+repro), one call returns all five, still read-only and NPI-free — no new capability, just fewer
+round-trips. Reach for the individual tools when you only need one field; reach for the packet
+when you're handing a bug to an agent for the first time.
 
 These come from one source of truth — `COPILOT_SAFE_OPERATIONS` — shared with
 `openapi-v2.json` and the live routes, drift-guarded by
@@ -57,7 +66,7 @@ event server-side.
   same `COPILOT_SAFE_OPERATIONS` registry behind an HTTP MCP transport. The tool registry
   and `dispatch_tool` are transport-agnostic; only the serving shell differs. Until the
   HTTP shell is deployed, Copilot Studio can use the **OpenAPI custom connector**
-  ([SETUP.md](SETUP.md)) — same eight operations, same governance.
+  ([SETUP.md](SETUP.md)) — same thirteen operations, same governance.
 
 ## Per-client registration
 
@@ -70,8 +79,51 @@ Then apply [action-policy.md](action-policy.md) and the DLP/approval governance 
 `python -m stepstitch_service.mcp_cli` with `STEPSTITCH_BASE_URL` / `STEPSTITCH_TOKEN` in env.
 
 **OpenAI Agents SDK / LangGraph / Vertex / Bedrock** — register the StepStitch MCP server
-as a tool source; each treats the eight tools as standard MCP tools. No StepStitch-specific
+as a tool source; each treats the thirteen tools as standard MCP tools. No StepStitch-specific
 code required.
+
+## Public registry listing (prepared, not yet submitted)
+
+A fully-built MCP server that no one can find is a wasted asset. `service/server.json` is a
+ready-to-submit manifest for the **official MCP Registry**
+(`registry.modelcontextprotocol.io`) — the canonical place a third-party server registers
+itself. Researched and confirmed (2026-07): **Smithery, Glama, mcp.so, and PulseMCP are
+registry *aggregators*** — they scrape the official registry's public REST API on their own
+schedule rather than taking separate manual submissions, so publishing once to the official
+registry is the one action that reaches all of them.
+
+**This submission is intentionally left for the maintainer to run** — it requires a live
+GitHub OAuth device-flow login (`mcp-publisher login github`), which only the account owner
+can authorize.
+
+Steps (owner-run, from `service/`):
+
+```bash
+# 1. Install the CLI (macOS/Linux; see MCP docs for Windows/Homebrew)
+curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
+  | tar xz mcp-publisher && sudo mv mcp-publisher /usr/local/bin/
+
+# 2. Authenticate as CyKiller (opens a GitHub device-flow prompt)
+mcp-publisher login github
+
+# 3. Publish the prepared manifest (service/server.json)
+cd service && mcp-publisher publish
+```
+
+Prerequisites already satisfied by this repo:
+- `stepstitch-service` is live on PyPI (`registryType: "pypi"` in `server.json`).
+- Ownership verification is in place: `service/README.md` carries the required
+  `<!-- mcp-name: io.github.CyKiller/stepstitch -->` marker (becomes the PyPI
+  description via `readme = "README.md"` in `service/pyproject.toml`), and it **must
+  match `server.json`'s `name` field exactly** — the registry rejects a mismatch.
+- `service/server.json`'s `version` must be bumped alongside every PyPI release
+  (`stepstitch-service`'s version in `pyproject.toml`) — the registry checks the PyPI
+  version at that identifier actually exists.
+
+After publishing, verify with:
+```bash
+curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.CyKiller/stepstitch"
+```
 
 ## Governance carried over (unchanged from the connector path)
 - Read-only / draft-only; record creation happens **only** via the client's native

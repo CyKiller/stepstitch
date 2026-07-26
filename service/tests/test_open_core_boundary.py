@@ -19,7 +19,7 @@ from pathlib import Path
 _PKG = Path(__file__).resolve().parents[1] / "stepstitch_service"
 
 # Filenames (module stems) of the concrete, host-injected adapters.
-_ADAPTER_STEMS = {"servicenow", "salesforce", "genesys", "bundle"}
+_ADAPTER_STEMS = {"servicenow", "salesforce", "genesys", "github", "linear", "slack", "bundle"}
 
 # Core internals an adapter must never reach into (it only gets a TraceSummary).
 _CORE_INTERNALS = {

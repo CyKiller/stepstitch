@@ -1,14 +1,16 @@
 import { GithubLogo, Package } from "@phosphor-icons/react/dist/ssr";
 import { Wordmark } from "./wordmark";
-import { GITHUB_URL, NPM_URL, DOCS_URL } from "@/lib/links";
+import { GITHUB_URL, NPM_URL, DOCS_URL, RELEASES_URL } from "@/lib/links";
+import { RELEASE_TAG } from "@/lib/version";
 
 const columns = [
   {
     title: "Product",
     links: [
       { href: "/#how", label: "How it works" },
+      { href: "/who-its-for", label: "Who it's for" },
       { href: "/#demo", label: "Live demo" },
-      { href: "/#pricing", label: "Pricing" },
+      { href: "/agents", label: "Agents & MCP" },
       { href: "/financial-services-pilot", label: "Financial-services pilot" },
     ],
   },
@@ -21,8 +23,8 @@ const columns = [
       { href: GITHUB_URL, label: "GitHub", external: true },
       { href: NPM_URL, label: "npm", external: true },
       {
-        href: `${GITHUB_URL}/releases`,
-        label: "Releases · v0.6.0",
+        href: RELEASES_URL,
+        label: `Releases · ${RELEASE_TAG}`,
         external: true,
       },
     ],

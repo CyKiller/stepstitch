@@ -40,7 +40,14 @@ from .scrubber import (
     ScrubRejection,
     scrub_trace_payload,
 )
-from .verification.verdict import ALL_VERDICTS, derive_verdict
+from .shapes import STAGE_ORDER
+from .shapes import board as shape_board
+from .shapes import cluster as cluster_shapes
+from .verification.verdict import (
+    ALL_VERDICTS,
+    VERDICT_CONFIRMED_FIXED,
+    derive_verdict,
+)
 
 logger = logging.getLogger("stepstitch")
 
@@ -244,11 +251,19 @@ def create_stepstitch_router(
         # compliance reviewer) can see exactly what the server stripped at ingestion.
         stored_metadata = dict(scrubbed["metadata"])
         stored_metadata["_scrub"] = scrub_report
+        # Failure Shapes: compute the structural fingerprint at ingest so the console can cluster
+        # with a query rather than parsing every footsteps blob per board load. Derived purely
+        # from post-scrub structural fields (templated routes, structural selectors) — no NPI —
+        # and stored outside the body so the shape survives retention purge.
+        ingest_summary = build_trace_summary(
+            trace_id, scrubbed["footsteps"], project_id=payload.project_id)
+        fp_json = json.dumps(
+            fix_fingerprint(ingest_summary.as_dict(), scrubbed["footsteps"]))
         await execute(
             "INSERT INTO stepstitch_traces (id, app_id, project_id, user_id, "
             "explanation, footsteps, trace_metadata, consent_version, "
-            "retention_expires_at, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "retention_expires_at, created_at, fingerprint) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 trace_id,
                 payload.app_id,
@@ -260,6 +275,7 @@ def create_stepstitch_router(
                 payload.consent_version,
                 expires,
                 now,
+                fp_json,
             ),
         )
         logger.info("stepstitch trace stored id=%s user=%s scrub=%s",
@@ -484,6 +500,52 @@ def create_stepstitch_router(
                 "screenshots", "video", "input values", "raw URLs", "page text",
                 "request/response bodies", "console messages", "network headers",
             ],
+        }
+
+    @router.get("/session/{trace_id}/agent-packet")
+    async def get_agent_packet(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        # The Safe Agent Packet: one call composing the same five already-agent-safe reads
+        # (summary, replayability, privacy posture, diagnostic, Playwright repro) instead of
+        # five round-trips. No new capability — every field here is already individually
+        # exposed as its own MCP tool; this only removes the round-trips.
+        row = await fetchone(
+            "SELECT footsteps, project_id, trace_metadata FROM stepstitch_traces WHERE id = ?",
+            (trace_id,),
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        await _audit("stepstitch.agent_packet", _actor_id(admin), {"trace_id": trace_id})
+        footsteps = _loads(row[0])
+        summary = build_trace_summary(trace_id, footsteps, project_id=row[1])
+        meta = _loads(row[2]) or {}
+        scrub = meta.get("_scrub") if isinstance(meta, dict) else None
+        return {
+            "status": "ok",
+            "trace_id": trace_id,
+            "agent_packet": {
+                "summary": summary.as_dict(),
+                "replayability": score_trace(footsteps),
+                "privacy_posture": {
+                    "policy": scrub_policy.name,
+                    "scrub": scrub,
+                    "never_captured": [
+                        "screenshots", "video", "input values", "raw URLs", "page text",
+                        "request/response bodies", "console messages", "network headers",
+                    ],
+                },
+                "diagnostic": {
+                    "recommended_next_step": _recommended_next_step(summary),
+                    "never_included": [
+                        "raw console logs", "raw error messages", "stack traces",
+                        "request/response bodies", "headers", "cookies",
+                        "input values", "screenshots", "full URLs",
+                    ],
+                },
+                "playwright_code": generate_playwright_test(trace_id, footsteps, base_url),
+            },
         }
 
     @router.post("/session/{trace_id}/export-preview")
@@ -858,6 +920,81 @@ def create_stepstitch_router(
         await _audit("stepstitch.corpus", _actor_id(admin), {"verdict": verdict})
         return {"status": "ok", "verdict": verdict,
                 "entries": [_verification_row(r) for r in rows]}
+
+    async def _load_shapes(limit: int) -> List[Dict[str, Any]]:
+        """Read traces + their verdicts + the corpus, and cluster into failure shapes.
+
+        All three reads are structural only — fingerprints, verdicts, fix refs — so nothing here
+        can surface a trace body. The clustering itself lives in the pure `shapes` module.
+        """
+        trace_rows = await fetchall(
+            "SELECT id, fingerprint, created_at FROM stepstitch_traces "
+            "WHERE fingerprint IS NOT NULL ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        )
+        verdict_rows = await fetchall(
+            "SELECT trace_id, verdict FROM stepstitch_verifications "
+            "ORDER BY created_at DESC LIMIT ?",
+            (limit * 10,),
+        )
+        verdicts_by_trace: Dict[str, List[str]] = {}
+        for row in verdict_rows:
+            verdicts_by_trace.setdefault(row[0], []).append(row[1])
+
+        corpus_rows = await fetchall(
+            "SELECT trace_id, fix_ref, run_url, fingerprint FROM stepstitch_verifications "
+            "WHERE verdict = ? AND fingerprint IS NOT NULL ORDER BY created_at DESC LIMIT ?",
+            (VERDICT_CONFIRMED_FIXED, 500),
+        )
+        corpus: List[Dict[str, Any]] = []
+        for row in corpus_rows:
+            try:
+                fp = _loads(row[3])
+            except Exception:
+                continue
+            corpus.append({"trace_id": row[0], "fix_ref": row[1], "run_url": row[2],
+                           "fingerprint": fp})
+
+        traces: List[Dict[str, Any]] = []
+        for row in trace_rows:
+            try:
+                fp = _loads(row[1])
+            except Exception:
+                continue
+            created = row[2]
+            traces.append({
+                "trace_id": row[0],
+                "fingerprint": fp,
+                "created_at": created.isoformat() if hasattr(created, "isoformat") else created,
+                "verdicts": verdicts_by_trace.get(row[0], []),
+            })
+        # Default match weights, same as /similar-fixes — one notion of "similar" everywhere.
+        return cluster_shapes(traces, corpus=corpus)
+
+    @router.get("/shapes")
+    async def list_shapes(
+        admin: Any = Depends(require_admin),
+        limit: int = Query(200, ge=1, le=1000),
+    ) -> Dict[str, Any]:
+        # Failure Shapes: traces grouped by what actually broke, arranged into the pipeline
+        # columns derived from the verdict state machine. Forty reports of one bug is one shape.
+        shapes = await _load_shapes(limit)
+        await _audit("stepstitch.shapes", _actor_id(admin), {"shapes": len(shapes)})
+        return {"status": "ok", "stages": list(STAGE_ORDER), "shapes": shapes,
+                "board": shape_board(shapes)}
+
+    @router.get("/shapes/{shape_id}")
+    async def get_shape(
+        shape_id: str,
+        admin: Any = Depends(require_admin),
+        limit: int = Query(200, ge=1, le=1000),
+    ) -> Dict[str, Any]:
+        shapes = await _load_shapes(limit)
+        for shape in shapes:
+            if shape["shape_id"] == shape_id:
+                await _audit("stepstitch.shape", _actor_id(admin), {"shape_id": shape_id})
+                return {"status": "ok", "shape": shape}
+        raise HTTPException(status_code=404, detail="Shape not found")
 
     @router.get("/session/{trace_id}/playwright")
     async def get_compiled_repro(
