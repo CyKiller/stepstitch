@@ -17,7 +17,7 @@ CI gate re-run as the release gate before any artifact is pushed.
 | Web (marketing site + copy claims) | **38** | `cd web && npx vitest run` |
 
 Counts are the number pytest/vitest **collect**, and they are enforced: each suite verifies
-its own row (`service/tests/test_status_ledger.py`, `server/tests/test_status_ledger.py`),
+its own row (`test_status_ledger.py`, `test_status_ledger_host.py`),
 so CI fails if this table drifts or cites a test that does not exist. The check is split
 per suite deliberately — the Service job does not install the host's dependencies, so
 counting `server/tests` from there under-reports without erroring. The old version of this

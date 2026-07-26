@@ -91,7 +91,7 @@ def collected_count(suite: str) -> int:
 def test_stated_service_count_is_real():
     """The Service row must match what pytest collects here.
 
-    The Host row is checked by `server/tests/test_status_ledger.py`, which runs in the job
+    The Host row is checked by `server/tests/test_status_ledger_host.py`, which runs in the job
     that actually has the host's dependencies installed.
     """
     stated, actual = stated_count("Service"), collected_count("service/tests")

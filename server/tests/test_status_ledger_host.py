@@ -10,6 +10,12 @@ counted and the number still looks plausible, which is the dangerous part.
 So each job verifies its own row, in the one environment that can answer honestly. The two
 small helpers are duplicated rather than imported across suites — a cross-rootdir import
 between two pytest packages is more fragile than fifteen repeated lines.
+
+The ``_host`` suffix is load-bearing. Neither tests directory has an ``__init__.py``, so
+pytest derives a module name from the basename alone: two files both called
+``test_status_ledger.py`` collide with "import file mismatch" and abort collection the
+moment both suites run in one invocation. CI runs them separately and would not have
+caught it.
 """
 from __future__ import annotations
 
