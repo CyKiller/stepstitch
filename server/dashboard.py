@@ -1114,48 +1114,30 @@ DASHBOARD_HTML = r"""<!doctype html>
   }
 
   // ---- overview ----------------------------------------------------------------------------
-  // The landing screen. Every number here is derived from /shapes + /admin/status — no new
-  // endpoint — and the maths mirrors service/stepstitch_service/metrics.py, which is where it
-  // is unit-tested. A dashboard that quietly computes the wrong number is worse than none.
+  // The landing screen. Every number comes from the `overview` block on /shapes, computed
+  // server-side by service/stepstitch_service/metrics.py — which is where it is unit-tested.
+  //
+  // It used to be recomputed here in JavaScript, mirroring that module. Mirrored maths is not
+  // tested maths: the module had full coverage and was imported by nothing, so the arithmetic
+  // actually on screen was the one copy nobody checked. A dashboard that quietly computes the
+  // wrong number is worse than no dashboard, which only holds if the tested code is the code
+  // that runs. This function now just reshapes the payload for rendering.
 
-  function dayKeys(n) {
-    var out = [], now = new Date();
-    for (var i = n - 1; i >= 0; i--) {
-      var d = new Date(now.getTime() - i * 86400000);
-      out.push(d.toISOString().slice(0, 10));
-    }
-    return out;
-  }
-
-  function overviewMetrics(shapes, days) {
-    var open = shapes.filter(function (s) { return s.stage !== "fixed"; });
-    var counts = {};
-    days.forEach(function (d) { counts[d] = 0; });
-    shapes.forEach(function (s) {
-      var d = String(s.first_seen || "").slice(0, 10);
-      if (d in counts) counts[d] += 1;
-    });
-    var pages = {};
-    open.forEach(function (s) {
-      var r = (s.fingerprint || {}).route;
-      if (r) pages[r] = (pages[r] || 0) + (s.occurrences || 0);
-    });
+  function overviewMetrics(ov) {
+    ov = ov || {};
+    var stages = {};
+    (ov.stages || []).forEach(function (r) { stages[r.stage] = r.count; });
     return {
-      open: open.length,
-      people: open.reduce(function (a, s) { return a + (s.occurrences || 0); }, 0),
-      fixed: shapes.filter(function (s) { return s.stage === "fixed"; }).length,
-      repeat: shapes.length
-        ? Math.round(shapes.filter(function (s) {
-            return (s.prior_fixes || []).length; }).length / shapes.length * 1000) / 10
-        : 0,
-      series: days.map(function (d) { return counts[d]; }),
-      stages: STAGES.map(function (st) {
-        return { st: st, n: open.filter(function (s) { return s.stage === st.id; }).length };
-      }).filter(function (r) { return r.n; }),
-      pages: Object.keys(pages).sort(function (a, b) {
-        return pages[b] - pages[a] || a.localeCompare(b);
-      }).slice(0, 5).map(function (r) { return { route: r, people: pages[r] }; }),
-      total: shapes.length
+      open: ov.open || 0,
+      people: ov.people_affected || 0,
+      fixed: ov.fixed || 0,
+      repeat: ov.repeat_rate || 0,
+      days: ov.days || [],
+      series: ov.series || [],
+      stages: STAGES.map(function (st) { return { st: st, n: stages[st.id] || 0 }; })
+                    .filter(function (r) { return r.n; }),
+      pages: ov.pages || [],
+      total: ov.total || 0
     };
   }
 
@@ -1235,9 +1217,11 @@ DASHBOARD_HTML = r"""<!doctype html>
 
   async function renderOverview() {
     mountLoading(skeleton("board"));
-    var shapes, status;
+    var shapes, status, overview;
     try {
-      shapes = (await api("/shapes")).shapes || [];
+      var data = await api("/shapes");
+      shapes = data.shapes || [];
+      overview = data.overview || {};   // computed by metrics.py, not re-derived here
       status = await adminApi("/status").catch(function () { return lastStatus || {}; });
       lastStatus = status;
     } catch (e) { return mount(fail(e)); }
@@ -1246,8 +1230,8 @@ DASHBOARD_HTML = r"""<!doctype html>
     renderStageNav();
     if (!shapes.length) return mount(setupView(status));
 
-    var days = dayKeys(30);
-    var m = overviewMetrics(shapes, days);
+    var m = overviewMetrics(overview);
+    var days = m.days;
     var root = el("div", { class: "ov" });
 
     // Hero: the one number that matters, and the constellation of what is behind it.
@@ -1304,18 +1288,22 @@ DASHBOARD_HTML = r"""<!doctype html>
       ]);
     })));
 
-    // Trend + stage mix.
-    var avg = (m.series.reduce(function (a, b) { return a + b; }, 0) / days.length).toFixed(1);
+    // Trend + stage mix. The series is PEOPLE per day, not new-failures per day: a real
+    // deployment produces a handful of distinct failures a month, so plotting those drew a
+    // flat line with a couple of spikes and read as "nothing is happening" while eighty-odd
+    // people were hitting them. Same data, honest resolution.
+    var total = m.series.reduce(function (a, b) { return a + b; }, 0);
+    var avg = days.length ? (total / days.length).toFixed(1) : "0.0";
     root.appendChild(el("div", { class: "two" }, [
       el("div", { class: "card accent" }, [
         el("div", { class: "ch" }, [
-          el("h2", { text: "New failures" }),
+          el("h2", { text: "People affected" }),
           el("span", { class: "sub", text: "per day, last 30 days" }),
-          el("span", { class: "rt", text: avg + " daily average" })
+          el("span", { class: "rt", text: avg + " a day on average" })
         ]),
         areaChart(m.series, 660, 170),
         el("div", { class: "axis" }, [
-          el("span", { text: days[0] }), el("span", { text: days[14] }),
+          el("span", { text: days[0] || "" }), el("span", { text: days[14] || "" }),
           el("span", { text: "today" })
         ])
       ]),

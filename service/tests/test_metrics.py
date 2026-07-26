@@ -5,6 +5,7 @@ from stepstitch_service.metrics import (
     daily_series,
     open_shapes,
     people_affected,
+    people_series,
     repeat_rate,
     stage_breakdown,
     summary,
@@ -14,9 +15,10 @@ from stepstitch_service.shapes import STAGE_ORDER
 
 
 def _shape(stage="untriaged", occurrences=1, first="2026-07-20T09:00:00+00:00",
-           route="/checkout", prior=None):
+           route="/checkout", prior=None, daily=None):
     return {"stage": stage, "occurrences": occurrences, "first_seen": first,
-            "fingerprint": {"route": route}, "prior_fixes": prior or []}
+            "fingerprint": {"route": route}, "prior_fixes": prior or [],
+            "daily": daily or {}}
 
 
 DAYS = ["2026-07-18", "2026-07-19", "2026-07-20", "2026-07-21"]
@@ -128,4 +130,53 @@ def test_summary_is_internally_consistent():
 def test_summary_on_an_empty_deployment():
     s = summary([], DAYS, STAGE_ORDER)
     assert s == {"open": 0, "people_affected": 0, "fixed": 0, "repeat_rate": 0.0,
-                 "series": [0, 0, 0, 0], "stages": [], "pages": [], "total": 0}
+                 "days": DAYS, "series": [0, 0, 0, 0], "new_shapes_series": [0, 0, 0, 0],
+                 "stages": [], "pages": [], "total": 0}
+
+
+def test_summary_charts_people_not_new_shapes():
+    """The headline series must be people-per-day; new-shapes-per-day rides alongside it.
+
+    These differ by an order of magnitude on real data — which is the entire reason the
+    chart changed. Asserting both in one place stops a future edit quietly swapping them
+    back and flattening the chart again.
+    """
+    shapes = [
+        _shape(first="2026-07-18T00:00:00+00:00", occurrences=9,
+               daily={"2026-07-18": 4, "2026-07-19": 5}),
+        _shape(first="2026-07-20T00:00:00+00:00", occurrences=3,
+               daily={"2026-07-20": 3}),
+    ]
+    s = summary(shapes, DAYS, STAGE_ORDER)
+    assert s["series"] == [4, 5, 3, 0]              # people per day
+    assert s["new_shapes_series"] == [1, 0, 1, 0]   # distinct failures first seen per day
+    assert s["days"] == DAYS                        # the axis travels with the data
+
+
+# ---- people series ----------------------------------------------------------------------
+
+def test_people_series_sums_across_shapes_on_the_same_day():
+    shapes = [_shape(daily={"2026-07-19": 2}), _shape(daily={"2026-07-19": 5})]
+    assert people_series(shapes, DAYS) == [0, 7, 0, 0]
+
+
+def test_people_series_zero_fills_quiet_days():
+    """A day nobody reported is a zero, never a gap — otherwise a quiet week compresses
+    the chart and makes a calm month look busy."""
+    shapes = [_shape(daily={"2026-07-18": 1, "2026-07-21": 1})]
+    assert people_series(shapes, DAYS) == [1, 0, 0, 1]
+
+
+def test_people_series_ignores_days_outside_the_window():
+    shapes = [_shape(daily={"2026-01-01": 99, "2026-07-20": 2})]
+    assert people_series(shapes, DAYS) == [0, 0, 2, 0]
+
+
+def test_people_series_survives_shapes_with_no_daily_tally():
+    """Shapes predating the `daily` field, or with a null created_at, must not crash it."""
+    assert people_series([{}, {"daily": None}, _shape(daily={"2026-07-20": 3})],
+                         DAYS) == [0, 0, 3, 0]
+
+
+def test_people_series_on_no_shapes_is_all_zeros():
+    assert people_series([], DAYS) == [0, 0, 0, 0]

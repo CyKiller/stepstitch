@@ -51,6 +51,25 @@ def daily_series(shapes: Sequence[Dict[str, Any]], days: Sequence[str]) -> List[
     return [counts.get(d, 0) for d in days]
 
 
+def people_series(shapes: Sequence[Dict[str, Any]], days: Sequence[str]) -> List[int]:
+    """People affected per day, over an explicit list of dates.
+
+    This is the number the overview chart plots, and it is deliberately not
+    :func:`daily_series`. That one counts a shape once, on the day it first appeared — so a
+    real deployment with six distinct failures over a month draws six isolated spikes and a
+    flat line, which reads as "nothing is happening" when in fact eighty-odd people hit
+    those failures. Summing each shape's ``daily`` tally instead gives a continuous series
+    at the resolution the data actually has.
+
+    Same explicit-axis contract as :func:`daily_series`: a day nobody reported is a zero,
+    not a gap, so a quiet week cannot compress the chart into looking busy.
+    """
+    return [
+        sum(int((s.get("daily") or {}).get(d, 0)) for s in shapes)
+        for d in days
+    ]
+
+
 def stage_breakdown(
     shapes: Sequence[Dict[str, Any]], order: Sequence[str]
 ) -> List[Dict[str, Any]]:
@@ -80,14 +99,23 @@ def worst_hit_pages(
 def summary(
     shapes: Sequence[Dict[str, Any]], days: Sequence[str], stage_order: Sequence[str]
 ) -> Dict[str, Any]:
-    """Everything the overview needs, in one pass."""
+    """Everything the overview needs, in one pass.
+
+    ``days`` is the date axis the caller wants drawn, oldest first. Both series are keyed to
+    it, so they line up on the same x-positions without the consumer re-deriving anything.
+    """
     opened = open_shapes(shapes)
     return {
         "open": len(opened),
         "people_affected": people_affected(opened),
         "fixed": sum(1 for s in shapes if s.get("stage") == FIXED),
         "repeat_rate": repeat_rate(shapes),
-        "series": daily_series(shapes, days),
+        "days": list(days),
+        # What the chart draws: people affected per day, a real curve.
+        "series": people_series(shapes, days),
+        # Kept alongside it: new distinct failures per day. Useful as a figure, useless as
+        # this chart — see people_series for why.
+        "new_shapes_series": daily_series(shapes, days),
         "stages": stage_breakdown(opened, stage_order),
         "pages": worst_hit_pages(opened),
         "total": len(shapes),
@@ -95,6 +123,6 @@ def summary(
 
 
 __all__ = [
-    "open_shapes", "people_affected", "repeat_rate", "daily_series",
+    "open_shapes", "people_affected", "repeat_rate", "daily_series", "people_series",
     "stage_breakdown", "worst_hit_pages", "summary",
 ]

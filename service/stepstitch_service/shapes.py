@@ -135,6 +135,7 @@ def cluster(
                 "verdicts": [],
                 "first_seen": None,
                 "last_seen": None,
+                "daily": {},
             }
         bucket["trace_ids"].append(trace.get("trace_id"))
         bucket["verdicts"].extend(trace.get("verdicts") or [])
@@ -144,6 +145,13 @@ def cluster(
                 bucket["first_seen"] = created
             if bucket["last_seen"] is None or created > bucket["last_seen"]:
                 bucket["last_seen"] = created
+            # Keep the per-day tally, not just the span. first_seen/last_seen answer "when
+            # did this shape appear", which is one point per shape — six shapes across a
+            # month is a flat chart. How many people hit it *each day* is the number worth
+            # plotting, and every trace's date is already in this loop; not recording it
+            # was throwing the data away.
+            day = str(created)[:10]
+            bucket["daily"][day] = bucket["daily"].get(day, 0) + 1
 
     shapes: List[Dict[str, Any]] = []
     for bucket in buckets.values():
@@ -171,6 +179,10 @@ def cluster(
             "representative_trace_id": bucket["trace_ids"][0],
             "first_seen": bucket["first_seen"],
             "last_seen": bucket["last_seen"],
+            # {"2026-07-14": 3, ...} — how many people hit this shape on each day. Days with
+            # no traces are absent rather than zero; the consumer supplies the date axis, so
+            # only it knows which quiet days are inside the window worth drawing.
+            "daily": bucket["daily"],
             "stage": stage,
             "verdicts": sorted(set(bucket["verdicts"])),
             "prior_fixes": prior_fixes,

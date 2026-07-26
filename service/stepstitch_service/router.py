@@ -32,6 +32,7 @@ from .fix_memory import match as fix_match
 from .fragility import compute_fragility_map, minimal_repro
 from .github_bridge.content import branch_name, regression_test_path
 from .integrations.base import DraftAdapter, build_trace_summary, export_preview
+from .metrics import summary as overview_summary
 from .replayability import score_trace
 from .retention import purge_expired_traces
 from .scrubber import (
@@ -971,6 +972,16 @@ def create_stepstitch_router(
         # Default match weights, same as /similar-fixes — one notion of "similar" everywhere.
         return cluster_shapes(traces, corpus=corpus)
 
+    def _recent_days(span: int = 30) -> List[str]:
+        """The chart's x-axis: `span` dates ending today, oldest first.
+
+        Built here rather than inferred from the data so a day on which nothing broke is
+        still a zero on the chart. Inferring the axis from the traces themselves would
+        silently drop quiet days and make a bad week look like a busy one.
+        """
+        today = datetime.now(timezone.utc).date()
+        return [(today - timedelta(days=n)).isoformat() for n in range(span - 1, -1, -1)]
+
     @router.get("/shapes")
     async def list_shapes(
         admin: Any = Depends(require_admin),
@@ -981,7 +992,12 @@ def create_stepstitch_router(
         shapes = await _load_shapes(limit)
         await _audit("stepstitch.shapes", _actor_id(admin), {"shapes": len(shapes)})
         return {"status": "ok", "stages": list(STAGE_ORDER), "shapes": shapes,
-                "board": shape_board(shapes)}
+                "board": shape_board(shapes),
+                # The overview's arithmetic is computed here, by the tested `metrics` module,
+                # rather than re-derived by whichever client is drawing it. A dashboard that
+                # quietly computes the wrong number is worse than no dashboard, and the only
+                # way that stays true is if the code under test is the code that runs.
+                "overview": overview_summary(shapes, _recent_days(), STAGE_ORDER)}
 
     @router.get("/shapes/{shape_id}")
     async def get_shape(
