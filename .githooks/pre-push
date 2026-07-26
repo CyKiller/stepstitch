@@ -18,12 +18,18 @@ CHECK_ALL=0       # 1 when a new branch is pushed (no cheap range) -> check ever
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$Z40" ] && continue  # branch deletion
 
+  # Authorship is checked over commits that exist nowhere on the remote yet — `--not --remotes`
+  # in BOTH cases, not just for new branches. A plain `remote_sha..local_sha` range looks right
+  # but breaks on force-push after a rebase: it sweeps in every commit the new base added, and
+  # `main` legitimately carries GitHub-authored squashes (dependabot, release-please) that can
+  # never satisfy this gate. That made every branch rebased onto a current `main` unpushable and
+  # invited a habit of `--no-verify`, which would disable the check this hook exists to make.
+  # Rebased/amended commits get fresh SHAs, so they are still caught — nothing is smuggled past.
+  rev_args="$local_sha --not --remotes"
   if [ "$remote_sha" = "$Z40" ]; then
-    rev_args="$local_sha --not --remotes"  # new branch: check all reachable commits
-    CHECK_ALL=1
+    CHECK_ALL=1  # new branch: no cheap changed-path range, so gate 2 checks everything
   else
     range="${remote_sha}..${local_sha}"
-    rev_args="$range"
     CHANGED="$CHANGED
 $(git diff --name-only "$range" 2>/dev/null || true)"
   fi
