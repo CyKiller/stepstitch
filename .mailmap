@@ -1,0 +1,37 @@
+# One project, one maintainer: CyKiller <cykiller@msn.com>.
+#
+# Aaron Johnson and CyKiller are the same person — the legal name and the handle on the
+# same GitHub account (login CyKiller, id 328016). Over time, commits picked up five
+# different name/email spellings from three sources:
+#
+#   CyKiller <Cykiller@msn.com>       GitHub's stored address casing, used when GitHub
+#   Aaron Johnson <Cykiller@msn.com>  itself writes a commit (squash-merges, web edits).
+#                                     GitHub uses the account's PROFILE name, not the
+#                                     name in local git config, so a profile reading
+#                                     "Aaron Johnson" lands on the commit.
+#
+#   CyKiller <devway83@gmail.com>     the address used before June 2026, still present
+#   StepStitch <devway83@gmail.com>   in the v0.1.0-v0.3.0 tags.
+#
+# GitHub already collapses all of these into one contributor, because it matches on the
+# account's verified addresses rather than the literal strings. Local tooling does not:
+# without this file `git shortlog -sne` reports five people for one person, and so would
+# anything counting contributors from a clone.
+#
+# This file is display-only. It rewrites nothing and breaks no link — git reads through
+# it when resolving a name. Rewriting history to correct the recorded strings was
+# considered and rejected: the published history is already clean of AI co-author
+# trailers (verified across all 181 published commits), so a force-push would spend the
+# integrity of every commit id to tidy twelve labels that already display correctly.
+#
+# Going forward this should stop drifting. The repository now allows ONLY rebase merges,
+# which preserve the local commit author verbatim; squash merges were the mechanism that
+# let GitHub stamp its own profile name onto four commits. The .githooks/pre-push gate
+# enforces the canonical identity on everything created locally.
+#
+# Format: Canonical Name <canonical@email>  Recorded Name <recorded@email>
+
+CyKiller <cykiller@msn.com>  CyKiller <Cykiller@msn.com>
+CyKiller <cykiller@msn.com>  Aaron Johnson <Cykiller@msn.com>
+CyKiller <cykiller@msn.com>  CyKiller <devway83@gmail.com>
+CyKiller <cykiller@msn.com>  StepStitch <devway83@gmail.com>
