@@ -6,56 +6,104 @@ import { Reveal } from "@/components/reveal";
 import { Button } from "@/components/button";
 import { CodeBlock } from "@/components/code-block";
 import { NPM_URL } from "@/lib/links";
+import {
+  DOCKER_DOCTOR,
+  DOCKER_SEED,
+  DOCKER_UP,
+  MANUAL_DOCTOR,
+  MANUAL_HOST,
+  OFFLINE_DEMO,
+  OFFLINE_DEMO_WINDOWS_ACTIVATE,
+  SDK_INSTALL,
+} from "@/lib/quickstart-commands";
 
 export const metadata: Metadata = {
   title: "Quickstart — StepStitch",
   description:
-    "Go from clone to a verified red-to-green reproduction in about ten minutes. Install the SDK, run the credential-free demo, view the operator cockpit, generate a Playwright repro, and walk the verification flow — no ServiceNow, Salesforce, GitHub, or cloud credentials required.",
+    "Three ways in: add the zero-dependency SDK with npm alone, prove the whole loop offline with Node and Python, or run the full host with Docker and walk a trace to a verified red-to-green fix. Every command works in the order shown.",
 };
 
-const steps: { title: string; body: string; code?: string; caption?: string }[] = [
+// Each journey states its real prerequisites up front, and its commands are imported from
+// one shared module so the README, this page, and the clean-install CI gate can never
+// document three different sequences.
+type Step = { title: string; body: string; code?: string; caption?: string };
+type Journey = { name: string; prereqs: string; intro: string; steps: Step[] };
+
+const journeys: Journey[] = [
   {
-    title: "Install the SDK",
-    body: "Add the zero-dependency tracker to the app whose bugs you want to reproduce.",
-    code: "npm install @stepstitch/tracker",
+    name: "Add the SDK to your app",
+    prereqs: "Needs Node and npm. Nothing else.",
+    intro:
+      "The zero-dependency tracker goes into the app whose bugs you want reproduced. Capture is off until a user consents.",
+    steps: [
+      {
+        title: "Install the tracker",
+        body: "One package, no transitive dependencies, works from both ESM and CommonJS. Consent is off by default — until your app calls grantConsent(), nothing is observed and nothing is sent.",
+        code: SDK_INSTALL,
+      },
+    ],
   },
   {
-    title: "Run the credential-free demo",
-    body: "The fastest way to see the whole moat. It imports the real service modules and writes a labeled evidence bundle — no database, no credentials, nothing sent.",
-    code: "npm run demo      # writes demo/evidence-bundle.json\nnpm run smoke     # asserts no forbidden field or value survived the scrub",
-    caption: "Deterministic — re-running produces an identical bundle.",
+    name: "Prove the loop offline",
+    prereqs: "Needs Git, Node 20+, and Python 3.10+. Nothing leaves your machine.",
+    intro:
+      "The demo imports the real service modules — scrubber, scorer, compiler, verdict — so Python and the service package are genuine prerequisites, and installing them is part of the sequence.",
+    steps: [
+      {
+        title: "Clone, install the service, run the demo",
+        body: "Runs the real pipeline end to end (report → scrub → score → Playwright → verdict) with no database, no network and no credentials, then asserts no forbidden field or value survived the scrub. The venv keeps the service install disposable.",
+        code: OFFLINE_DEMO,
+        caption: `Windows (PowerShell): activate with ${OFFLINE_DEMO_WINDOWS_ACTIVATE}. Deterministic — re-running writes an identical demo/evidence-bundle.json.`,
+      },
+    ],
   },
   {
-    title: "Mount the service (or use the reference host)",
-    body: "One command brings up Postgres and the ingest host with throwaway dev tokens. Prefer to run it yourself? The uvicorn line below does the same thing against your own database.",
-    code: "docker compose up --build      # Postgres + host, dev tokens, http://localhost:8000\n\n# or, against your own database:\nexport DATABASE_URL=postgres://localhost/stepstitch\nexport STEPSTITCH_INGEST_TOKEN=dev-ingest STEPSTITCH_ADMIN_TOKEN=dev-admin\nexport STEPSTITCH_APP_BASE_URL=https://staging.your-app.example   # where repros should point\nuvicorn server.app:app --port 8000",
-  },
-  {
-    title: "Check the install before going further",
-    body: "doctor walks the whole chain — environment, host, database, both tokens, capture policy and reproduction settings — and names the fix for anything broken. It never prints a secret value, so its output is safe to paste into an issue.",
-    code: "pip install ./service && stepstitch doctor",
-  },
-  {
-    title: "Submit a demo trace",
-    body: "Seed one realistic, already-structural trace (transfer → 500) into the running service.",
-    code: "STEPSTITCH_BASE_URL=http://localhost:8000 STEPSTITCH_INGEST_TOKEN=dev-ingest \\\n  node scripts/seed-demo-trace.mjs",
-  },
-  {
-    title: "View the operator cockpit",
-    body: "Open the read-only cockpit, paste your admin token, and inspect the sanitized evidence: summary, replayability, privacy posture, and verification history.",
-    code: "open http://localhost:8000/dashboard",
-  },
-  {
-    title: "Point reproductions at your app, then generate one",
-    body: "A trace knows the route template, not your hostname, and never recorded what was typed. Supply the rest once and every generated test carries a READY / NEEDS-CONFIG checklist naming anything still missing. Configuration stores env var names, never credentials.",
-    code: "curl -X PUT -H \"Authorization: Bearer $STEPSTITCH_ADMIN_TOKEN\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"config\":{\"base_url\":\"https://staging.your-app.example\",\"route_params\":{\"id\":\"1001\"}}}' \\\n  http://localhost:8000/admin/config/repro\n\ncurl -H \"Authorization: Bearer $STEPSTITCH_ADMIN_TOKEN\" \\\n  http://localhost:8000/api/stepstitch/v1/session/<trace_id>/playwright",
-  },
-  {
-    title: "Close the loop from CI",
-    body: "Your CI runs the reproduction on the buggy commit and again on the fix, then posts both measured outcomes. confirmed_fixed means StepStitch actually observed the test fail and then pass — if either run does not complete, nothing is recorded. Issue CI a verify-scoped token from the console's Agents tab; it never needs your admin token.",
-    code: "# the shipped workflow does this for you: .github/workflows/stepstitch-repro.yml\n# red  -> checkout the pre-fix ref, run the repro, expect FAIL\n# green -> checkout the fix,       run the repro, expect PASS\ncurl -X POST -H \"Authorization: Bearer $STEPSTITCH_VERIFY_TOKEN\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"pre_passed\": false, \"post_passed\": true, \"fix_ref\": \"PR #482\"}' \\\n  http://localhost:8000/api/stepstitch/v1/session/<trace_id>/verify   # -> confirmed_fixed",
+    name: "Run the full host",
+    prereqs:
+      "Needs Docker. (Prefer no Docker? The manual path below needs Python 3.10+ and a Postgres you provide.)",
+    intro:
+      "One command brings up Postgres and the ingest host with throwaway dev tokens. From there you seed a trace, check the install, point reproductions at your app, and close the loop from CI.",
+    steps: [
+      {
+        title: "Bring up Postgres and the host",
+        body: "Then open http://localhost:8000/dashboard and paste dev-admin when the console asks for a token. These are throwaway dev credentials — never use them in production.",
+        code: DOCKER_UP,
+      },
+      {
+        title: "Seed a demo trace",
+        body: "Submits one realistic, already-structural trace (transfer → 500). The script needs both variables — it refuses to guess where your host is or what its ingest token might be.",
+        code: DOCKER_SEED,
+      },
+      {
+        title: "Check the install where the configuration lives",
+        body: "doctor walks the whole chain — environment, host, database, both tokens, capture policy and reproduction settings — and names the fix for anything broken. It reads configuration from its own environment, so with Compose it must run inside the container; on your host shell it would truthfully report the variables missing. It never prints a secret value.",
+        code: DOCKER_DOCTOR,
+      },
+      {
+        title: "No Docker? The manual path, in an order that works",
+        body: "Install the service and the host's requirements before uvicorn ever starts, and export the configuration first. STEPSTITCH_APP_BASE_URL is where generated reproductions will point — set it to your staging app now, or every repro targets localhost:3000 until you configure it.",
+        code: MANUAL_HOST,
+        caption: `Then run ${MANUAL_DOCTOR} in the same shell — doctor needs the environment you just exported.`,
+      },
+      {
+        title: "Point reproductions at your app, then generate one",
+        body: "A trace knows the route template, not your hostname, and never recorded what was typed. Supply the rest once and every generated test carries a READY / NEEDS-CONFIG checklist naming anything still missing. Configuration stores env var names, never credentials.",
+        code: "curl -X PUT -H \"Authorization: Bearer $STEPSTITCH_ADMIN_TOKEN\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"config\":{\"base_url\":\"https://staging.your-app.example\",\"route_params\":{\"id\":\"1001\"}}}' \\\n  http://localhost:8000/admin/config/repro\n\ncurl -H \"Authorization: Bearer $STEPSTITCH_ADMIN_TOKEN\" \\\n  http://localhost:8000/api/stepstitch/v1/session/<trace_id>/playwright",
+      },
+      {
+        title: "Close the loop from CI",
+        body: "Your CI runs the reproduction on the buggy commit and again on the fix, then posts both measured outcomes. confirmed_fixed means StepStitch actually observed the test fail and then pass — if either run does not complete, nothing is recorded. Issue CI a verify-scoped token from the console's Agents tab; it never needs your admin token.",
+        code: "# the shipped workflow does this for you: .github/workflows/stepstitch-repro.yml\n# red  -> checkout the pre-fix ref, run the repro, expect FAIL\n# green -> checkout the fix,       run the repro, expect PASS\ncurl -X POST -H \"Authorization: Bearer $STEPSTITCH_VERIFY_TOKEN\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"pre_passed\": false, \"post_passed\": true, \"fix_ref\": \"PR #482\"}' \\\n  http://localhost:8000/api/stepstitch/v1/session/<trace_id>/verify   # -> confirmed_fixed",
+      },
+    ],
   },
 ];
+
+// Continuous step numbering across the three journeys, computed statically because the
+// React compiler (rightly) refuses render-time mutation.
+const stepOffsets = journeys.map((_, i) =>
+  journeys.slice(0, i).reduce((acc, j) => acc + j.steps.length, 0),
+);
 
 export default function QuickstartPage() {
   return (
@@ -72,8 +120,8 @@ export default function QuickstartPage() {
         <div className="mt-6">
           <SectionHeader
             eyebrow="Quickstart"
-            title="From clone to a verified reproduction in ~10 minutes"
-            body="The first two steps need nothing but Node and the repo — the credential-free demo proves the whole loop offline. The rest wires up the live service so you can submit a trace and watch it become a Playwright repro and a confirmed fix."
+            title="Three ways in, smallest first"
+            body="Add the SDK to your app with npm alone. Prove the whole loop offline with Node and Python. Or run the full host and watch a submitted trace become a Playwright repro and a confirmed fix. Each path states its real prerequisites, and every command works in the order shown."
           />
         </div>
 
@@ -84,26 +132,48 @@ export default function QuickstartPage() {
           </div>
         </Reveal>
 
-        <ol className="mt-10 grid gap-4">
-          {steps.map((s, i) => (
-            <Reveal key={s.title} delay={Math.min(i * 0.04, 0.2)}>
-              <li className="rounded-2xl border border-line bg-surface p-6">
-                <div className="flex items-center gap-3">
-                  <span className="grid size-7 shrink-0 place-items-center rounded-full bg-accent-solid text-[13px] font-semibold text-accent-fg">
-                    {i + 1}
-                  </span>
-                  <h3 className="text-base font-semibold text-fg">{s.title}</h3>
-                </div>
-                <p className="mt-3 text-[14.5px] leading-relaxed text-muted">{s.body}</p>
-                {s.code ? (
-                  <div className="mt-4">
-                    <CodeBlock code={s.code} caption={s.caption} />
-                  </div>
-                ) : null}
-              </li>
-            </Reveal>
+        <div className="mt-12 grid gap-14">
+          {journeys.map((journey, journeyIndex) => (
+            <div key={journey.name}>
+              <Reveal>
+                <h2 className="text-xl font-semibold tracking-tight text-fg">
+                  {journey.name}
+                </h2>
+                <p className="mt-1 text-[13.5px] font-medium text-accent">
+                  {journey.prereqs}
+                </p>
+                <p className="mt-3 max-w-2xl text-[14.5px] leading-relaxed text-muted">
+                  {journey.intro}
+                </p>
+              </Reveal>
+              <ol className="mt-6 grid gap-4">
+                {journey.steps.map((s, stepIndex) => {
+                  const n = stepOffsets[journeyIndex] + stepIndex + 1;
+                  return (
+                    <Reveal key={s.title}>
+                      <li className="rounded-2xl border border-line bg-surface p-6">
+                        <div className="flex items-center gap-3">
+                          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-accent-solid text-[13px] font-semibold text-accent-fg">
+                            {n}
+                          </span>
+                          <h3 className="text-base font-semibold text-fg">{s.title}</h3>
+                        </div>
+                        <p className="mt-3 text-[14.5px] leading-relaxed text-muted">
+                          {s.body}
+                        </p>
+                        {s.code ? (
+                          <div className="mt-4">
+                            <CodeBlock code={s.code} caption={s.caption} />
+                          </div>
+                        ) : null}
+                      </li>
+                    </Reveal>
+                  );
+                })}
+              </ol>
+            </div>
           ))}
-        </ol>
+        </div>
 
         <Reveal>
           <div className="mt-10 flex flex-wrap items-center gap-3">
