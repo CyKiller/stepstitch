@@ -13,9 +13,9 @@ pushed.
 | Suite | Tests | Command |
 |---|---|---|
 | Service (compiler, router, privacy, connectors) | **414** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **106** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Host (auth, dashboard, real Postgres) | **132** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **22** | `npx vitest run` |
-| Web (marketing site + copy claims) | **38** | `cd web && npx vitest run` |
+| Web (marketing site + copy claims) | **43** | `cd web && npx vitest run` |
 
 Counts are the number pytest/vitest **collect**, and they are enforced: each suite verifies
 its own row (`test_status_ledger.py`, `test_status_ledger_host.py`),
@@ -26,8 +26,10 @@ doc sat a month stale claiming "183 service + 31 host" and naming a proof that w
 the repository.
 
 Also blocking: `ruff`, `mypy`, `tsc --noEmit`, `eslint`, CodeQL, the executable-repro proof
-(`scripts/prove-repro-executes.mjs`), the compliance-evidence drift guard, and the
-import-linter layering contract.
+(`scripts/prove-repro-executes.mjs`), the compliance-evidence drift guard, the import-linter
+layering contract, and two browser jobs the server-side suites cannot replace — `demo-console`
+(the console actually renders) and `tiny-transfer` (the privacy claims hold against the bytes
+the browser sent).
 
 ## Shipped — done (proven)
 
@@ -52,6 +54,8 @@ import-linter layering contract.
 | `stepstitch doctor` first-run diagnostic (never prints a secret) | `service/.../cli.py` | `test_doctor.py` |
 | Startup fails with every misconfiguration named, not `KeyError` | `server/envcheck.py` | `test_app_startup.py` |
 | Runnable example proving the privacy claims + red→green | `examples/tiny-transfer/` | CI job `tiny-transfer` (13 Playwright tests over the captured payload) |
+| Public demo console — real UI, synthetic data, no credentials, read-only | `server/demo.py`, `scripts/build_demo_dataset.py` | `test_demo_app.py`, CI job `demo-console` (13 browser tests) |
+| Deep-linkable failures (`#/shape/…`) | `server/dashboard.py` | `test_host.py`, `dashboard-demo.spec.ts` |
 | End-to-end golden path | (all of the above) | `test_golden_path.py` |
 
 ### Host, governance and operations

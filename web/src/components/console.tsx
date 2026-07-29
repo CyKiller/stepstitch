@@ -9,6 +9,7 @@ import {
 import type { Icon } from "@phosphor-icons/react";
 import { Reveal } from "./reveal";
 import { Section, SectionHeader } from "./section";
+import { Button } from "./button";
 import { ConsoleBoard } from "./console-board";
 
 type Panel = {
@@ -71,6 +72,10 @@ export function Console() {
 
       <Reveal className="mt-12">
         <ConsoleBoard />
+      </Reveal>
+
+      <Reveal className="mt-6">
+        <Button href="/dashboard">Try the console</Button>
       </Reveal>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

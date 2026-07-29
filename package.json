@@ -1,7 +1,7 @@
 {
   "name": "@stepstitch/tracker",
   "version": "0.8.0",
-  "description": "StepStitch — issue-to-repro infrastructure (not session replay): turns a user-reported problem into scrubbed diagnostics, a replayability score, and a copyable Playwright reproduction, without capturing screens, input values, or page text. Zero runtime dependencies.",
+  "description": "StepStitch \u2014 issue-to-repro infrastructure (not session replay): turns a user-reported problem into scrubbed diagnostics, a replayability score, and a copyable Playwright reproduction, without capturing screens, input values, or page text. Zero runtime dependencies.",
   "license": "Apache-2.0",
   "keywords": [
     "playwright",
@@ -63,7 +63,9 @@
     "test:e2e-proof": "node scripts/prove-repro-executes.mjs",
     "demo": "PYTHONPATH=service python3 scripts/demo_red_to_green.py",
     "smoke": "npm run demo && node scripts/smoke-check.mjs",
-    "release-gate:evidence": "python3 -m pytest service/tests/test_repro_eval.py service/tests/test_compliance.py service/tests/test_golden_path.py -q"
+    "release-gate:evidence": "python3 -m pytest service/tests/test_repro_eval.py service/tests/test_compliance.py service/tests/test_golden_path.py -q",
+    "demo:dataset": "PYTHONPATH=service python3 scripts/build_demo_dataset.py",
+    "test:demo-console": "playwright test --config playwright.demo.config.ts"
   },
   "dependencies": {},
   "devDependencies": {

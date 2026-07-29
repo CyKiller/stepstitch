@@ -321,6 +321,14 @@ DASHBOARD_HTML = r"""<!doctype html>
   .primary-actions { margin-top:20px; padding:13px 14px 4px; border:1px solid var(--line-strong); border-radius:var(--r-lg); background:var(--surface); }
   .primary-actions .lab { font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin-bottom:9px; }
   .primary-actions .row-actions { margin-bottom:9px; }
+  /* Demo banner: permanent, above everything, impossible to mistake for chrome. */
+  .demobar {
+    position:sticky; top:0; z-index:60; display:flex; gap:10px; align-items:baseline;
+    flex-wrap:wrap; padding:8px 16px; font-size:12.5px; line-height:1.5;
+    background:var(--accent-dim); border-bottom:1px solid rgba(52,211,153,.32); color:var(--fg);
+  }
+  .demobar b { color:var(--accent); font-weight:560; flex:0 0 auto; }
+  .demobar span { color:var(--muted); }
 
   .tabs { display:flex; gap:1px; margin:24px 0 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
   .tabs button {
@@ -462,6 +470,10 @@ DASHBOARD_HTML = r"""<!doctype html>
 </aside>
 
 <main class="view" id="view">
+  <div class="demobar" id="demobar" role="status" hidden>
+    <b>Synthetic demo</b>
+    <span id="demobartext"></span>
+  </div>
   <div class="topbar">
     <div class="crumbs" id="crumbs"></div>
     <span class="spacer"></span>
@@ -483,12 +495,20 @@ DASHBOARD_HTML = r"""<!doctype html>
 (function () {
   "use strict";
 
-  var API = "/api/stepstitch/v1";
+  // The console is served at "<mount>/dashboard" — at the root for the real host, under
+  // /demo for the public demo copy, and under the site's own path when proxied. Deriving the
+  // API base from our own URL means one template works at every mount point, with nothing to
+  // keep in sync. DEMO is substituted server-side (server/demo.py:render_dashboard).
+  var ROOT = location.pathname.replace(/\/dashboard\/?$/, "");
+  var API = ROOT + "/api/stepstitch/v1";
+  var ADMIN = ROOT + "/admin";
+  var DEMO = __DEMO_MODE__;
   var viewEl = document.getElementById("content");
   var navEl = document.getElementById("nav");
   var stageNavEl = document.getElementById("stagenav");
   var crumbsEl = document.getElementById("crumbs");
-  var token = sessionStorage.getItem("ss_token") || "";
+  // The demo needs no credential; a placeholder keeps the transport code identical.
+  var token = DEMO ? "demo" : (sessionStorage.getItem("ss_token") || "");
 
   // ---- operator preferences -------------------------------------------------------------
   // Persisted in localStorage (preferences, not credentials — the token stays in
@@ -608,7 +628,7 @@ DASHBOARD_HTML = r"""<!doctype html>
     return res.json();
   }
   function api(path, opts) { return req(API, path, opts); }
-  function adminApi(path, opts) { return req("/admin", path, opts); }
+  function adminApi(path, opts) { return req(ADMIN, path, opts); }
   function jsonPost(body) {
     return { method: "POST", headers: { "Content-Type": "application/json" },
              body: JSON.stringify(body) };
@@ -826,7 +846,9 @@ DASHBOARD_HTML = r"""<!doctype html>
 
   var currentShapeId = null;   // set while a shape detail is open, so re-renders return to it
 
-  function go(id) {
+  function go(id, opts) {
+    // Keep the URL in step with the view unless we are already responding to a hash change.
+    if (!(opts && opts.fromHash)) setHash("#/" + id);
     current = id;
     currentShapeId = null;
     selectedRow = -1;
@@ -891,6 +913,7 @@ DASHBOARD_HTML = r"""<!doctype html>
     tech = techEl.checked;
     setPref("tech", tech);
     syncChrome();
+    if (DEMO) showDemoBanner();   // the banner speaks in the operator's chosen register
     if (currentShapeId) openShape(currentShapeId); else go(current);
   };
 
@@ -1296,9 +1319,12 @@ DASHBOARD_HTML = r"""<!doctype html>
     var POS = [[40, 24, 76], [3, 4, 42], [7, 60, 50], [72, 2, 44], [78, 56, 38], [28, 80, 36]];
     var cst = el("div", { class: "cst" }, top.map(function (s, i) {
       var p = POS[i] || POS[0];
+      // These buttons contain only an SVG glyph, so `title` is their sole visible label —
+      // and title alone is not a reliable accessible name. Name them explicitly.
+      var label = s.plain_summary || "Open this failure";
       var node = el("button", { class: "cnode" + (i ? "" : " lead"),
         style: "left:" + p[0] + "%;top:" + p[1] + "%",
-        title: s.plain_summary || "",
+        title: label, "aria-label": label,
         onclick: function () { openShape(s.shape_id); } },
         [glyph(s.fingerprint, p[2])]);
       if (!i) node.appendChild(el("span", { class: "cl",
@@ -1603,7 +1629,8 @@ DASHBOARD_HTML = r"""<!doctype html>
   // Sections render IN PLACE. Nothing is ever injected above what the operator is reading.
   var GRADE_TONE = { A: "ok", B: "ok", C: "warn", D: "warn", E: "bad", F: "bad" };
 
-  async function openShape(shapeId) {
+  async function openShape(shapeId, opts) {
+    if (!(opts && opts.fromHash)) setHash("#/shape/" + encodeURIComponent(shapeId));
     currentShapeId = shapeId;
     mountLoading(skeleton("detail"));
     var shape, trace;
@@ -2343,10 +2370,57 @@ DASHBOARD_HTML = r"""<!doctype html>
     mount(root);
   }
 
+  // ---- URL state ------------------------------------------------------------------------
+  // The console had no addressable state at all: a failure could not be linked to, and a
+  // refresh dropped you back on Overview. Hash routing keeps that inside the page (no server
+  // routes, nothing for the CSP to object to).
+  var applyingHash = false;
+  function setHash(next) {
+    if (applyingHash || location.hash === next) return;
+    applyingHash = true;
+    location.hash = next;
+    applyingHash = false;
+  }
+  function routeFromHash() {
+    var raw = (location.hash || "").replace(/^#\/?/, "");
+    var parts = raw.split("/").filter(Boolean);
+    if (parts[0] === "shape" && parts[1]) {
+      current = "board";
+      renderNav();
+      syncChrome();
+      return openShape(decodeURIComponent(parts[1]), { fromHash: true });
+    }
+    var known = ROUTES.filter(function (r) { return r.id === parts[0]; })[0];
+    go(known ? known.id : "overview", { fromHash: true });
+  }
+
+  // Unmissable and permanent. Someone who lands here from a link must not be able to
+  // mistake this for their own data. The markup ships in the page and is only revealed
+  // here, so it is on screen before any of this script runs.
+  function showDemoBanner() {
+    document.getElementById("demobartext").textContent = tech
+      ? "Read-only. Six failure shapes generated by the real StepStitch pipeline "
+        + "(scrubber, scorer, compiler, verdict rules). No real user data exists here, "
+        + "and nothing on this page can be changed."
+      : "Everything here is made up. It is a working copy of the real console, filled "
+        + "with example failures so you can look around. Nothing can be changed.";
+    document.getElementById("demobar").hidden = false;
+  }
+
   // ---- boot -----------------------------------------------------------------------------
   renderNav();
   syncChrome();
-  if (token) { loadStatus(); go("overview"); } else { renderGate(); }
+  if (DEMO) {
+    showDemoBanner();
+    // There is no credential to disconnect from, and no agent token can be issued here.
+    document.getElementById("tokenbtn").hidden = true;
+  }
+  if (token) {
+    loadStatus();
+    // Deep links: a failure has a URL, so it can be shared, bookmarked and reloaded.
+    window.addEventListener("hashchange", routeFromHash);
+    routeFromHash();
+  } else { renderGate(); }
 })();
 </script>
 </body>

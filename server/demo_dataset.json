@@ -1,0 +1,199 @@
+{
+  "audit": [
+    {
+      "action": "stepstitch.ingest",
+      "actor": "demo-user-1",
+      "created_at": "2026-07-19T07:12:00+00:00",
+      "detail": "{\"trace_id\": \"trc_demo_transfer_fixed\", \"scrub_status\": \"scrubbed\"}",
+      "id": "aud_trc_demo_transfer_fixed"
+    },
+    {
+      "action": "stepstitch.verify",
+      "actor": "ci@demo-bank",
+      "created_at": "2026-07-19T13:12:00+00:00",
+      "detail": "{\"trace_id\": \"trc_demo_transfer_fixed\", \"verdict\": \"confirmed_fixed\"}",
+      "id": "aud_trc_demo_transfer_fixed_v0"
+    },
+    {
+      "action": "stepstitch.ingest",
+      "actor": "demo-user-2",
+      "created_at": "2026-07-20T02:24:00+00:00",
+      "detail": "{\"trace_id\": \"trc_demo_transfer_repeat\", \"scrub_status\": \"scrubbed\"}",
+      "id": "aud_trc_demo_transfer_repeat"
+    },
+    {
+      "action": "stepstitch.ingest",
+      "actor": "demo-user-3",
+      "created_at": "2026-07-18T00:00:00+00:00",
+      "detail": "{\"trace_id\": \"trc_demo_statement_reproduced\", \"scrub_status\": \"clean\"}",
+      "id": "aud_trc_demo_statement_reproduced"
+    },
+    {
+      "action": "stepstitch.verify",
+      "actor": "ci@demo-bank",
+      "created_at": "2026-07-18T06:00:00+00:00",
+      "detail": "{\"trace_id\": \"trc_demo_statement_reproduced\", \"verdict\": \"reproduced_unfixed\"}",
+      "id": "aud_trc_demo_statement_reproduced_v0"
+    },
+    {
+      "action": "stepstitch.ingest",
+      "actor": "demo-user-4",
+      "created_at": "2026-07-17T09:36:00+00:00",
+      "detail": "{\"trace_id\": \"trc_demo_payee_fix_failed\", \"scrub_status\": \"scrubbed\"}",
+      "id": "aud_trc_demo_payee_fix_failed"
+    },
+    {
+      "action": "stepstitch.verify",
+      "actor": "ci@demo-bank",
+      "created_at": "2026-07-17T15:36:00+00:00",
+      "detail": "{\"trace_id\": \"trc_demo_payee_fix_failed\", \"verdict\": \"not_fixed\"}",
+      "id": "aud_trc_demo_payee_fix_failed_v0"
+    },
+    {
+      "action": "stepstitch.ingest",
+      "actor": "demo-user-5",
+      "created_at": "2026-07-15T21:36:00+00:00",
+      "detail": "{\"trace_id\": \"trc_demo_search_repro_invalid\", \"scrub_status\": \"clean\"}",
+      "id": "aud_trc_demo_search_repro_invalid"
+    },
+    {
+      "action": "stepstitch.verify",
+      "actor": "ci@demo-bank",
+      "created_at": "2026-07-16T03:36:00+00:00",
+      "detail": "{\"trace_id\": \"trc_demo_search_repro_invalid\", \"verdict\": \"not_reproduced\"}",
+      "id": "aud_trc_demo_search_repro_invalid_v0"
+    },
+    {
+      "action": "stepstitch.ingest",
+      "actor": "demo-user-6",
+      "created_at": "2026-07-20T09:36:00+00:00",
+      "detail": "{\"trace_id\": \"trc_demo_card_untriaged\", \"scrub_status\": \"clean\"}",
+      "id": "aud_trc_demo_card_untriaged"
+    }
+  ],
+  "generated_from": "scripts/build_demo_dataset.py",
+  "note": "Synthetic. Produced by the real StepStitch pipeline. No real user data.",
+  "now": "2026-07-20T12:00:00+00:00",
+  "profile": "financial-services-enterprise",
+  "schema": "stepstitch.demo_dataset/v1",
+  "traces": [
+    {
+      "app_id": "demo-bank-web",
+      "consent_version": "demo-v1",
+      "created_at": "2026-07-19T07:12:00+00:00",
+      "explanation": "Sending $250.00 to account [redacted:card]failed. Reach me at [redacted:email] \u2014 my SSN is [redacted:ssn].",
+      "fingerprint": "{\"route\": \"/accounts/:id/transfer\", \"diagnostic_type\": \"api_error\", \"failing_status\": 500, \"exception_type\": null, \"diagnostic_endpoint\": \"/api/accounts/:id/transfers\", \"terminal_selector\": \"[data-testid=send-transfer]\"}",
+      "footsteps": "[{\"timestamp\": \"2026-07-01T09:00:00Z\", \"type\": \"navigation\", \"route\": \"/accounts/:id/transfer\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:04Z\", \"type\": \"input\", \"route\": \"/accounts/:id/transfer\", \"target\": \"[data-testid=amount]\", \"label\": \"[masked]\", \"metadata\": {\"interacted\": true}}, {\"timestamp\": \"2026-07-01T09:00:07Z\", \"type\": \"click\", \"route\": \"/accounts/:id/transfer\", \"target\": \"[data-testid=send-transfer]\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:08Z\", \"type\": \"api_error\", \"route\": \"/accounts/:id/transfer\", \"label\": \"[masked]\", \"metadata\": {\"status\": 500, \"method\": \"POST\", \"endpoint\": \"/api/accounts/:id/transfers\"}}]",
+      "id": "trc_demo_transfer_fixed",
+      "project_id": "demo-bank",
+      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"scrubbed\", \"scrubbed_fields\": [\"explanation\"], \"policy\": \"financial-services-enterprise\"}}",
+      "user_id": "demo-user-1"
+    },
+    {
+      "app_id": "demo-bank-web",
+      "consent_version": "demo-v1",
+      "created_at": "2026-07-20T02:24:00+00:00",
+      "explanation": "Transfer failed again this morning. Card [redacted:card].",
+      "fingerprint": "{\"route\": \"/accounts/:id/transfer\", \"diagnostic_type\": \"api_error\", \"failing_status\": 500, \"exception_type\": null, \"diagnostic_endpoint\": \"/api/accounts/:id/transfers\", \"terminal_selector\": \"[data-testid=confirm-and-send]\"}",
+      "footsteps": "[{\"timestamp\": \"2026-07-01T09:00:00Z\", \"type\": \"navigation\", \"route\": \"/accounts/:id/transfer\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:04Z\", \"type\": \"input\", \"route\": \"/accounts/:id/transfer\", \"target\": \"[data-testid=amount]\", \"label\": \"[masked]\", \"metadata\": {\"interacted\": true}}, {\"timestamp\": \"2026-07-01T09:00:07Z\", \"type\": \"click\", \"route\": \"/accounts/:id/transfer\", \"target\": \"[data-testid=confirm-and-send]\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:08Z\", \"type\": \"api_error\", \"route\": \"/accounts/:id/transfer\", \"label\": \"[masked]\", \"metadata\": {\"status\": 500, \"method\": \"POST\", \"endpoint\": \"/api/accounts/:id/transfers\"}}]",
+      "id": "trc_demo_transfer_repeat",
+      "project_id": "demo-bank",
+      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"scrubbed\", \"scrubbed_fields\": [\"explanation\"], \"policy\": \"financial-services-enterprise\"}}",
+      "user_id": "demo-user-2"
+    },
+    {
+      "app_id": "demo-bank-web",
+      "consent_version": "demo-v1",
+      "created_at": "2026-07-18T00:00:00+00:00",
+      "explanation": "Statement download spins forever then errors.",
+      "fingerprint": "{\"route\": \"/accounts/:id/statements\", \"diagnostic_type\": \"api_error\", \"failing_status\": 500, \"exception_type\": null, \"diagnostic_endpoint\": \"/api/accounts/:id/statements\", \"terminal_selector\": \"[data-testid=download-statement]\"}",
+      "footsteps": "[{\"timestamp\": \"2026-07-01T09:00:00Z\", \"type\": \"navigation\", \"route\": \"/accounts/:id/statements\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:04Z\", \"type\": \"input\", \"route\": \"/accounts/:id/statements\", \"target\": \"[data-testid=amount]\", \"label\": \"[masked]\", \"metadata\": {\"interacted\": true}}, {\"timestamp\": \"2026-07-01T09:00:07Z\", \"type\": \"click\", \"route\": \"/accounts/:id/statements\", \"target\": \"[data-testid=download-statement]\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:08Z\", \"type\": \"api_error\", \"route\": \"/accounts/:id/statements\", \"label\": \"[masked]\", \"metadata\": {\"status\": 500, \"method\": \"POST\", \"endpoint\": \"/api/accounts/:id/statements\"}}]",
+      "id": "trc_demo_statement_reproduced",
+      "project_id": "demo-bank",
+      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"clean\", \"scrubbed_fields\": [], \"policy\": \"financial-services-enterprise\"}}",
+      "user_id": "demo-user-3"
+    },
+    {
+      "app_id": "demo-bank-web",
+      "consent_version": "demo-v1",
+      "created_at": "2026-07-17T09:36:00+00:00",
+      "explanation": "Saving a payee returns an error. Call me on [redacted:phone].",
+      "fingerprint": "{\"route\": \"/payees/:id/edit\", \"diagnostic_type\": \"api_error\", \"failing_status\": 500, \"exception_type\": null, \"diagnostic_endpoint\": \"/api/payees/:id\", \"terminal_selector\": \"[data-testid=save-payee]\"}",
+      "footsteps": "[{\"timestamp\": \"2026-07-01T09:00:00Z\", \"type\": \"navigation\", \"route\": \"/payees/:id/edit\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:04Z\", \"type\": \"input\", \"route\": \"/payees/:id/edit\", \"target\": \"[data-testid=amount]\", \"label\": \"[masked]\", \"metadata\": {\"interacted\": true}}, {\"timestamp\": \"2026-07-01T09:00:07Z\", \"type\": \"click\", \"route\": \"/payees/:id/edit\", \"target\": \"[data-testid=save-payee]\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:08Z\", \"type\": \"api_error\", \"route\": \"/payees/:id/edit\", \"label\": \"[masked]\", \"metadata\": {\"status\": 500, \"method\": \"POST\", \"endpoint\": \"/api/payees/:id\"}}]",
+      "id": "trc_demo_payee_fix_failed",
+      "project_id": "demo-bank",
+      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"scrubbed\", \"scrubbed_fields\": [\"explanation\"], \"policy\": \"financial-services-enterprise\"}}",
+      "user_id": "demo-user-4"
+    },
+    {
+      "app_id": "demo-bank-web",
+      "consent_version": "demo-v1",
+      "created_at": "2026-07-15T21:36:00+00:00",
+      "explanation": "Search was down for a minute earlier.",
+      "fingerprint": "{\"route\": \"/search\", \"diagnostic_type\": \"api_error\", \"failing_status\": 503, \"exception_type\": null, \"diagnostic_endpoint\": \"/api/search\", \"terminal_selector\": \"[data-testid=run-search]\"}",
+      "footsteps": "[{\"timestamp\": \"2026-07-01T09:00:00Z\", \"type\": \"navigation\", \"route\": \"/search\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:04Z\", \"type\": \"input\", \"route\": \"/search\", \"target\": \"[data-testid=amount]\", \"label\": \"[masked]\", \"metadata\": {\"interacted\": true}}, {\"timestamp\": \"2026-07-01T09:00:07Z\", \"type\": \"click\", \"route\": \"/search\", \"target\": \"[data-testid=run-search]\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:08Z\", \"type\": \"api_error\", \"route\": \"/search\", \"label\": \"[masked]\", \"metadata\": {\"status\": 503, \"method\": \"POST\", \"endpoint\": \"/api/search\"}}]",
+      "id": "trc_demo_search_repro_invalid",
+      "project_id": "demo-bank",
+      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"clean\", \"scrubbed_fields\": [], \"policy\": \"financial-services-enterprise\"}}",
+      "user_id": "demo-user-5"
+    },
+    {
+      "app_id": "demo-bank-web",
+      "consent_version": "demo-v1",
+      "created_at": "2026-07-20T09:36:00+00:00",
+      "explanation": "Freeze card button does nothing.",
+      "fingerprint": "{\"route\": \"/cards/:id/freeze\", \"diagnostic_type\": \"api_error\", \"failing_status\": 500, \"exception_type\": null, \"diagnostic_endpoint\": \"/api/cards/:id/freeze\", \"terminal_selector\": \"[data-testid=freeze-card]\"}",
+      "footsteps": "[{\"timestamp\": \"2026-07-01T09:00:00Z\", \"type\": \"navigation\", \"route\": \"/cards/:id/freeze\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:04Z\", \"type\": \"input\", \"route\": \"/cards/:id/freeze\", \"target\": \"[data-testid=amount]\", \"label\": \"[masked]\", \"metadata\": {\"interacted\": true}}, {\"timestamp\": \"2026-07-01T09:00:07Z\", \"type\": \"click\", \"route\": \"/cards/:id/freeze\", \"target\": \"[data-testid=freeze-card]\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:08Z\", \"type\": \"api_error\", \"route\": \"/cards/:id/freeze\", \"label\": \"[masked]\", \"metadata\": {\"status\": 500, \"method\": \"POST\", \"endpoint\": \"/api/cards/:id/freeze\"}}]",
+      "id": "trc_demo_card_untriaged",
+      "project_id": "demo-bank",
+      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"clean\", \"scrubbed_fields\": [], \"policy\": \"financial-services-enterprise\"}}",
+      "user_id": "demo-user-6"
+    }
+  ],
+  "verifications": [
+    {
+      "created_at": "2026-07-19T13:12:00+00:00",
+      "fingerprint": "{\"route\": \"/accounts/:id/transfer\", \"diagnostic_type\": \"api_error\", \"failing_status\": 500, \"exception_type\": null, \"diagnostic_endpoint\": \"/api/accounts/:id/transfers\", \"terminal_selector\": \"[data-testid=send-transfer]\"}",
+      "fix_ref": "PR #482 \u2014 guard the settlement ledger call",
+      "id": "ver_trc_demo_transfer_fixed_0",
+      "post_passed": true,
+      "pre_passed": false,
+      "run_url": "https://github.com/example/bank/actions/runs/1482",
+      "trace_id": "trc_demo_transfer_fixed",
+      "verdict": "confirmed_fixed"
+    },
+    {
+      "created_at": "2026-07-18T06:00:00+00:00",
+      "fingerprint": "{\"route\": \"/accounts/:id/statements\", \"diagnostic_type\": \"api_error\", \"failing_status\": 500, \"exception_type\": null, \"diagnostic_endpoint\": \"/api/accounts/:id/statements\", \"terminal_selector\": \"[data-testid=download-statement]\"}",
+      "fix_ref": null,
+      "id": "ver_trc_demo_statement_reproduced_0",
+      "post_passed": null,
+      "pre_passed": false,
+      "run_url": null,
+      "trace_id": "trc_demo_statement_reproduced",
+      "verdict": "reproduced_unfixed"
+    },
+    {
+      "created_at": "2026-07-17T15:36:00+00:00",
+      "fingerprint": "{\"route\": \"/payees/:id/edit\", \"diagnostic_type\": \"api_error\", \"failing_status\": 500, \"exception_type\": null, \"diagnostic_endpoint\": \"/api/payees/:id\", \"terminal_selector\": \"[data-testid=save-payee]\"}",
+      "fix_ref": "PR #468 \u2014 first attempt",
+      "id": "ver_trc_demo_payee_fix_failed_0",
+      "post_passed": false,
+      "pre_passed": false,
+      "run_url": "https://github.com/example/bank/actions/runs/1468",
+      "trace_id": "trc_demo_payee_fix_failed",
+      "verdict": "not_fixed"
+    },
+    {
+      "created_at": "2026-07-16T03:36:00+00:00",
+      "fingerprint": "{\"route\": \"/search\", \"diagnostic_type\": \"api_error\", \"failing_status\": 503, \"exception_type\": null, \"diagnostic_endpoint\": \"/api/search\", \"terminal_selector\": \"[data-testid=run-search]\"}",
+      "fix_ref": null,
+      "id": "ver_trc_demo_search_repro_invalid_0",
+      "post_passed": null,
+      "pre_passed": true,
+      "run_url": "https://github.com/example/bank/actions/runs/1455",
+      "trace_id": "trc_demo_search_repro_invalid",
+      "verdict": "not_reproduced"
+    }
+  ]
+}

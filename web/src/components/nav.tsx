@@ -21,6 +21,7 @@ const desktopLinks = [
 
 const mobileLinks = [
   { href: "/#how", label: "How it works" },
+  { href: "/dashboard", label: "Try the console" },
   { href: "/demo", label: "Red-to-green demo" },
   { href: "/quickstart", label: "Quickstart" },
   { href: "/who-its-for", label: "Who it's for" },
