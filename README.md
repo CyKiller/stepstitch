@@ -116,6 +116,82 @@ commercially-licensed edition may *add* a separately-licensed adapter or complia
 additive only; nothing currently Apache-2.0 would be closed. See
 `COMMERCIAL.md`, `docs/PRODUCT-PLAN.md`, and `docs/DEPLOY.md`.
 
+## Quickstart (one command, no credentials)
+
+Brings up Postgres + the ingest host with throwaway dev tokens:
+
+```bash
+docker compose up --build
+```
+
+Then open <http://localhost:8000/dashboard> and paste `dev-admin` when the console asks for
+a token. To fill the board with a realistic failure:
+
+```bash
+node scripts/seed-demo-trace.mjs
+```
+
+To check the whole install at any point — env, host, database, both tokens, capture policy
+and reproduction settings — run the diagnostic. It never prints a secret value:
+
+```bash
+pip install ./service && stepstitch doctor
+```
+
+Prefer no backend at all? `npm run demo` runs the real pipeline end to end (report → scrub →
+score → Playwright → verified fix) with no database, no network and no credentials, and
+writes the evidence bundle to `demo/evidence-bundle.json`.
+
+### The two tokens
+
+StepStitch has two long-lived bearers, and they are not interchangeable:
+
+| Token | Who holds it | What it can do |
+|---|---|---|
+| `STEPSTITCH_INGEST_TOKEN` | your **server** (never the browser) | POST traces to `/session` |
+| `STEPSTITCH_ADMIN_TOKEN` | the operator, in the console | read evidence, drafts, config |
+
+Two narrower credentials exist so nobody has to hand out the admin token: **scoped agent
+tokens** for AI assistants (`summaries` / `repros` / `drafts`) and a **`verify` token** for
+CI, which may fetch a reproduction and post a verdict and nothing else. Issue both from the
+console's Agents tab. Enterprise deployments can replace the admin token entirely with OIDC
+SSO — see [docs/DEPLOY.md](docs/DEPLOY.md).
+
+### Keep the ingest token server-side
+
+The SDK posts to a path in **your** app, which forwards to StepStitch with the ingest token
+attached. The token never reaches browser JavaScript:
+
+```js
+// POST /api/stepstitch/ingest  — your server, same origin as your app
+export async function POST(request) {
+  return fetch(`${process.env.STEPSTITCH_HOST}/api/stepstitch/v1/session`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.STEPSTITCH_INGEST_TOKEN}`, // server-side only
+    },
+    body: await request.text(),
+  })
+}
+```
+
+`examples/tiny-transfer` is a complete runnable version of this, including the red→green loop.
+
+### Point reproductions at your app
+
+A captured trace is structural: it knows the route template, not your hostname, and never
+recorded what was typed. Tell StepStitch the rest once, or every generated test will target
+`http://localhost:3000` and cannot run in CI:
+
+```bash
+STEPSTITCH_APP_BASE_URL=https://staging.your-app.example   # the app under test
+```
+
+Per-project settings (auth fixture, values for `:id` segments, synthetic form values) live at
+`PUT /admin/config/repro`. Generated tests carry a READY / NEEDS-CONFIG checklist naming
+exactly what is still missing. Configuration stores env var **names**, never credentials.
+
 ## Usage
 
 ```ts

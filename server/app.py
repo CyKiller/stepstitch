@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from .audit import make_db_audit
 from .auth import build_auth
 from .db import build_db_callables
+from .envcheck import require_env
 from .host import build_app
 from .oidc import oidc_auth_from_env
 from .retention_job import logger as retention_logger
@@ -53,6 +54,7 @@ class _PoolProxy:
 
 
 def create_app_from_env():
+    require_env(dict(os.environ))
     database_url = os.environ["DATABASE_URL"]
     ingest_token = os.environ["STEPSTITCH_INGEST_TOKEN"]
     profile = os.environ.get("STEPSTITCH_PROFILE", "financial-services-enterprise")

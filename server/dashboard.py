@@ -1069,10 +1069,17 @@ DASHBOARD_HTML = r"""<!doctype html>
       { done: (s.traces || 0) > 0, title: "Receive your first report",
         detail: "Install @stepstitch/tracker in your app, or send a sample below to see the " +
                 "console with real evidence in it." },
+      { done: !!s.base_url_configured, title: "Point reproductions at your app",
+        detail: "A generated test needs to know where your application lives, and which " +
+                "values to use for templated routes and form fields. Without this every " +
+                "reproduction targets localhost:3000 and cannot run in CI. Set " +
+                "STEPSTITCH_APP_BASE_URL, or store per-project settings with " +
+                "PUT /admin/config/repro. Run `stepstitch doctor` to check the whole setup." },
       { done: (s.verifications || 0) > 0, title: "Let CI report results",
-        detail: "Your CI runs the generated test before and after a fix and posts the outcome " +
-                "back. Until it does, nothing can be proven fixed and there is no memory to " +
-                "match new bugs against. Open any failure and use the Verify tab for the snippet." },
+        detail: "Your CI runs the generated test on the buggy commit and again on the fix, " +
+                "then posts both measured outcomes back. Until it does, nothing can be proven " +
+                "fixed and there is no memory to match new bugs against. Issue a " +
+                "'verify'-scoped token in Agents — CI never needs your admin token." },
       { done: (s.agents_total || 0) > 0, title: "Connect an AI agent (optional)",
         detail: "Give an assistant a scoped, revocable token so it can read safe evidence — " +
                 "never raw data. Set this up in Agents." }
