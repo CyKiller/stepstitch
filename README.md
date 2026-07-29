@@ -116,7 +116,40 @@ commercially-licensed edition may *add* a separately-licensed adapter or complia
 additive only; nothing currently Apache-2.0 would be closed. See
 `COMMERCIAL.md`, `docs/PRODUCT-PLAN.md`, and `docs/DEPLOY.md`.
 
-## Quickstart (one command, no credentials)
+## Quickstart
+
+Three ways in, smallest first. Each path lists its real prerequisites, and every command
+works in the order shown — the clean-install CI gate runs these sequences on a bare
+machine, and `web/tests/quickstart-parity.test.ts` keeps this section and the website's
+quickstart page telling the same story.
+
+### Add the SDK to your app (Node + npm only)
+
+```bash
+npm install @stepstitch/tracker
+```
+
+Zero dependencies, ESM and CommonJS. Capture is off until your app calls `grantConsent()`.
+
+### Prove the loop offline (Git, Node 20+, Python 3.10+)
+
+The demo imports the real service modules — scrubber, scorer, compiler, verdict — so the
+service package must be installed first. Nothing leaves your machine, and re-running
+writes an identical `demo/evidence-bundle.json`:
+
+```bash
+git clone https://github.com/CyKiller/stepstitch.git
+cd stepstitch
+python3 -m venv .venv
+source .venv/bin/activate
+pip install ./service
+npm run demo
+npm run smoke
+```
+
+On Windows (PowerShell), activate with `.venv\Scripts\Activate.ps1` instead.
+
+### Run the full host (Docker)
 
 Brings up Postgres + the ingest host with throwaway dev tokens:
 
@@ -125,22 +158,36 @@ docker compose up --build
 ```
 
 Then open <http://localhost:8000/dashboard> and paste `dev-admin` when the console asks for
-a token. To fill the board with a realistic failure:
+a token. To fill the board with a realistic failure (the script needs both variables):
 
 ```bash
-node scripts/seed-demo-trace.mjs
+STEPSTITCH_BASE_URL=http://localhost:8000 STEPSTITCH_INGEST_TOKEN=dev-ingest \
+  node scripts/seed-demo-trace.mjs
 ```
 
 To check the whole install at any point — env, host, database, both tokens, capture policy
-and reproduction settings — run the diagnostic. It never prints a secret value:
+and reproduction settings — run the diagnostic. It reads configuration from its own
+environment, so with Compose it runs inside the container (on your host shell it would
+truthfully report the variables missing). It never prints a secret value:
 
 ```bash
-pip install ./service && stepstitch doctor
+docker compose exec stepstitch stepstitch doctor
 ```
 
-Prefer no backend at all? `npm run demo` runs the real pipeline end to end (report → scrub →
-score → Playwright → verified fix) with no database, no network and no credentials, and
-writes the evidence bundle to `demo/evidence-bundle.json`.
+Prefer no Docker? Install everything before starting anything, export the configuration,
+then run `stepstitch doctor` in that same shell. `STEPSTITCH_APP_BASE_URL` is where
+generated reproductions will point — without it every repro targets `localhost:3000`:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install ./service
+pip install -r server/requirements.txt
+export DATABASE_URL=postgres://localhost/stepstitch
+export STEPSTITCH_INGEST_TOKEN=dev-ingest
+export STEPSTITCH_ADMIN_TOKEN=dev-admin
+export STEPSTITCH_APP_BASE_URL=https://staging.your-app.example
+uvicorn server.app:app --port 8000
+```
 
 ### The two tokens
 
