@@ -32,7 +32,10 @@ afterEach(() => {
 });
 
 async function renderPage() {
-  // The page reads the env var at module scope, so it has to be imported fresh per case.
+  // The page reads the env var at module scope, so the module registry has to be cleared
+  // BEFORE the import, not just after. Resetting only in afterEach passes in isolation and
+  // fails in a full run, because whatever ran first leaves the module cached.
+  vi.resetModules();
   const mod = await import("@/app/dashboard/page");
   render(<mod.default />);
 }
