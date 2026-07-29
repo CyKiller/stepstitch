@@ -15,7 +15,8 @@ TRACE = [
 
 def test_emits_valid_playwright_scaffold():
     code = generate_playwright_test("t_1", TRACE, base_url="https://app.example.test")
-    assert code.startswith("import { test, expect } from '@playwright/test';")
+    assert code.startswith("import { test, expect")
+    assert "from '@playwright/test';" in code.splitlines()[0]
     assert "test('StepStitch reproduction'" in code
     assert code.rstrip().endswith("});")
 
@@ -24,7 +25,7 @@ def test_no_embedded_credentials():
     code = generate_playwright_test("t_1", TRACE)
     lowered = code.lower()
     assert "password" not in lowered
-    assert "fill('stepstitch-test-value')" in code  # redacted inputs become placeholders
+    assert "setField(page.locator('#memo'), 'stepstitch-test-value')" in code
     assert "TODO: authenticate" in code
 
 
@@ -119,7 +120,7 @@ def test_config_substitutes_templated_route_values():
 
 def test_config_supplies_synthetic_input_values():
     code = generate_playwright_test("t_1", TRACE, config=FULL_CONFIG)
-    assert "await page.locator('#memo').fill('regression-check');" in code
+    assert "await setField(page.locator('#memo'), 'regression-check');" in code
 
 
 def test_input_kind_is_inferred_when_unconfigured():
@@ -127,7 +128,7 @@ def test_input_kind_is_inferred_when_unconfigured():
     code = generate_playwright_test("t_1", trace)
     # One hardcoded literal for every field was the old behaviour; typed values are better
     # input for a real form (an email field rejects 'stepstitch-test-value').
-    assert "fill('qa@example.test');" in code
+    assert "setField(page.locator('[data-testid=contact-email]'), 'qa@example.test');" in code
     assert "synthetic email value" in code
 
 
@@ -180,3 +181,27 @@ def test_absent_config_is_backward_compatible():
     positional = generate_playwright_test("t_1", TRACE, "https://x.test")
     assert explicit_none == positional
     assert "test('StepStitch reproduction'" in positional
+
+
+def test_checkbox_inputs_do_not_get_an_invalid_fill():
+    """A regression from running the real example.
+
+    The SDK records that a control was interacted with, never what kind of control it is —
+    it reads no markup. The compiler used to emit `.fill()` for every input footstep, which
+    Playwright rejects on a checkbox, so the reproduction failed for a reason unrelated to
+    the bug it was meant to prove. The control type is now resolved at run time.
+    """
+    trace = [{"type": "input", "route": "/", "target": "[data-testid=consent-toggle]"}]
+    code = generate_playwright_test("t_1", trace)
+    assert "async function setField(" in code
+    assert "locator.check()" in code
+    # No bare .fill() on a locator — every write goes through the type-aware helper.
+    assert ".fill('" not in code.replace("return locator.fill(value);", "")
+    assert "type Locator" in code.splitlines()[0]
+
+
+def test_the_helper_is_omitted_when_a_trace_has_no_inputs():
+    trace = [{"type": "click", "route": "/", "target": "#go"}]
+    code = generate_playwright_test("t_1", trace)
+    assert "setField" not in code
+    assert "type Locator" not in code

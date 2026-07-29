@@ -1,0 +1,18 @@
+{
+  "name": "tiny-transfer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A deliberately broken money-transfer app that demonstrates the whole StepStitch loop.",
+  "scripts": {
+    "start": "node server.mjs",
+    "test:e2e": "playwright test",
+    "verify": "node verify.mjs"
+  },
+  "dependencies": {
+    "@stepstitch/tracker": "file:../.."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0"
+  }
+}

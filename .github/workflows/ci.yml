@@ -161,6 +161,32 @@ jobs:
       - name: Prove generated reproduction executes
         run: npm run test:e2e-proof
 
+  tiny-transfer:
+    name: Example (TinyTransfer privacy + red-to-green)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+          cache: "npm"
+      # The example depends on @stepstitch/tracker at file:../.., and dist/ is produced by
+      # the root's prepare script — so the root install has to come first.
+      - name: Install the SDK (builds dist/)
+        run: npm ci
+      - name: Install the example
+        working-directory: examples/tiny-transfer
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium
+        working-directory: examples/tiny-transfer
+        run: npx playwright install --with-deps chromium
+      # Hermetic: a stub host stands in for StepStitch, so this job needs no Python and no
+      # database. The full red-to-green loop against a live host is verify.mjs, run by hand.
+      - name: Prove the privacy claims against the captured payload
+        working-directory: examples/tiny-transfer
+        run: npm run test:e2e
+
   compliance:
     name: Compliance evidence (no drift)
     runs-on: ubuntu-latest

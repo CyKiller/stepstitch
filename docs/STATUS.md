@@ -12,7 +12,7 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **412** | `PYTHONPATH=service pytest service/tests/` |
+| Service (compiler, router, privacy, connectors) | **414** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **106** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **22** | `npx vitest run` |
 | Web (marketing site + copy claims) | **38** | `cd web && npx vitest run` |
@@ -51,6 +51,7 @@ import-linter layering contract.
 | Fingerprint backfill for pre-0005 traces | `scripts/backfill_fingerprints.py` | `test_backfill_fingerprints.py` |
 | `stepstitch doctor` first-run diagnostic (never prints a secret) | `service/.../cli.py` | `test_doctor.py` |
 | Startup fails with every misconfiguration named, not `KeyError` | `server/envcheck.py` | `test_app_startup.py` |
+| Runnable example proving the privacy claims + red→green | `examples/tiny-transfer/` | CI job `tiny-transfer` (13 Playwright tests over the captured payload) |
 | End-to-end golden path | (all of the above) | `test_golden_path.py` |
 
 ### Host, governance and operations

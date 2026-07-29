@@ -263,7 +263,7 @@ def test_reproduction_downloads_as_a_spec_file():
     assert r.status_code == 200
     assert "attachment;" in r.headers["content-disposition"]
     assert r.headers["content-disposition"].endswith('-repro.spec.ts"')
-    assert r.text.startswith("import { test, expect }")
+    assert r.text.startswith("import { test, expect")
 
 
 def test_attestation_downloads_as_a_json_bundle():
