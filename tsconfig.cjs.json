@@ -4,6 +4,10 @@
     "module": "CommonJS",
     "moduleResolution": "Node",
     "outDir": "dist/cjs",
-    "declaration": false
+    // Declarations are emitted here too: dist/cjs/ carries a {"type":"commonjs"} marker,
+    // so these .d.ts files are CJS-flavored. Without them a TypeScript consumer in
+    // CommonJS node16 mode hits TS1479 (ESM types behind a require condition) — the
+    // clean-install gate's tarball job caught exactly that.
+    "declaration": true
   }
 }
