@@ -1984,12 +1984,18 @@ DASHBOARD_HTML = r"""<!doctype html>
       return String(b.created_at || "").localeCompare(String(a.created_at || ""));
     });
     var origin = window.location.origin;
+    // Least privilege: this snippet is handed to CI, and CI gets the narrow
+    // verify-scoped token (fetch the repro, post the verdict, nothing else) — never the
+    // operator's admin bearer. The Agents tab issues it; the gate copy promises exactly
+    // this ("no agent ever receives this credential").
     var snippet =
       "# StepStitch: report the repro outcome so the fix is provable.\n" +
       "# Run the generated test BEFORE the fix (expect fail) and AFTER (expect pass).\n" +
+      "# STEPSTITCH_VERIFY_TOKEN is a verify-scoped token issued from the Agents tab —\n" +
+      "# CI never needs the admin token.\n" +
       "curl -sS -X POST \\\n" +
       "  " + origin + API + "/session/" + trace.id + "/verify \\\n" +
-      "  -H \"Authorization: Bearer $STEPSTITCH_ADMIN_TOKEN\" \\\n" +
+      "  -H \"Authorization: Bearer $STEPSTITCH_VERIFY_TOKEN\" \\\n" +
       "  -H 'Content-Type: application/json' \\\n" +
       "  -d '{\"pre_passed\": false, \"post_passed\": true,\n" +
       "       \"fix_ref\": \"'\"$GIT_COMMIT\"'\", \"run_url\": \"'\"$CI_RUN_URL\"'\"}'\n" +

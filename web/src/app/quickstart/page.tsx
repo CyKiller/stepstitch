@@ -10,8 +10,8 @@ import {
   DOCKER_DOCTOR,
   DOCKER_SEED,
   DOCKER_UP,
-  MANUAL_DOCTOR,
-  MANUAL_HOST,
+  MANUAL_HOST_TERMINAL_1,
+  MANUAL_HOST_TERMINAL_2,
   OFFLINE_DEMO,
   OFFLINE_DEMO_WINDOWS_ACTIVATE,
   SDK_INSTALL,
@@ -66,7 +66,7 @@ const journeys: Journey[] = [
     steps: [
       {
         title: "Bring up Postgres and the host",
-        body: "Then open http://localhost:8000/dashboard and paste dev-admin when the console asks for a token. These are throwaway dev credentials — never use them in production.",
+        body: "-d returns your terminal once the containers are up (follow logs with docker compose logs -f stepstitch). Then open http://localhost:8000/dashboard and paste dev-admin when the console asks for a token. These are throwaway dev credentials — never use them in production.",
         code: DOCKER_UP,
       },
       {
@@ -76,14 +76,18 @@ const journeys: Journey[] = [
       },
       {
         title: "Check the install where the configuration lives",
-        body: "doctor walks the whole chain — environment, host, database, both tokens, capture policy and reproduction settings — and names the fix for anything broken. It reads configuration from its own environment, so with Compose it must run inside the container; on your host shell it would truthfully report the variables missing. It never prints a secret value.",
+        body: "doctor walks the whole chain — environment, host, database, both tokens, capture policy and reproduction settings — and names the fix for anything broken. It reads configuration from its own environment, so with Compose it must run inside the container; on your host shell it would truthfully report the variables missing. It never prints a secret value. (-T skips TTY allocation, so this exact line also works from scripts and CI.)",
         code: DOCKER_DOCTOR,
       },
       {
-        title: "No Docker? The manual path, in an order that works",
-        body: "Install the service and the host's requirements before uvicorn ever starts, and export the configuration first. STEPSTITCH_APP_BASE_URL is where generated reproductions will point — set it to your staging app now, or every repro targets localhost:3000 until you configure it.",
-        code: MANUAL_HOST,
-        caption: `Then run ${MANUAL_DOCTOR} in the same shell — doctor needs the environment you just exported.`,
+        title: "No Docker? Terminal 1 — run the host",
+        body: "macOS/Linux; on Windows use the Docker path above. Install the service and the host's requirements before uvicorn ever starts, and export the configuration first. STEPSTITCH_APP_BASE_URL is where generated reproductions will point — set it to your staging app now, or every repro targets localhost:3000 until you configure it. uvicorn runs in the foreground: leave this terminal open.",
+        code: MANUAL_HOST_TERMINAL_1,
+      },
+      {
+        title: "Terminal 2 — check it with doctor",
+        body: "A second terminal, because uvicorn owns the first. A fresh shell has neither the venv nor your exports, and doctor reads configuration only from its own environment — so activate and export again before running it.",
+        code: MANUAL_HOST_TERMINAL_2,
       },
       {
         title: "Point reproductions at your app, then generate one",

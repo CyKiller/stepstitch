@@ -151,10 +151,11 @@ On Windows (PowerShell), activate with `.venv\Scripts\Activate.ps1` instead.
 
 ### Run the full host (Docker)
 
-Brings up Postgres + the ingest host with throwaway dev tokens:
+Brings up Postgres + the ingest host with throwaway dev tokens. `-d` returns your
+terminal once the containers are up (follow logs with `docker compose logs -f stepstitch`):
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
 Then open <http://localhost:8000/dashboard> and paste `dev-admin` when the console asks for
@@ -168,15 +169,20 @@ STEPSTITCH_BASE_URL=http://localhost:8000 STEPSTITCH_INGEST_TOKEN=dev-ingest \
 To check the whole install at any point — env, host, database, both tokens, capture policy
 and reproduction settings — run the diagnostic. It reads configuration from its own
 environment, so with Compose it runs inside the container (on your host shell it would
-truthfully report the variables missing). It never prints a secret value:
+truthfully report the variables missing). It never prints a secret value, and `-T` skips
+TTY allocation so the exact same line works from scripts and CI:
 
 ```bash
-docker compose exec stepstitch stepstitch doctor
+docker compose exec -T stepstitch stepstitch doctor
 ```
 
-Prefer no Docker? Install everything before starting anything, export the configuration,
-then run `stepstitch doctor` in that same shell. `STEPSTITCH_APP_BASE_URL` is where
-generated reproductions will point — without it every repro targets `localhost:3000`:
+Prefer no Docker? The manual path (macOS/Linux; on Windows use Docker above) needs a
+Postgres you provide, and **two terminals**, because uvicorn runs in the foreground and
+owns the first. `STEPSTITCH_APP_BASE_URL` is where generated reproductions will point —
+without it every repro targets `localhost:3000`.
+
+**Terminal 1 — run the host** (install everything before starting anything, export the
+configuration, then leave this terminal open):
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
@@ -187,6 +193,18 @@ export STEPSTITCH_INGEST_TOKEN=dev-ingest
 export STEPSTITCH_ADMIN_TOKEN=dev-admin
 export STEPSTITCH_APP_BASE_URL=https://staging.your-app.example
 uvicorn server.app:app --port 8000
+```
+
+**Terminal 2 — check it with doctor** (a fresh shell has neither the venv nor your
+exports, and doctor reads configuration only from its own environment):
+
+```bash
+source .venv/bin/activate
+export DATABASE_URL=postgres://localhost/stepstitch
+export STEPSTITCH_INGEST_TOKEN=dev-ingest
+export STEPSTITCH_ADMIN_TOKEN=dev-admin
+export STEPSTITCH_APP_BASE_URL=https://staging.your-app.example
+stepstitch doctor
 ```
 
 ### The two tokens

@@ -224,6 +224,30 @@ def test_dashboard_has_no_popout_and_closes_the_ci_loop():
     assert "/verify" in body and "pre_passed" in body and "post_passed" in body
 
 
+def test_ci_snippet_uses_the_verify_scoped_token_never_admin():
+    # The "Report from CI" snippet is copy-pasted into pipelines, so it must carry the
+    # narrow verify-scoped bearer (fetch repro + post verdict, nothing else). Handing CI
+    # the admin token would contradict the console's own promise that no agent ever
+    # receives that credential. Scoped to the Bearer header on purpose: the operator
+    # gate legitimately names STEPSTITCH_ADMIN_TOKEN when asking the operator to log in.
+    client, _ = _client()
+    body = client.get("/dashboard").text
+    start = body.index("report the repro outcome")
+    snippet = body[start : start + 900]
+    assert "/verify" in snippet
+    assert "Bearer $STEPSTITCH_VERIFY_TOKEN" in snippet
+    assert "Bearer $STEPSTITCH_ADMIN_TOKEN" not in body, (
+        "no snippet anywhere may tell a machine to authenticate with the admin bearer"
+    )
+    # The verdict payload is intact — both measured outcomes plus provenance fields.
+    for field in ("pre_passed", "post_passed", "fix_ref", "run_url"):
+        assert field in snippet, f"CI snippet lost {field}"
+    # And it says where the token comes from.
+    assert "Agents tab" in snippet
+    # Operator login is untouched: the gate still names the admin env var.
+    assert "STEPSTITCH_ADMIN_TOKEN" in body
+
+
 def test_dashboard_reads_plainly_by_default():
     # The console has to be usable by the support lead who took the customer's call, not only by
     # the engineer who will fix it. Plain wording ships alongside the technical wording, and the
