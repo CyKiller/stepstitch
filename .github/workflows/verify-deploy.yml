@@ -1,0 +1,100 @@
+name: verify production deploy
+
+# Deployment ownership, stated plainly: Railway's native GitHub integration deploys main
+# to the production service (stepstitch-api), and Vercel's native Git integration deploys
+# web/ to stepstitch.vercel.app. This workflow deploys NOTHING. It replaces the old
+# deploy-staging / deploy-preview workflows, which skipped every step when RAILWAY_TOKEN
+# was unset and still concluded success — a green check that deployed nothing and verified
+# nothing. This one verifies the deployment the native integrations made, and goes red
+# when the public product proof is broken, which is the honest signal.
+#
+# Everything checked here is public and credential-free; no secret is read or printed.
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: verify-deploy
+  cancel-in-progress: true
+
+env:
+  RAILWAY_HOST: https://stepstitch-api-production.up.railway.app
+  SITE: https://stepstitch.vercel.app
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Wait for Railway to serve this commit
+        id: revision
+        run: |
+          # Railway builds on its own schedule after the push; poll /healthz until the
+          # reported revision matches this commit. "unknown" means the platform did not
+          # inject a commit SHA — warn rather than fail, because the functional checks
+          # below still prove the demo works. A DIFFERENT sha after the timeout means a
+          # stale deploy is serving, and that is a failure.
+          want="${GITHUB_SHA}"
+          deadline=$((SECONDS + 600))
+          rev=""
+          while [ $SECONDS -lt $deadline ]; do
+            rev=$(curl -sf "$RAILWAY_HOST/healthz" | jq -r '.revision // "unknown"' || echo "unreachable")
+            if [ "$rev" = "$want" ]; then
+              echo "confirmed=true" >> "$GITHUB_OUTPUT"
+              echo "revision=$rev" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "revision=$rev" >> "$GITHUB_OUTPUT"
+          if [ "$rev" = "unknown" ]; then
+            echo "confirmed=unknown" >> "$GITHUB_OUTPUT"
+            echo "::warning::/healthz reports no revision; cannot confirm which commit is serving."
+            exit 0
+          fi
+          echo "::error::Railway is serving revision '$rev', expected '$want' — stale or failed deploy."
+          exit 1
+
+      - name: Demo console serves on the Railway host
+        run: |
+          body=$(curl -sf "$RAILWAY_HOST/demo/dashboard")
+          echo "$body" | grep -q "Synthetic demo" || { echo "::error::demo console is missing its synthetic banner"; exit 1; }
+
+      - name: Demo read API answers
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$RAILWAY_HOST/demo/api/stepstitch/v1/sessions?limit=1")
+          [ "$code" = "200" ] || { echo "::error::demo read API returned $code"; exit 1; }
+
+      - name: Demo refuses mutation (403)
+        run: |
+          for probe in "-X POST $RAILWAY_HOST/demo/api/stepstitch/v1/session/probe/verify" \
+                       "-X PUT $RAILWAY_HOST/demo/admin/config/repro"; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" $probe)
+            [ "$code" = "403" ] || { echo "::error::demo mutation probe ($probe) returned $code, expected 403"; exit 1; }
+          done
+
+      - name: Public site serves the console through the rewrite
+        run: |
+          body=$(curl -sf "$SITE/dashboard/demo")
+          echo "$body" | grep -q "Synthetic demo" || { echo "::error::$SITE/dashboard/demo is not the console (rewrite broken or STEPSTITCH_DEMO_HOST unset on Vercel)"; exit 1; }
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$SITE/dashboard/demo/api/stepstitch/v1/sessions?limit=1")
+          [ "$code" = "200" ] || { echo "::error::proxied demo API returned $code"; exit 1; }
+
+      - name: Write summary
+        if: always()
+        run: |
+          {
+            echo "## Production deploy verification"
+            echo ""
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| Deployed revision | \`${{ steps.revision.outputs.revision }}\` (confirmed: ${{ steps.revision.outputs.confirmed || 'no' }}) |"
+            echo "| Railway host | $RAILWAY_HOST |"
+            echo "| Demo console | $RAILWAY_HOST/demo/dashboard |"
+            echo "| Public console | $SITE/dashboard/demo |"
+            echo ""
+            echo "Deploys are made by the native Railway and Vercel Git integrations; this workflow only verifies them."
+          } >> "$GITHUB_STEP_SUMMARY"
