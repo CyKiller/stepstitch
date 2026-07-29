@@ -12,8 +12,8 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **392** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **99** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Service (compiler, router, privacy, connectors) | **412** | `PYTHONPATH=service pytest service/tests/` |
+| Host (auth, dashboard, real Postgres) | **106** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **22** | `npx vitest run` |
 | Web (marketing site + copy claims) | **38** | `cd web && npx vitest run` |
 
@@ -49,6 +49,8 @@ import-linter layering contract.
 | Narrow `verify` CI scope (fetch repro + post verdict, nothing else) | `server/agents.py` | `test_agents.py::test_verify_scope_can_do_nothing_else` |
 | Reproduction + attestation downloads | `router.py` | `test_repro_config_host.py` (downloads) |
 | Fingerprint backfill for pre-0005 traces | `scripts/backfill_fingerprints.py` | `test_backfill_fingerprints.py` |
+| `stepstitch doctor` first-run diagnostic (never prints a secret) | `service/.../cli.py` | `test_doctor.py` |
+| Startup fails with every misconfiguration named, not `KeyError` | `server/envcheck.py` | `test_app_startup.py` |
 | End-to-end golden path | (all of the above) | `test_golden_path.py` |
 
 ### Host, governance and operations
