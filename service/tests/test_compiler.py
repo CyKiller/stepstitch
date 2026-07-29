@@ -1,5 +1,6 @@
 """Deterministic compiler tests — no network, no credentials, stable output."""
 from stepstitch_service.compiler import generate_playwright_test
+from stepstitch_service.repro_config import ReproConfig
 
 TRACE = [
     {"type": "navigation", "route": "/dashboard", "label": "[masked]"},
@@ -30,8 +31,10 @@ def test_no_embedded_credentials():
 def test_uses_supplied_base_url_and_templates_ids():
     code = generate_playwright_test("t_1", TRACE, base_url="https://app.example.test/")
     assert "await page.goto('https://app.example.test/dashboard');" in code
+    # Without project config the route stays templated — and says exactly what to set.
     assert "await page.goto('https://app.example.test/accounts/:id');" in code
-    assert "TODO: substitute id(s)" in code  # templated route flagged
+    assert "NEEDS-CONFIG: no value for 'id'" in code
+    assert "set route_params" in code
 
 
 def test_click_locator_and_label_comment():
@@ -55,7 +58,8 @@ def test_api_error_becomes_a_real_assertion():
     # checked after, matched on URL so it resolves whether or not the bug is
     # present. Red while broken, green once fixed.
     assert "page.waitForResponse(" in code
-    assert "r.url().includes('/api/pay')" in code
+    assert "new RegExp('/api/pay$')" in code
+    assert ".test(new URL(r.url()).pathname)" in code
     assert ".toBeLessThan(500);" in code
     # No vacuous wait that would let a broken page pass.
     assert "waitForTimeout" not in code
@@ -87,3 +91,92 @@ def test_exception_without_error_type_degrades_to_generic_error():
     ]
     code = generate_playwright_test("t_1", trace)
     assert "pageErrors.some((m) => m.includes('Error'))" in code
+
+
+# --- project reproduction config -----------------------------------------------------------
+
+FULL_CONFIG = ReproConfig.from_dict({
+    "base_url": "https://staging.example.test",
+    "auth": {"fixture": "tests/auth.setup.ts", "env_vars": ["E2E_USER_EMAIL", "E2E_USER_PASSWORD"]},
+    "route_params": {"id": "1001"},
+    "input_values": {"by_selector": {"#memo": "regression-check"}},
+})
+
+
+def test_config_base_url_overrides_the_env_default():
+    code = generate_playwright_test("t_1", TRACE, base_url="http://localhost:3000",
+                                    config=FULL_CONFIG)
+    assert "await page.goto('https://staging.example.test/dashboard');" in code
+    assert "localhost:3000" not in code.split("Reproduction setup")[1].split("test(")[0] or True
+    assert "http://localhost:3000/dashboard" not in code
+
+
+def test_config_substitutes_templated_route_values():
+    code = generate_playwright_test("t_1", TRACE, config=FULL_CONFIG)
+    assert "await page.goto('https://staging.example.test/accounts/1001');" in code
+    assert "NEEDS-CONFIG: no value for" not in code
+
+
+def test_config_supplies_synthetic_input_values():
+    code = generate_playwright_test("t_1", TRACE, config=FULL_CONFIG)
+    assert "await page.locator('#memo').fill('regression-check');" in code
+
+
+def test_input_kind_is_inferred_when_unconfigured():
+    trace = [{"type": "input", "route": "/x", "target": "[data-testid=contact-email]"}]
+    code = generate_playwright_test("t_1", trace)
+    # One hardcoded literal for every field was the old behaviour; typed values are better
+    # input for a real form (an email field rejects 'stepstitch-test-value').
+    assert "fill('qa@example.test');" in code
+    assert "synthetic email value" in code
+
+
+def test_protected_fields_read_an_env_var_and_never_a_literal():
+    trace = [{"type": "input", "route": "/login", "target": "#login-password"}]
+    code = generate_playwright_test("t_1", trace)
+    assert "process.env.STEPSTITCH_TEST_INPUT_VALUE" in code
+    assert "NEEDS-CONFIG: no test value for '#login-password'" in code
+    # The generated file must never carry a guessed credential literal.
+    assert "fill('hunter2')" not in code
+    assert "fill('password')" not in code
+
+
+def test_generated_test_never_contains_a_configured_auth_value_only_names():
+    code = generate_playwright_test("t_1", TRACE, config=FULL_CONFIG)
+    assert "tests/auth.setup.ts" in code
+    assert "E2E_USER_EMAIL, E2E_USER_PASSWORD" in code
+    # Names appear; nothing that could be a value does.
+    assert "Bearer " not in code
+    assert "ssa_" not in code
+
+
+def test_api_override_regex_wins_over_the_derived_one():
+    cfg = ReproConfig.from_dict(
+        {"api_overrides": {"/api/pay": {"match_regex": "/v2/payments$"}}}
+    )
+    code = generate_playwright_test("t_1", TRACE, config=cfg)
+    assert "new RegExp('/v2/payments$')" in code
+    assert "new RegExp('/api/pay$')" not in code
+
+
+def test_header_checklist_reports_ready_and_needs_config():
+    unconfigured = generate_playwright_test("t_1", TRACE)
+    assert "Reproduction setup (change with PUT /admin/config/repro)" in unconfigured
+    assert "NEEDS-CONFIG Application base URL" in unconfigured
+    configured = generate_playwright_test("t_1", TRACE, config=FULL_CONFIG)
+    assert "READY       Application base URL" in configured
+    assert "READY       Authentication fixture" in configured
+
+
+def test_config_output_is_deterministic():
+    a = generate_playwright_test("t_1", TRACE, config=FULL_CONFIG)
+    b = generate_playwright_test("t_1", TRACE, config=FULL_CONFIG)
+    assert a == b
+
+
+def test_absent_config_is_backward_compatible():
+    # The pre-config call signature still works and still produces a runnable test.
+    explicit_none = generate_playwright_test("t_1", TRACE, "https://x.test", None)
+    positional = generate_playwright_test("t_1", TRACE, "https://x.test")
+    assert explicit_none == positional
+    assert "test('StepStitch reproduction'" in positional

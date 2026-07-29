@@ -12,8 +12,8 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **337** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **65** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Service (compiler, router, privacy, connectors) | **392** | `PYTHONPATH=service pytest service/tests/` |
+| Host (auth, dashboard, real Postgres) | **99** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **22** | `npx vitest run` |
 | Web (marketing site + copy claims) | **38** | `cd web && npx vitest run` |
 
@@ -43,6 +43,12 @@ import-linter layering contract.
 | Deployment profiles | `profiles.py` + `profiles/*.json` | `test_profiles.py` (incl. drift guard) |
 | Consent / GPC / DNT, kill switch, split retention | SDK + `router.py` + `retention.py` | `test_retention.py`, `test_retention_job.py` |
 | Reproduction-quality eval gate | quality oracle on compiler + scorer | `test_repro_eval.py` |
+| Project reproduction config (base URL, auth fixture, route/form values, API match) | `repro_config.py` | `test_repro_config.py`, `test_repro_config_host.py` |
+| Config refuses to store credentials (names only) | `repro_config.py` | `test_repro_config.py::TestSecretRefusal` |
+| **Measured** red run in the CI template (no assumed `pre_passed`) | `github_bridge/workflow.py` | `test_github_content.py::test_the_red_half_is_measured_not_assumed` |
+| Narrow `verify` CI scope (fetch repro + post verdict, nothing else) | `server/agents.py` | `test_agents.py::test_verify_scope_can_do_nothing_else` |
+| Reproduction + attestation downloads | `router.py` | `test_repro_config_host.py` (downloads) |
+| Fingerprint backfill for pre-0005 traces | `scripts/backfill_fingerprints.py` | `test_backfill_fingerprints.py` |
 | End-to-end golden path | (all of the above) | `test_golden_path.py` |
 
 ### Host, governance and operations
@@ -110,9 +116,13 @@ the draft-only default and the no-NPI guarantee are unchanged.
 
 ## Known gaps
 
-- **`scripts/backfill_fingerprints.py` does not exist.** Migration `0005` adds
-  `fingerprint` with no backfill, so traces stored before it have `NULL` and will not
-  cluster into a shape. Harmless on a fresh install; real for an existing deployment.
+- **The red run needs a startable app.** The CI template now measures the pre-fix run for
+  real (see above), but it can only do so if the pre-fix ref still builds and boots via
+  `npm run stepstitch:app` / `STEPSTITCH_APP_CMD`. When it does not, the workflow records
+  nothing rather than guessing — correct, but it means old traces can be unverifiable.
+- **The `verify` agent scope exists only in shared-admin-token mode.** Agent-scope
+  enforcement lives in the host middleware, which is active only when an admin token is
+  configured. OIDC deployments post verdicts with an OIDC admin identity instead.
 
 ## Definition of 100%
 

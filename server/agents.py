@@ -16,6 +16,12 @@ default-deny applies.
   summaries → list/corpus + summary/replayability/privacy-posture/diagnostic-summary
   repros    → summaries + the Playwright reproduction
   drafts    → repros + the sanitized export-preview drafts
+
+``verify`` sits OUTSIDE that ladder, deliberately. It is the CI credential: it may fetch a
+reproduction and post the measured red/green outcome, and nothing else. It is not a superset
+of ``drafts`` (CI has no business drafting tickets), and ``drafts`` is not a superset of it
+(a ticket-drafting agent must never be able to write a verdict — verdicts are evidence). So
+rules carry an explicit set of scopes rather than a minimum tier.
 """
 from __future__ import annotations
 
@@ -26,34 +32,47 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
-SCOPES: Tuple[str, ...] = ("none", "summaries", "repros", "drafts")
-_TIER_RANK = {s: i for i, s in enumerate(SCOPES)}  # none=0 < summaries < repros < drafts
+SCOPES: Tuple[str, ...] = ("none", "summaries", "repros", "drafts", "verify")
+# The linear evidence-access ladder. 'verify' is not on it (see the module docstring).
+_LADDER: Tuple[str, ...] = ("none", "summaries", "repros", "drafts")
+_TIER_RANK = {s: i for i, s in enumerate(_LADDER)}
+
+
+def _from_tier(min_tier: str, *extra: str) -> frozenset:
+    """Every ladder scope at or above ``min_tier``, plus any off-ladder scopes named."""
+    floor = _TIER_RANK[min_tier]
+    return frozenset(
+        [s for s in _LADDER if _TIER_RANK[s] >= floor and s != "none"] + list(extra)
+    )
+
 
 _PFX = r"/api/stepstitch/v1"
-# (method, path-regex, minimum scope tier that unlocks it). Anything not listed is denied.
-_RULES: Tuple[Tuple[str, str, str], ...] = (
-    ("GET", rf"^{_PFX}/sessions$", "summaries"),
-    ("GET", rf"^{_PFX}/corpus$", "summaries"),
-    ("GET", rf"^{_PFX}/session/[^/]+/summary$", "summaries"),
-    ("GET", rf"^{_PFX}/session/[^/]+/replayability$", "summaries"),
-    ("GET", rf"^{_PFX}/session/[^/]+/privacy-posture$", "summaries"),
-    ("GET", rf"^{_PFX}/session/[^/]+/diagnostic-summary$", "summaries"),
-    ("GET", rf"^{_PFX}/correlation/[^/]+/summary$", "summaries"),
-    ("GET", rf"^{_PFX}/session/[^/]+/playwright$", "repros"),
-    ("POST", rf"^{_PFX}/session/[^/]+/export-preview$", "drafts"),
-    ("POST", rf"^{_PFX}/session/[^/]+/financial-services-export-preview$", "drafts"),
+# (method, path-regex, the exact set of scopes that unlocks it). Anything not listed is denied.
+_RULES: Tuple[Tuple[str, str, frozenset], ...] = (
+    ("GET", rf"^{_PFX}/sessions$", _from_tier("summaries")),
+    ("GET", rf"^{_PFX}/corpus$", _from_tier("summaries")),
+    ("GET", rf"^{_PFX}/session/[^/]+/summary$", _from_tier("summaries")),
+    ("GET", rf"^{_PFX}/session/[^/]+/replayability$", _from_tier("summaries")),
+    ("GET", rf"^{_PFX}/session/[^/]+/privacy-posture$", _from_tier("summaries")),
+    ("GET", rf"^{_PFX}/session/[^/]+/diagnostic-summary$", _from_tier("summaries")),
+    ("GET", rf"^{_PFX}/correlation/[^/]+/summary$", _from_tier("summaries")),
+    # CI needs the reproduction it is about to run, so 'verify' joins the repro readers.
+    ("GET", rf"^{_PFX}/session/[^/]+/playwright$", _from_tier("repros", "verify")),
+    ("POST", rf"^{_PFX}/session/[^/]+/export-preview$", _from_tier("drafts")),
+    ("POST", rf"^{_PFX}/session/[^/]+/financial-services-export-preview$", _from_tier("drafts")),
+    # Writing a verdict is exclusive to 'verify' — no read tier can record evidence.
+    ("POST", rf"^{_PFX}/session/[^/]+/verify$", frozenset({"verify"})),
 )
 
 
 def scope_allows(scope: str, method: str, path: str) -> bool:
     """True if an agent at ``scope`` may call ``method path``. Default-deny."""
-    rank = _TIER_RANK.get(scope, 0)
-    if rank == 0:  # 'none' or unknown → nothing
+    if scope not in SCOPES or scope == "none":
         return False
     method = method.upper()
-    for m, pattern, min_tier in _RULES:
+    for m, pattern, allowed in _RULES:
         if m == method and re.match(pattern, path):
-            return rank >= _TIER_RANK[min_tier]
+            return scope in allowed
     return False
 
 

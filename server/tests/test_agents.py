@@ -90,6 +90,47 @@ class FakeDB:
         ]
 
 
+# ---- the 'verify' scope: CI's narrow credential ------------------------------------
+# It exists so CI never holds the admin token. It must be able to do exactly two things.
+
+_VERIFY = f"{_PFX}/session/abc/verify"
+_PLAY = f"{_PFX}/session/abc/playwright"
+
+
+def test_verify_scope_can_fetch_a_repro_and_post_a_verdict():
+    assert scope_allows("verify", "GET", _PLAY)
+    assert scope_allows("verify", "POST", _VERIFY)
+
+
+def test_verify_scope_can_do_nothing_else():
+    denied = [
+        ("GET", f"{_PFX}/sessions"),
+        ("GET", f"{_PFX}/corpus"),
+        ("GET", f"{_PFX}/session/abc/summary"),
+        ("GET", f"{_PFX}/session/abc/replayability"),
+        ("GET", f"{_PFX}/session/abc/privacy-posture"),
+        ("GET", f"{_PFX}/session/abc/diagnostic-summary"),
+        ("POST", f"{_PFX}/session/abc/export-preview"),
+        ("POST", f"{_PFX}/session/abc/financial-services-export-preview"),
+        ("POST", f"{_PFX}/session/abc/deliver"),
+        ("DELETE", f"{_PFX}/session/by-user/u1"),
+        ("GET", f"{_PFX}/audit"),
+    ]
+    for method, path in denied:
+        assert not scope_allows("verify", method, path), f"verify must not reach {method} {path}"
+
+
+def test_no_read_tier_can_write_a_verdict():
+    # A verdict is evidence. A ticket-drafting or repro-reading agent must never record one.
+    for scope in ("summaries", "repros", "drafts"):
+        assert not scope_allows(scope, "POST", _VERIFY), f"{scope} must not write verdicts"
+
+
+def test_verify_is_not_a_superset_of_drafts():
+    # It sits outside the ladder: CI has no business drafting tickets.
+    assert not scope_allows("verify", "POST", f"{_PFX}/session/abc/export-preview")
+
+
 def test_register_list_resolve_revoke_round_trip():
     db = FakeDB()
     agent_id, token = run(register_agent(db.execute, name="Claude repro", scope="repros",

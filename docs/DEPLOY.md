@@ -79,6 +79,7 @@ root `Dockerfile` builds it and `railway.json` health-checks `/healthz`.
 | `STEPSTITCH_PROFILE` | no (default FS) | you | `financial-services-enterprise` / `healthcare-strict` / `internal-enterprise` / `open-source-default` |
 | `RETENTION_DAYS` | no (default 30) | you | trace-body retention window |
 | `STEPSTITCH_ENABLE_ADAPTERS` | no (default on) | you | `0` to run open-core only (no ServiceNow/Salesforce/Genesys drafts) |
+| `STEPSTITCH_APP_BASE_URL` | no (recommended) | you | base URL of **your application under test** — where generated reproductions point. Unset, every repro targets `http://localhost:3000` and cannot run in CI. A per-project override lives at `PUT /admin/config/repro`. |
 
 ```bash
 railway variables \

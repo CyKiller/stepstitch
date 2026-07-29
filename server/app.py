@@ -56,6 +56,13 @@ def create_app_from_env():
     database_url = os.environ["DATABASE_URL"]
     ingest_token = os.environ["STEPSTITCH_INGEST_TOKEN"]
     profile = os.environ.get("STEPSTITCH_PROFILE", "financial-services-enterprise")
+    # The APPLICATION UNDER TEST — where a generated reproduction should point.
+    # Deliberately NOT named STEPSTITCH_BASE_URL: that name is already taken, both by the
+    # marketing site's env and by the CI workflow template, where it means the StepStitch
+    # host itself. Reusing it here would silently compile every reproduction to point at
+    # StepStitch instead of the customer's app. Unset -> localhost:3000 (and the console's
+    # setup checklist flags it, because such a repro cannot run in CI).
+    base_url = os.environ.get("STEPSTITCH_APP_BASE_URL")
     retention_days = int(os.environ.get("RETENTION_DAYS", "30"))
     enable_adapters = os.environ.get("STEPSTITCH_ENABLE_ADAPTERS", "1").lower() in (
         "1", "true", "yes",
@@ -140,6 +147,7 @@ def create_app_from_env():
         admin_token=admin_token,
         ingest_token=ingest_token,
         sign_blob=sign_blob,
+        base_url=base_url,
     )
 
 

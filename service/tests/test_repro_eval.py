@@ -64,8 +64,21 @@ def test_empty_trace_is_graded_F():
 
 
 def test_templated_route_flags_id_substitution():
+    # Unconfigured, a templated route must still be flagged — and now it names the exact
+    # setting that resolves it rather than leaving a bare TODO.
     code = generate_playwright_test("t", STRONG)
-    assert "TODO: substitute id" in code, "templated route must flag id substitution"
+    assert "NEEDS-CONFIG: no value for 'id'" in code, "templated route must flag substitution"
+    assert "set route_params" in code, "the flag must name the setting that fixes it"
+
+
+def test_configured_route_params_remove_the_flag():
+    from stepstitch_service.repro_config import ReproConfig
+
+    code = generate_playwright_test(
+        "t", STRONG, config=ReproConfig.from_dict({"route_params": {"id": "1001"}})
+    )
+    assert "NEEDS-CONFIG" not in code.split("test('StepStitch")[1]
+    assert "/accounts/1001/" in code
 
 
 def test_repro_embeds_no_credentials():
