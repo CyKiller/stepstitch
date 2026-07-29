@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import secrets
 import time
@@ -202,7 +203,15 @@ def build_app(
 
     @app.get("/healthz")
     async def healthz() -> dict:  # Railway healthcheck target
-        return {"status": "ok"}
+        # `revision` lets the post-deploy verifier confirm WHICH commit is serving, not
+        # just that something answers. Railway injects RAILWAY_GIT_COMMIT_SHA; other
+        # platforms can set STEPSTITCH_REVISION. Absent both, be honest about it.
+        revision = (
+            os.environ.get("RAILWAY_GIT_COMMIT_SHA")
+            or os.environ.get("STEPSTITCH_REVISION")
+            or "unknown"
+        )
+        return {"status": "ok", "revision": revision}
 
     @app.get("/metrics", response_class=PlainTextResponse)
     async def metrics_endpoint() -> str:

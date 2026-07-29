@@ -13,7 +13,7 @@ pushed.
 | Suite | Tests | Command |
 |---|---|---|
 | Service (compiler, router, privacy, connectors) | **416** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **132** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Host (auth, dashboard, real Postgres) | **133** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **22** | `npx vitest run` |
 | Web (marketing site + copy claims) | **56** | `cd web && npx vitest run` |
 

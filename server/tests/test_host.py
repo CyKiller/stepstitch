@@ -83,7 +83,16 @@ _PAYLOAD = {
 
 def test_healthz_open():
     client, _ = _client()
-    assert client.get("/healthz").json() == {"status": "ok"}
+    # Outside a deployment there is no commit env; the endpoint says so instead of lying.
+    assert client.get("/healthz").json() == {"status": "ok", "revision": "unknown"}
+
+
+def test_healthz_reports_the_deployed_revision(monkeypatch):
+    # The post-deploy verifier matches this against the pushed SHA, so a stale deploy
+    # (Railway serving an old build) fails verification instead of passing on a bare 200.
+    monkeypatch.setenv("RAILWAY_GIT_COMMIT_SHA", "cafe1234")
+    client, _ = _client()
+    assert client.get("/healthz").json()["revision"] == "cafe1234"
 
 
 def test_dashboard_served_readonly():
