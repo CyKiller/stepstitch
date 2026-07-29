@@ -131,6 +131,60 @@ jobs:
           done
           echo "no canary leaked"
 
+  manual-host:
+    name: manual path (two terminals) against Postgres 16, as documented
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The docs describe two interactive terminals. Each `run:` step below is its own
+    # fresh shell, which is exactly the property that makes the second terminal
+    # necessary — so step 1 is Terminal 1 and step 2 is Terminal 2, verbatim except:
+    # uvicorn is backgrounded with a readiness poll (CI's stand-in for "leave this
+    # terminal open"), and DATABASE_URL points at the job's own Postgres service — the
+    # docs likewise require a Postgres the user provides. The interactive ergonomics of
+    # two real terminals are the only part not executed here.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: stepstitch
+          POSTGRES_PASSWORD: stepstitch
+          POSTGRES_DB: stepstitch
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U stepstitch"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.10"
+      - name: Terminal 1 — install, configure, run the host
+        run: |
+          python3 -m venv .venv && source .venv/bin/activate
+          pip install ./service
+          pip install -r server/requirements.txt
+          export DATABASE_URL=postgres://stepstitch:stepstitch@localhost:5432/stepstitch
+          export STEPSTITCH_INGEST_TOKEN=dev-ingest
+          export STEPSTITCH_ADMIN_TOKEN=dev-admin
+          export STEPSTITCH_APP_BASE_URL=https://staging.your-app.example
+          nohup uvicorn server.app:app --port 8000 > /tmp/uvicorn.log 2>&1 &
+          deadline=$((SECONDS + 60))
+          until curl -sf http://localhost:8000/healthz >/dev/null; do
+            [ $SECONDS -lt $deadline ] || { echo "::error::host never became healthy"; tail -50 /tmp/uvicorn.log; exit 1; }
+            sleep 2
+          done
+      - name: Terminal 2 — a fresh shell rebuilds doctor's environment and runs it
+        run: |
+          source .venv/bin/activate
+          export DATABASE_URL=postgres://stepstitch:stepstitch@localhost:5432/stepstitch
+          export STEPSTITCH_INGEST_TOKEN=dev-ingest
+          export STEPSTITCH_ADMIN_TOKEN=dev-admin
+          export STEPSTITCH_APP_BASE_URL=https://staging.your-app.example
+          stepstitch doctor
+
   docker-doctor:
     name: doctor inside the Compose container, as documented
     runs-on: ubuntu-latest

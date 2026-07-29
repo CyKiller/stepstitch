@@ -45,7 +45,12 @@ async function renderPage() {
   return mod;
 }
 
-describe("/dashboard", () => {
+// Generous timeout: every test here re-imports the page module after vi.resetModules()
+// (the env var is read at module scope), and that re-evaluation of the icon/motion
+// graph can exceed the default 5s under full-suite worker contention. A timeout mid-
+// mount also leaks the render past cleanup(), cascading duplicate-DOM failures into
+// the next test — so the budget is the fix, not looser assertions.
+describe("/dashboard", { timeout: 20_000 }, () => {
   it("links to the console when the demo host is configured", async () => {
     process.env.STEPSTITCH_DEMO_HOST = "http://127.0.0.1:8020";
     const mod = await renderPage();

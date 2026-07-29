@@ -8,7 +8,12 @@ name: verify production deploy
 # nothing. This one verifies the deployment the native integrations made, and goes red
 # when the public product proof is broken, which is the honest signal.
 #
+# There is deliberately no soft path: if /healthz cannot prove it is serving THIS commit
+# (unreachable host, malformed JSON, missing revision, "unknown", or a different SHA),
+# the job fails. A deployment that cannot be identified is not a verified deployment.
+#
 # Everything checked here is public and credential-free; no secret is read or printed.
+# Guarded by service/tests/test_verify_deploy_workflow.py.
 on:
   push:
     branches: [ main ]
@@ -27,61 +32,102 @@ env:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
-      - name: Wait for Railway to serve this commit
+      - name: Railway serves exactly this commit
         id: revision
         run: |
           # Railway builds on its own schedule after the push; poll /healthz until the
-          # reported revision matches this commit. "unknown" means the platform did not
-          # inject a commit SHA — warn rather than fail, because the functional checks
-          # below still prove the demo works. A DIFFERENT sha after the timeout means a
-          # stale deploy is serving, and that is a failure.
+          # reported revision EXACTLY equals this commit. Every unconfirmed state —
+          # unreachable host, malformed JSON, missing revision, "unknown", a different
+          # SHA — keeps polling, and hitting the deadline fails the job. Never a
+          # soft-pass: a 200 from a build we cannot identify proves nothing.
           want="${GITHUB_SHA}"
           deadline=$((SECONDS + 600))
-          rev=""
+          observed="never-reached"
           while [ $SECONDS -lt $deadline ]; do
-            rev=$(curl -sf "$RAILWAY_HOST/healthz" | jq -r '.revision // "unknown"' || echo "unreachable")
-            if [ "$rev" = "$want" ]; then
-              echo "confirmed=true" >> "$GITHUB_OUTPUT"
-              echo "revision=$rev" >> "$GITHUB_OUTPUT"
+            if body=$(curl -sfS --max-time 15 "$RAILWAY_HOST/healthz" 2>/dev/null); then
+              if rev=$(printf '%s' "$body" | jq -er '.revision' 2>/dev/null); then
+                observed="$rev"
+              else
+                observed="malformed-or-missing-revision"
+              fi
+            else
+              observed="unreachable"
+            fi
+            if [ "$observed" = "$want" ]; then
+              echo "observed=$observed" >> "$GITHUB_OUTPUT"
+              echo "confirmed=yes" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             sleep 20
           done
-          echo "revision=$rev" >> "$GITHUB_OUTPUT"
-          if [ "$rev" = "unknown" ]; then
-            echo "confirmed=unknown" >> "$GITHUB_OUTPUT"
-            echo "::warning::/healthz reports no revision; cannot confirm which commit is serving."
-            exit 0
-          fi
-          echo "::error::Railway is serving revision '$rev', expected '$want' — stale or failed deploy."
+          echo "observed=$observed" >> "$GITHUB_OUTPUT"
+          echo "confirmed=no" >> "$GITHUB_OUTPUT"
+          echo "::error::Railway never confirmed revision '$want' before the deadline (last observed: '$observed'). A stale or unidentifiable deployment is a failure, not a warning."
           exit 1
 
-      - name: Demo console serves on the Railway host
+      - name: Railway public contract
+        id: railway
+        # continue-on-error so the Vercel contract still runs and reports; the gate step
+        # below turns any contract failure into a job failure.
+        continue-on-error: true
         run: |
-          body=$(curl -sf "$RAILWAY_HOST/demo/dashboard")
-          echo "$body" | grep -q "Synthetic demo" || { echo "::error::demo console is missing its synthetic banner"; exit 1; }
+          # probe METHOD URL EXPECTED_STATUS [REQUIRED_TEXT] — bounded retries, arguments
+          # individually quoted end to end (never a word-split command string).
+          probe() {
+            method="$1"; url="$2"; want="$3"; text="${4:-}"
+            for attempt in 1 2 3 4 5; do
+              code=$(curl -sS --max-time 20 -X "$method" -o /tmp/probe-body -w "%{http_code}" "$url" 2>/dev/null) || code="000"
+              if [ "$code" = "$want" ]; then
+                if [ -z "$text" ] || grep -q "$text" /tmp/probe-body; then
+                  echo "ok: $method $url -> $code"
+                  return 0
+                fi
+              fi
+              sleep 10
+            done
+            echo "::error::$method $url returned '$code' (expected $want${text:+ with text \"$text\"})"
+            return 1
+          }
+          probe GET  "$RAILWAY_HOST/demo/dashboard" 200 "Synthetic demo"
+          probe GET  "$RAILWAY_HOST/demo/api/stepstitch/v1/sessions?limit=1" 200
+          probe POST "$RAILWAY_HOST/demo/api/stepstitch/v1/session/probe/verify" 403
+          probe PUT  "$RAILWAY_HOST/demo/admin/config/repro" 403
 
-      - name: Demo read API answers
+      - name: Vercel public contract
+        id: vercel
+        continue-on-error: true
         run: |
-          code=$(curl -s -o /dev/null -w "%{http_code}" "$RAILWAY_HOST/demo/api/stepstitch/v1/sessions?limit=1")
-          [ "$code" = "200" ] || { echo "::error::demo read API returned $code"; exit 1; }
+          probe() {
+            method="$1"; url="$2"; want="$3"; text="${4:-}"
+            for attempt in 1 2 3 4 5; do
+              code=$(curl -sS --max-time 20 -X "$method" -o /tmp/probe-body -w "%{http_code}" "$url" 2>/dev/null) || code="000"
+              if [ "$code" = "$want" ]; then
+                if [ -z "$text" ] || grep -q "$text" /tmp/probe-body; then
+                  echo "ok: $method $url -> $code"
+                  return 0
+                fi
+              fi
+              sleep 10
+            done
+            echo "::error::$method $url returned '$code' (expected $want${text:+ with text \"$text\"})"
+            return 1
+          }
+          probe GET  "$SITE/dashboard/demo" 200 "Synthetic demo"
+          probe GET  "$SITE/dashboard/demo/api/stepstitch/v1/sessions?limit=1" 200
+          probe POST "$SITE/dashboard/demo/api/stepstitch/v1/session/probe/verify" 403
+          probe PUT  "$SITE/dashboard/demo/admin/config/repro" 403
 
-      - name: Demo refuses mutation (403)
+      - name: Gate on both contracts
         run: |
-          for probe in "-X POST $RAILWAY_HOST/demo/api/stepstitch/v1/session/probe/verify" \
-                       "-X PUT $RAILWAY_HOST/demo/admin/config/repro"; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" $probe)
-            [ "$code" = "403" ] || { echo "::error::demo mutation probe ($probe) returned $code, expected 403"; exit 1; }
-          done
-
-      - name: Public site serves the console through the rewrite
-        run: |
-          body=$(curl -sf "$SITE/dashboard/demo")
-          echo "$body" | grep -q "Synthetic demo" || { echo "::error::$SITE/dashboard/demo is not the console (rewrite broken or STEPSTITCH_DEMO_HOST unset on Vercel)"; exit 1; }
-          code=$(curl -s -o /dev/null -w "%{http_code}" "$SITE/dashboard/demo/api/stepstitch/v1/sessions?limit=1")
-          [ "$code" = "200" ] || { echo "::error::proxied demo API returned $code"; exit 1; }
+          railway="${{ steps.railway.outcome }}"
+          vercel="${{ steps.vercel.outcome }}"
+          echo "railway=$railway vercel=$vercel"
+          [ "$railway" = "success" ] && [ "$vercel" = "success" ] || {
+            echo "::error::public contract failed (railway=$railway, vercel=$vercel)"
+            exit 1
+          }
 
       - name: Write summary
         if: always()
@@ -91,10 +137,11 @@ jobs:
             echo ""
             echo "| Check | Result |"
             echo "|---|---|"
-            echo "| Deployed revision | \`${{ steps.revision.outputs.revision }}\` (confirmed: ${{ steps.revision.outputs.confirmed || 'no' }}) |"
-            echo "| Railway host | $RAILWAY_HOST |"
-            echo "| Demo console | $RAILWAY_HOST/demo/dashboard |"
-            echo "| Public console | $SITE/dashboard/demo |"
+            echo "| Expected SHA | \`${GITHUB_SHA}\` |"
+            echo "| Observed revision | \`${{ steps.revision.outputs.observed || 'step did not run' }}\` |"
+            echo "| Exact revision confirmed | ${{ steps.revision.outputs.confirmed || 'no' }} |"
+            echo "| Railway contract ($RAILWAY_HOST) | ${{ steps.railway.outcome }} |"
+            echo "| Vercel contract ($SITE) | ${{ steps.vercel.outcome }} |"
             echo ""
             echo "Deploys are made by the native Railway and Vercel Git integrations; this workflow only verifies them."
           } >> "$GITHUB_STEP_SUMMARY"
