@@ -7,9 +7,12 @@ import { RedToGreen } from "./red-to-green";
 export function DemoSection() {
   return (
     <Section id="demo" className="border-b border-line">
+      {/* The panel below fetches its trace at runtime and may fall back to the bundled
+          sample, so this copy stays source-neutral — the badge and the disclosure line
+          inside the panel say where the trace actually came from. */}
       <SectionHeader
         title="See exactly what your team gets"
-        body="A real example, live from a running StepStitch service. Click through the tabs to follow what happened, how reproducible it is, what was kept private, and the test it wrote automatically."
+        body="A worked example straight from the StepStitch pipeline — the badge on the panel says whether it was fetched moments ago from a live service or is the bundled synthetic sample. Click through the tabs to follow what happened, how reproducible it is, what was kept private, and the test it wrote automatically."
       />
 
       {/* The outcome first — the compiled repro running red, then green —
