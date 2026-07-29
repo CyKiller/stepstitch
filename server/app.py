@@ -134,7 +134,7 @@ def create_app_from_env():
                     pass
             await proxy.pool.close()
 
-    return build_app(
+    stepstitch_app = build_app(
         get_user_id=get_user_id,
         require_admin=require_admin,
         require_destructive=require_destructive,
@@ -151,6 +151,15 @@ def create_app_from_env():
         sign_blob=sign_blob,
         base_url=base_url,
     )
+
+    # The public, credential-free demo console. Opt-in: a self-hosted deployment has no
+    # reason to serve it, and it must never appear by accident. It is a separate sub-app
+    # with its own read-only store, so mounting it cannot affect /api or /admin.
+    if os.environ.get("STEPSTITCH_DEMO_MODE", "").lower() in ("1", "true", "yes"):
+        from .demo import build_demo_app
+        stepstitch_app.mount("/demo", build_demo_app())
+
+    return stepstitch_app
 
 
 app = create_app_from_env()

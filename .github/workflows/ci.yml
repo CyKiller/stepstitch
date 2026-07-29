@@ -161,6 +161,35 @@ jobs:
       - name: Prove generated reproduction executes
         run: npm run test:e2e-proof
 
+  demo-console:
+    name: Demo console (renders in a real browser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+          cache: "npm"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      # The demo app needs no database and no tokens, which is exactly why it can be
+      # exercised here: the console is ~85 KB of inline JS that server-side tests cannot
+      # prove renders at all.
+      - name: Install the service
+        run: pip install "./service" && pip install -r server/requirements.txt
+      - name: Install
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Demo dataset is not stale
+        run: |
+          PYTHONPATH=service python3 scripts/build_demo_dataset.py
+          git diff --exit-code server/demo_dataset.json
+      - name: Drive the demo console
+        run: npm run test:demo-console
+
   tiny-transfer:
     name: Example (TinyTransfer privacy + red-to-green)
     runs-on: ubuntu-latest

@@ -184,7 +184,10 @@ def test_dashboard_leads_with_metrics_not_a_queue():
     client, _ = _client()
     body = client.get("/dashboard").text
     assert 'var current = "overview"' in body
-    assert 'go("overview")' in body, "the console must boot into the overview"
+    # Boot goes through the hash router, which falls back to the overview for an empty or
+    # unknown fragment — so the console still opens on metrics, and a deep link still works.
+    assert "routeFromHash();" in body, "the console must boot through the hash router"
+    assert 'go(known ? known.id : "overview"' in body, "the fallback route is the overview"
     for metric in ("Open failures", "People affected", "Proven fixed", "Repeat rate"):
         assert metric in body, f"overview missing metric tile: {metric}"
     assert "function overviewMetrics" in body and "function areaChart" in body
@@ -206,6 +209,7 @@ def test_dashboard_has_no_popout_and_closes_the_ci_loop():
     client, _ = _client()
     body = client.get("/dashboard").text
     assert "insertBefore" not in body, "sections must render in place, not as injected popouts"
+    assert "window.open" not in body
     # The console must hand the operator the snippet that reports a repro outcome back to
     # /verify — without it the corpus never fills and Fix Memory has nothing to match.
     assert "/verify" in body and "pre_passed" in body and "post_passed" in body
