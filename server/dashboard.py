@@ -314,6 +314,10 @@ DASHBOARD_HTML = r"""<!doctype html>
     border:1px solid rgba(52,211,153,.22); background:var(--accent-dim); font-size:13px; line-height:1.55;
   }
   .next .lab { font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:3px; }
+  /* The primary act on a failure: get the reproduction out of the browser and into CI. */
+  .primary-actions { margin-top:20px; padding:13px 14px 4px; border:1px solid var(--line-strong); border-radius:var(--r-lg); background:var(--surface); }
+  .primary-actions .lab { font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin-bottom:9px; }
+  .primary-actions .row-actions { margin-bottom:9px; }
 
   .tabs { display:flex; gap:1px; margin:24px 0 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
   .tabs button {
@@ -626,6 +630,45 @@ DASHBOARD_HTML = r"""<!doctype html>
       setTimeout(function () { b.textContent = label || "Copy"; }, 1500);
     };
     return b;
+  }
+  // Evidence has to be able to LEAVE the console — attached to a ticket, committed to a
+  // repo, handed to an auditor. The endpoints set Content-Disposition, but they are admin-
+  // gated, so a plain <a href> cannot carry the bearer token: fetch, then save the blob.
+  // A blob: URL is same-origin data already in the document, so `default-src 'none'` is
+  // satisfied without loosening the CSP.
+  function downloadBtn(path, label, cls) {
+    var b = el("button", { class: cls || "ghost", text: label });
+    b.onclick = async function () {
+      var original = b.textContent;
+      b.disabled = true;
+      b.textContent = "Preparing…";
+      try {
+        var res = await fetch(API + path, { headers: hdr() });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        var blob = await res.blob();
+        var name = filenameFrom(res.headers.get("Content-Disposition")) || "stepstitch-export";
+        var url = URL.createObjectURL(blob);
+        var a = el("a", { href: url });
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+        b.textContent = "Downloaded";
+      } catch (e) {
+        b.textContent = "Download failed";
+      }
+      setTimeout(function () { b.textContent = original; b.disabled = false; }, 1800);
+    };
+    return b;
+  }
+  // Read the server-supplied name, then strip anything that is not a plain filename so a
+  // header can never steer the write. The server sanitizes too; this is the second gate.
+  function filenameFrom(disposition) {
+    if (!disposition) return null;
+    var m = /filename="([^"]+)"/.exec(disposition);
+    if (!m) return null;
+    return m[1].replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 128);
   }
   function emptyState(message, actionLabel, onAction) {
     var kids = [el("p", { text: message })];
@@ -1641,6 +1684,53 @@ DASHBOARD_HTML = r"""<!doctype html>
         el("div", { text: trace.diagnostic.recommended_next_step })
       ]));
     }
+
+    // The one thing an operator came here to do. It used to be buried inside the Repro tab
+    // behind a Copy button; a reproduction that stays in the browser proves nothing, so
+    // running or exporting it is now the most prominent action on the failure.
+    var actions = el("div", { class: "primary-actions" }, [
+      el("div", { class: "lab",
+                  text: tech ? "Run or export the reproduction"
+                             : "Take the test to your code" }),
+      el("div", { class: "row-actions" }, [
+        downloadBtn("/session/" + trace.id + "/playwright/download",
+                    "Download .spec.ts", "primary"),
+        el("button", {
+          class: "ghost",
+          text: "Copy test",
+          onclick: function (e) {
+            var b = e.currentTarget;
+            api("/session/" + trace.id + "/playwright").then(function (r) {
+              if (navigator.clipboard) navigator.clipboard.writeText(r.playwright_code || "");
+              b.textContent = "Copied";
+            }).catch(function () { b.textContent = "Unavailable"; });
+            setTimeout(function () { b.textContent = "Copy test"; }, 1800);
+          }
+        }),
+        el("button", {
+          class: "ghost",
+          text: tech ? "Copy safe agent packet" : "Copy what an AI can see",
+          onclick: function (e) {
+            var b = e.currentTarget;
+            api("/session/" + trace.id + "/agent-packet").then(function (packet) {
+              if (navigator.clipboard) {
+                navigator.clipboard.writeText(JSON.stringify(packet, null, 2));
+              }
+              b.textContent = "Copied";
+            }).catch(function () { b.textContent = "Unavailable"; });
+            setTimeout(function () {
+              b.textContent = tech ? "Copy safe agent packet" : "Copy what an AI can see";
+            }, 1800);
+          }
+        }),
+        downloadBtn("/session/" + trace.id + "/attestation/download", "Download attestation")
+      ])
+    ]);
+    root.appendChild(actions);
+    var packetNote = teach("agent_packet",
+      "The agent packet is exactly what an AI assistant receives: structure, scores and the " +
+      "generated test. No page text, no values, no URLs — nothing that could carry customer data.");
+    if (packetNote) root.appendChild(packetNote);
 
     // Sections
     // Tab wording follows the toggle too — "Repro" means nothing outside engineering.

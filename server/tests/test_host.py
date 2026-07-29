@@ -3,6 +3,9 @@
 No live Postgres needed: ``build_app`` takes the DB callables directly, so we pass the
 same in-memory fake the service tests use and exercise the real auth + router wiring.
 """
+import shutil
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -314,3 +317,62 @@ def test_build_app_accepts_github_bridge():
         github_bridge=sentinel,
     )
     assert app is not None
+
+
+# --- the console's inline script -----------------------------------------------------------
+# Everything else in this file asserts against the served HTML as a STRING. That catches a
+# missing feature but not a broken one: a syntax error anywhere in the ~85 KB inline script
+# would leave every string assertion green and the console blank in the browser.
+
+def _inline_script() -> str:
+    import re
+
+    from server.dashboard import DASHBOARD_HTML
+    match = re.search(r'<script nonce="__CSP_NONCE__">(.*?)</script>', DASHBOARD_HTML, re.S)
+    assert match, "the console must ship exactly one nonce-gated inline script"
+    return match.group(1)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="needs node to parse the console JS")
+def test_dashboard_script_is_syntactically_valid():
+    import pathlib
+    import subprocess
+    import tempfile
+
+    path = pathlib.Path(tempfile.mkdtemp()) / "dashboard.js"
+    path.write_text(_inline_script())
+    result = subprocess.run(
+        ["node", "--check", str(path)], capture_output=True, text=True)
+    assert result.returncode == 0, f"console JS does not parse:\n{result.stderr}"
+
+
+def test_running_or_exporting_the_repro_is_the_primary_action():
+    """A reproduction that never leaves the browser proves nothing. Export used to be a
+    Copy button buried inside the Repro tab; it is now the headline action on a failure."""
+    client, _ = _client()
+    page = client.get("/dashboard").text
+    assert "primary-actions" in page
+    assert "Run or export the reproduction" in page
+    assert "Download .spec.ts" in page
+    assert "/playwright/download" in page
+    assert "/attestation/download" in page
+    # And the plain-language register is served too.
+    assert "Take the test to your code" in page
+
+
+def test_dashboard_offers_the_safe_agent_packet():
+    # The endpoint existed since 0.7 and nothing surfaced it.
+    client, _ = _client()
+    page = client.get("/dashboard").text
+    assert "/agent-packet" in page
+    assert "Copy safe agent packet" in page
+
+
+def test_downloads_are_fetched_with_auth_not_linked():
+    """The download routes are admin-gated, so a bare <a href> would 401. The console must
+    fetch with the bearer header and save the blob."""
+    client, _ = _client()
+    page = client.get("/dashboard").text
+    assert "function downloadBtn(" in page
+    assert "URL.createObjectURL" in page
+    assert "headers: hdr()" in page

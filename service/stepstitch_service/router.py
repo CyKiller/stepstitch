@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field, field_validator
 
 from .attestation import (
@@ -127,6 +128,12 @@ def _loads(value: Any) -> Any:
     return json.loads(value) if isinstance(value, (str, bytes)) else value
 
 
+def _safe_filename(trace_id: str, suffix: str) -> str:
+    """A download filename that cannot smuggle a path or a header break out of a trace id."""
+    stem = re.sub(r"[^A-Za-z0-9_-]", "_", trace_id)[:64] or "trace"
+    return f"stepstitch-{stem}{suffix}"
+
+
 def create_stepstitch_router(
     *,
     get_user_id: Callable[..., Any],
@@ -142,6 +149,7 @@ def create_stepstitch_router(
     capture_enabled: Optional[CaptureEnabledFn] = None,
     scrub_policy: ScrubPolicy = FINANCIAL_SERVICES_ENTERPRISE,
     scrub_policy_provider: Optional[Callable[[], Any]] = None,
+    repro_config_provider: Optional[Callable[[], Any]] = None,
     sign_blob: Optional[Callable[[bytes], Any]] = None,
     draft_adapters: Optional[List[DraftAdapter]] = None,
     record_writers: Optional[List[RecordWriter]] = None,
@@ -191,6 +199,26 @@ def create_stepstitch_router(
                 await audit(action, actor_id, detail)
             except Exception:  # never let audit failure mask the request
                 logger.exception("stepstitch audit failed action=%s", action)
+
+    async def _repro_config() -> Any:
+        """The project's reproduction settings, re-read per request so an operator's change
+        applies without a restart. A provider failure falls back to defaults — the compiler
+        degrades to a NEEDS-CONFIG checklist rather than failing to produce a test."""
+        if repro_config_provider is None:
+            return None
+        try:
+            result = repro_config_provider()
+            if inspect.isawaitable(result):
+                result = await result
+            return result
+        except Exception:
+            logger.exception("stepstitch repro config unavailable; using defaults")
+            return None
+
+    async def _compile(trace_id: str, footsteps: List[Dict[str, Any]]) -> str:
+        """Every compiled reproduction goes through here so project config is never skipped."""
+        cfg = await _repro_config()
+        return generate_playwright_test(trace_id, footsteps, base_url, config=cfg)
 
     async def _capture_allowed() -> bool:
         if capture_enabled is None:
@@ -545,7 +573,7 @@ def create_stepstitch_router(
                         "input values", "screenshots", "full URLs",
                     ],
                 },
-                "playwright_code": generate_playwright_test(trace_id, footsteps, base_url),
+                "playwright_code": await _compile(trace_id, footsteps),
             },
         }
 
@@ -696,7 +724,7 @@ def create_stepstitch_router(
             raise HTTPException(status_code=404, detail="Trace not found")
         footsteps = _loads(row[0])
         summary = build_trace_summary(trace_id, footsteps, project_id=row[1])
-        repro_code = generate_playwright_test(trace_id, footsteps, base_url)
+        repro_code = await _compile(trace_id, footsteps)
         if dry_run:
             await _audit("stepstitch.github_pr", _actor_id(admin),
                          {"trace_id": trace_id, "dry_run": True,
@@ -815,11 +843,7 @@ def create_stepstitch_router(
         return {"status": "ok", "trace_id": trace_id, "fingerprint": new_fp,
                 "similar_fixes": matches}
 
-    @router.get("/session/{trace_id}/attestation")
-    async def get_attestation(
-        trace_id: str,
-        admin: Any = Depends(require_admin),
-    ) -> Dict[str, Any]:
+    async def _attestation_payload(trace_id: str, admin: Any) -> Dict[str, Any]:
         # Evidence Attestation: a canonical, tamper-evident bundle (scrub report + replayability
         # + verdict + sdk build) anyone can verify INDEPENDENTLY (recompute the hash; if signed,
         # cosign verify-blob with the tenant's key). Optionally signed by a host-injected signer
@@ -867,6 +891,27 @@ def create_stepstitch_router(
             "signed": signature is not None, "verify_recipe": verify_recipe(trace_id),
         }
 
+    @router.get("/session/{trace_id}/attestation")
+    async def get_attestation(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        return await _attestation_payload(trace_id, admin)
+
+    @router.get("/session/{trace_id}/attestation/download")
+    async def download_attestation(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> JSONResponse:
+        """The same evidence bundle as a file. An attestation is only useful if it can leave
+        the console — attached to a ticket, checked into a repo, handed to an auditor."""
+        payload = await _attestation_payload(trace_id, admin)
+        filename = _safe_filename(trace_id, "-attestation.json")
+        return JSONResponse(
+            content=payload,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     @router.get("/session/{trace_id}/fragility")
     async def get_fragility(
         trace_id: str,
@@ -892,7 +937,7 @@ def create_stepstitch_router(
         if not row:
             raise HTTPException(status_code=404, detail="Trace not found")
         mr = minimal_repro(_loads(row[0]))
-        code = generate_playwright_test(trace_id, mr["footsteps"], base_url=base_url)
+        code = await _compile(trace_id, mr["footsteps"])
         await _audit("stepstitch.minimal_repro", _actor_id(admin),
                      {"trace_id": trace_id, "reduced_steps": mr["reduced_steps"]})
         return {
@@ -1025,8 +1070,28 @@ def create_stepstitch_router(
             raise HTTPException(status_code=404, detail="Trace not found")
         await _audit("stepstitch.compile", _actor_id(admin), {"trace_id": trace_id})
         footsteps = _loads(row[0])
-        code = generate_playwright_test(trace_id, footsteps, base_url)
+        code = await _compile(trace_id, footsteps)
         return {"status": "ok", "trace_id": trace_id, "playwright_code": code}
+
+    @router.get("/session/{trace_id}/playwright/download")
+    async def download_compiled_repro(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> PlainTextResponse:
+        """The reproduction as a ready-to-commit ``.spec.ts``. StepStitch does not run it —
+        the engineer or CI does, which is why getting it out of the console matters."""
+        row = await fetchone(
+            "SELECT footsteps FROM stepstitch_traces WHERE id = ?", (trace_id,))
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        await _audit("stepstitch.compile_download", _actor_id(admin), {"trace_id": trace_id})
+        code = await _compile(trace_id, _loads(row[0]))
+        filename = _safe_filename(trace_id, "-repro.spec.ts")
+        return PlainTextResponse(
+            content=code,
+            media_type="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     @router.delete("/session/by-user/{target_user_id}")
     async def delete_user_traces(

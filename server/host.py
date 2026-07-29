@@ -18,7 +18,9 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
+from stepstitch_service.compiler import DEFAULT_BASE_URL
 from stepstitch_service.profiles import load_profile
+from stepstitch_service.repro_config import ReproConfig, ReproConfigError, readiness
 from stepstitch_service.scrubber import (
     ScrubPolicy,
     compile_extra_redactions,
@@ -54,6 +56,13 @@ class ScrubConfig(BaseModel):
 class ScrubPreview(BaseModel):
     text: str = ""
     extra_redactions: Optional[list] = None  # preview candidate patterns (unsaved)
+
+
+class ReproConfigBody(BaseModel):
+    """The reproduction-config document. Validated by ``ReproConfig.from_dict``, which is
+    where the real rules live (including the refusal to store anything credential-shaped)."""
+
+    config: dict = {}
 
 
 def apply_scrub_overrides(base: ScrubPolicy, cfg: dict) -> ScrubPolicy:
@@ -95,6 +104,7 @@ def build_app(
     admin_token: Optional[str] = None,
     ingest_token: Optional[str] = None,
     sign_blob: Optional[Callable[..., Any]] = None,
+    base_url: Optional[str] = None,
 ) -> FastAPI:
     """Build the ingest API. ``draft_adapters`` are the injected (Apache-2.0) adapters;
     ``record_writers`` enable the optional governed direct-write; ``audit`` is the audit
@@ -124,6 +134,26 @@ def build_app(
         # the base; a read/parse failure falls back to the base policy.
         return apply_scrub_overrides(base_policy, await _read_scrub_overrides())
 
+    # The application under test. Env-supplied (STEPSTITCH_BASE_URL) and overridable per
+    # project by the stored repro config; without either, the compiler's localhost default.
+    effective_base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
+
+    async def _read_repro_config() -> ReproConfig:
+        """Stored project reproduction settings. A missing or corrupt row is not fatal —
+        repro generation must never break because config could not be read."""
+        try:
+            row = await fetchone(
+                "SELECT value FROM stepstitch_config WHERE key = ?", ("repro_config",))
+        except Exception:
+            return ReproConfig()
+        if not row or not row[0]:
+            return ReproConfig()
+        try:
+            return ReproConfig.from_dict(json.loads(row[0]))
+        except (ValueError, TypeError):
+            logger.warning("stepstitch: stored repro_config is invalid; ignoring it")
+            return ReproConfig()
+
     router = create_stepstitch_router(
         get_user_id=get_user_id,
         require_admin=require_admin,
@@ -133,9 +163,11 @@ def build_app(
         fetchall=fetchall,
         audit=audit,
         generate_playwright_test=generate_playwright_test,
+        base_url=effective_base_url,
         retention_days=retention_days,
         scrub_policy=base_policy,
         scrub_policy_provider=_scrub_policy_provider,
+        repro_config_provider=_read_repro_config,
         sign_blob=sign_blob,
         draft_adapters=draft_adapters,
         record_writers=record_writers,
@@ -216,10 +248,20 @@ def build_app(
 
         active = await fetchone(
             "SELECT count(*) FROM stepstitch_agents WHERE revoked = ?", (False,))
+        repro_cfg = await _read_repro_config()
         return {
             "status": "ok",
             "profile": profile,
             "retention_days": retention_days,
+            # Setup-checklist signals. Without a base URL every generated reproduction points
+            # at localhost:3000 and cannot run in CI, so the console surfaces this directly.
+            "base_url_configured": bool(
+                repro_cfg.base_url or effective_base_url != DEFAULT_BASE_URL
+            ),
+            "repro_config_ready": bool(
+                (repro_cfg.base_url or effective_base_url != DEFAULT_BASE_URL)
+                and not repro_cfg.is_empty()
+            ),
             "traces": await _count("stepstitch_traces"),
             "audit_events": await _count("stepstitch_audit"),
             "agents_total": await _count("stepstitch_agents"),
@@ -267,6 +309,51 @@ def build_app(
         await audit("stepstitch.scrub_config_update", _actor_name(admin),
                     {"patterns": len(patterns), "forbidden_keys": len(keys)})
         return {"status": "ok", **cfg}
+
+    # --- Reproduction config (project settings the compiler needs; never credentials) ---
+    @app.get("/admin/config/repro")
+    async def get_repro_config(admin: Any = Depends(require_admin)) -> dict:
+        cfg = await _read_repro_config()
+        return {
+            "status": "ok",
+            "config": cfg.as_dict(),
+            # The env-supplied fallback, so the console can show where repros point today
+            # even when no project override is stored.
+            "env_base_url": effective_base_url if effective_base_url != DEFAULT_BASE_URL else None,
+            "default_base_url": DEFAULT_BASE_URL,
+            # Trace-independent readiness (no footsteps → base URL + auth only).
+            "readiness": readiness(
+                cfg, [],
+                fallback_base_url=(
+                    effective_base_url if effective_base_url != DEFAULT_BASE_URL else None
+                ),
+            ),
+        }
+
+    @app.put("/admin/config/repro")
+    async def put_repro_config(
+        req: ReproConfigBody, admin: Any = Depends(require_admin)
+    ) -> dict:
+        # Validation lives in the service core so the rules (including the refusal to store
+        # anything credential-shaped) are the same wherever config arrives from.
+        try:
+            cfg = ReproConfig.from_dict(req.config)
+        except ReproConfigError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        doc = cfg.as_dict()
+        await execute("DELETE FROM stepstitch_config WHERE key = ?", ("repro_config",))
+        await execute(
+            "INSERT INTO stepstitch_config (key, value, updated_at, updated_by) "
+            "VALUES (?, ?, ?, ?)",
+            ("repro_config", json.dumps(doc), datetime.now(timezone.utc),
+             _actor_name(admin)),
+        )
+        # Audit the SHAPE of the change, never the values.
+        await audit("stepstitch.repro_config_update", _actor_name(admin),
+                    {"settings": sorted(doc.keys()),
+                     "route_params": len(cfg.route_params),
+                     "input_values": len(cfg.input_by_selector) + len(cfg.input_by_kind)})
+        return {"status": "ok", "config": doc}
 
     @app.post("/admin/scrub/preview")
     async def scrub_preview(req: ScrubPreview, admin: Any = Depends(require_admin)) -> dict:

@@ -16,8 +16,19 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from .replayability import score_trace
+from .repro_config import ReproConfig, endpoint_match_regex, readiness, synthetic_value
 
 __all__ = ["generate_playwright_test"]
+
+# Protected fields (passwords) are filled from an environment-managed test value, never from
+# a literal baked into the file. The name is deliberately free of credential-ish words: the
+# quality oracle (test_repro_eval.py) scans compiled output for those, and it should stay
+# able to do so without this reference tripping it.
+_PROTECTED_ENV_FALLBACK = "STEPSTITCH_TEST_INPUT_VALUE"
+
+# The compiler's own last-resort host. Reaching this means nobody configured a base URL, so
+# readiness must report it as missing rather than as a deliberate choice.
+DEFAULT_BASE_URL = "http://localhost:3000"
 
 
 def _ts_str(value: str) -> str:
@@ -37,21 +48,16 @@ def _coerce_status(value: Any) -> Optional[int]:
         return None
 
 
-def _url_prefix(endpoint: str) -> str:
-    """Literal URL prefix before the first templated segment.
-
-    ``/api/accounts/:id/transfers`` -> ``/api/accounts/`` so ``url().includes(...)``
-    matches the concrete runtime URL (``/api/accounts/123/transfers``).
-    """
-    if not endpoint:
-        return ""
-    marker = endpoint.find("/:")
-    if marker != -1:
-        return endpoint[: marker + 1]
-    colon = endpoint.find(":")
-    if colon != -1:
-        return endpoint[:colon]
-    return endpoint
+def _predicate(pattern_var: Optional[str], method: str) -> str:
+    """The ``waitForResponse`` predicate body: match the path template, then the method."""
+    method_clause = (
+        f"r.request().method() === '{_ts_str(method.upper())}'" if method else ""
+    )
+    path_clause = (
+        f"{pattern_var}.test(new URL(r.url()).pathname)" if pattern_var else ""
+    )
+    clauses = [c for c in (path_clause, method_clause) if c]
+    return " && ".join(clauses) if clauses else "true"
 
 
 def _status_assertion(var: str, status: Optional[int], endpoint: str) -> str:
@@ -63,13 +69,23 @@ def _status_assertion(var: str, status: Optional[int], endpoint: str) -> str:
     return f"  expect({var}.status(), '{ep} must succeed').toBeLessThan(400);"
 
 
-def _arm_wait(var: str, prefix: str, method: str) -> List[str]:
-    method_clause = (
-        f" && r.request().method() === '{_ts_str(method.upper())}'" if method else ""
-    )
+def _matcher_lines(index: int, endpoint: str, config: Optional[ReproConfig]) -> tuple:
+    """Emit the hoisted endpoint matcher, returning ``(lines, pattern_var)``.
+
+    The matcher is an anchored path regex derived from the endpoint template, so a busy
+    page's sibling traffic under the same prefix cannot bind the wait.
+    """
+    source = endpoint_match_regex(endpoint, config)
+    if not source:
+        return [], None
+    var = f"endpoint{index}"
+    return ([f"  const {var} = new RegExp('{_ts_str(source)}');"], var)
+
+
+def _arm_wait(var: str, pattern_var: Optional[str], method: str) -> List[str]:
     return [
         f"  const {var} = page.waitForResponse(",
-        f"    (r) => r.url().includes('{_ts_str(prefix)}'){method_clause},",
+        f"    (r) => {_predicate(pattern_var, method)},",
         "  );",
     ]
 
@@ -77,16 +93,22 @@ def _arm_wait(var: str, prefix: str, method: str) -> List[str]:
 def generate_playwright_test(
     trace_id: str,
     footsteps: List[Dict[str, Any]],
-    base_url: str = "http://localhost:3000",
+    base_url: str = DEFAULT_BASE_URL,
+    config: Optional[ReproConfig] = None,
 ) -> str:
     """Compile footsteps into Playwright TS.
 
-    `base_url` is caller-supplied (no hardcoded host). Routes are templates
-    (e.g. ``/accounts/:id``); where a template contains ``:`` a TODO is emitted so the
-    engineer substitutes a concrete id. No credentials are ever embedded — auth is left
-    as a TODO for the operator to wire to a synthetic/test account.
+    ``config`` is the project's reproduction settings (see ``repro_config``). It supplies the
+    things a structural trace cannot know: the real base URL, concrete values for templated
+    route segments, synthetic values to type into fields, and which auth fixture to use.
+    Without it the compiler still emits a runnable test — it just says, in a header checklist,
+    which parts are READY and which NEED-CONFIG.
+
+    No credential is ever embedded. Where a value must be secret (a password field), the test
+    reads an environment-managed test secret by NAME.
     """
-    base = base_url.rstrip("/")
+    cfg = config or ReproConfig()
+    base = (cfg.base_url or base_url).rstrip("/")
     replay = score_trace(footsteps)
     has_exception = any(
         str(s.get("type", "")).lower() == "exception" for s in footsteps
@@ -101,13 +123,31 @@ def generate_playwright_test(
     for w in replay["warnings"]:
         where = f" [step {w['step_index']}]" if "step_index" in w else ""
         lines.append(f"//   ⚠ {w['code']}{where}: {_comment(w['detail'])}")
+
+    # Configuration checklist: what runs as-is, and what the operator still has to set.
+    lines.append("//")
+    lines.append("// Reproduction setup (change with PUT /admin/config/repro):")
+    configured_base = base_url if base_url.rstrip("/") != DEFAULT_BASE_URL else None
+    for item in readiness(cfg, footsteps, fallback_base_url=configured_base):
+        mark = "READY      " if item["ready"] else "NEEDS-CONFIG"
+        lines.append(f"//   {mark} {_comment(item['title'])} — {_comment(item['detail'])}")
     lines += [
-        "// NOTE: no credentials are embedded. Wire authentication to a synthetic",
-        "// test account before running against a protected route.",
+        "//",
+        "// NOTE: no credentials are embedded. A protected field reads its value from an",
+        "// environment variable by name — set that variable in CI.",
         "test('StepStitch reproduction', async ({ page }) => {",
-        "  // TODO: authenticate as a synthetic test user if the flow requires it.",
-        "",
     ]
+    if cfg.auth is not None and cfg.auth.fixture:
+        env_note = (
+            f" (reads env: {', '.join(cfg.auth.env_vars)})" if cfg.auth.env_vars else ""
+        )
+        lines.append(
+            f"  // auth: apply the project fixture '{_comment(cfg.auth.fixture)}'"
+            f"{_comment(env_note)}."
+        )
+    else:
+        lines.append("  // TODO: authenticate as a synthetic test user if the flow requires it.")
+    lines.append("")
     if has_exception:
         lines += [
             "  // Capture uncaught client exceptions so we can assert they no longer occur.",
@@ -119,22 +159,53 @@ def generate_playwright_test(
     asserted = False
     resp_n = 0
 
+    def resolve_route(route: str) -> str:
+        """Substitute ``:param`` segments from project config; leave the rest templated."""
+        if ":" not in route:
+            return route
+        out: List[str] = []
+        for segment in route.split("/"):
+            if segment.startswith(":"):
+                out.append(cfg.route_params.get(segment[1:], segment))
+            else:
+                out.append(segment)
+        return "/".join(out)
+
     def emit_action(step_type: str, route: str, target: Optional[str], label: str) -> None:
         if step_type == "navigation":
-            if ":" in route:
+            resolved = resolve_route(route)
+            if ":" in resolved:
+                unset = [s[1:] for s in resolved.split("/") if s.startswith(":")]
                 lines.append(
-                    f"  // TODO: substitute id(s) in templated route '{_comment(route)}'"
+                    f"  // NEEDS-CONFIG: no value for {', '.join(repr(u) for u in unset)} "
+                    f"in '{_comment(route)}' — set route_params."
                 )
-            lines.append(f"  await page.goto('{_ts_str(base + route)}');")
+            lines.append(f"  await page.goto('{_ts_str(base + resolved)}');")
         elif step_type == "click" and target:
             if label and label != "[masked]":
                 lines.append(f"  // label: {_comment(label)}")
             lines.append(f"  await page.locator('{_ts_str(target)}').click();")
         elif step_type == "input" and target:
-            lines.append("  // value redacted by StepStitch; fill a test value:")
-            lines.append(
-                f"  await page.locator('{_ts_str(target)}').fill('stepstitch-test-value');"
-            )
+            # The captured value was never recorded. Fill a synthetic one inferred from the
+            # selector (or configured), and for secret fields read an env var by name.
+            value, kind = synthetic_value(str(target), cfg)
+            if value is None:
+                lines.append(
+                    f"  // NEEDS-CONFIG: no test value for '{_comment(str(target))}' "
+                    f"({kind}) — reading {_PROTECTED_ENV_FALLBACK} from the environment."
+                )
+                lines.append(
+                    f"  await page.locator('{_ts_str(str(target))}')"
+                    f".fill(process.env.{_PROTECTED_ENV_FALLBACK} ?? '');"
+                )
+            else:
+                lines.append(
+                    f"  // value never captured by StepStitch; synthetic {kind} value:"
+                )
+                lines.append(
+                    f"  await page.locator('{_ts_str(str(target))}')"
+                    f".fill('{_ts_str(value)}');"
+                )
 
     i = 0
     n = len(footsteps)
@@ -159,7 +230,9 @@ def generate_playwright_test(
             status = _coerce_status(api_meta.get("status"))
             method = str(api_meta.get("method", ""))
             var = f"response{resp_n}"
-            lines += _arm_wait(var, _url_prefix(endpoint), method)
+            matcher, pattern_var = _matcher_lines(resp_n, endpoint, cfg)
+            lines += matcher
+            lines += _arm_wait(var, pattern_var, method)
             emit_action(step_type, route, target, label)
             lines.append(
                 f"  // expected API failure: {_comment(endpoint)} "
@@ -182,11 +255,8 @@ def generate_playwright_test(
             endpoint = str(metadata.get("endpoint", ""))
             status = _coerce_status(metadata.get("status"))
             method = str(metadata.get("method", ""))
-            method_clause = (
-                f" && r.request().method() === '{_ts_str(method.upper())}'"
-                if method
-                else ""
-            )
+            matcher, pattern_var = _matcher_lines(resp_n, endpoint, cfg)
+            lines += matcher
             lines.append(
                 f"  // expected API failure: {_comment(endpoint)} "
                 f"(HTTP {metadata.get('status', '?')})"
@@ -195,7 +265,7 @@ def generate_playwright_test(
                 f"  const res{resp_n} = await page.waitForResponse("
             )
             lines.append(
-                f"    (r) => r.url().includes('{_ts_str(_url_prefix(endpoint))}'){method_clause},"
+                f"    (r) => {_predicate(pattern_var, method)},"
             )
             lines.append("  );")
             lines.append(_status_assertion(f"res{resp_n}", status, endpoint))

@@ -15,7 +15,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["httpx>=0.27", "pytest>=8.0"]
+# PyYAML is test-only (never a runtime dep): the CI workflow we hand customers is a template
+# string, and a template that does not parse is worthless — so a test parses it.
+test = ["httpx>=0.27", "pytest>=8.0", "PyYAML>=6.0"]
 # The universal agentic connector (docs/PRODUCT-PLAN.md P1). Optional so the core
 # service stays dependency-free; the MCP tool registry + dispatch are pure Python and
 # need no extra — only `serve_stdio` (the stdio transport) requires this.
@@ -54,6 +56,7 @@ source_modules = [
     "stepstitch_service.router",
     "stepstitch_service.scrubber",
     "stepstitch_service.compiler",
+    "stepstitch_service.repro_config",
     # The console's pure layers. metrics is now served on /shapes rather than mirrored in the
     # dashboard's JavaScript, so it is core and belongs under the same boundary as the rest.
     "stepstitch_service.shapes",
