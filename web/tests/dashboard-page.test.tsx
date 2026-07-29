@@ -31,21 +31,37 @@ afterEach(() => {
   delete process.env.STEPSTITCH_DEMO_HOST;
 });
 
-async function renderPage() {
+async function loadPage() {
   // The page reads the env var at module scope, so the module registry has to be cleared
   // BEFORE the import, not just after. Resetting only in afterEach passes in isolation and
   // fails in a full run, because whatever ran first leaves the module cached.
   vi.resetModules();
-  const mod = await import("@/app/dashboard/page");
+  return import("@/app/dashboard/page");
+}
+
+async function renderPage() {
+  const mod = await loadPage();
   render(<mod.default />);
+  return mod;
 }
 
 describe("/dashboard", () => {
   it("links to the console when the demo host is configured", async () => {
     process.env.STEPSTITCH_DEMO_HOST = "http://127.0.0.1:8020";
-    await renderPage();
+    const mod = await renderPage();
     const link = screen.getByRole("link", { name: /Open the console/i });
     expect(link.getAttribute("href")).toBe("/dashboard/demo");
+    // "Live" is earned: with the proxy wired, the page may say so.
+    expect(String(mod.metadata.title)).toMatch(/live synthetic/i);
+    expect(screen.getByText("Live synthetic console")).toBeTruthy();
+  });
+
+  it("never says 'live' anywhere when the demo host is not configured", async () => {
+    const mod = await renderPage();
+    expect(String(mod.metadata.title)).not.toMatch(/live/i);
+    expect(String(mod.metadata.description)).not.toMatch(/live/i);
+    expect(screen.getByText("Console preview")).toBeTruthy();
+    expect(screen.queryByText("Live synthetic console")).toBeNull();
   });
 
   it("stays useful when the demo host is not configured", async () => {

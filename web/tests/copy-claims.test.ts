@@ -50,3 +50,27 @@ describe("buyer-facing copy never claims screen/input/raw capture", () => {
     expect(text).toContain("not a recording");
   });
 });
+
+describe("'live' claims are conditional, never ambient", () => {
+  const COMPONENTS = join(process.cwd(), "src", "components");
+
+  it("the homepage demo section makes no unconditional live-service claim", () => {
+    // The LiveDemo panel can silently fall back to the bundled sample, so the static copy
+    // around it must not assert liveness — the in-panel disclosure carries that per-source.
+    const text = readFileSync(join(COMPONENTS, "demo-section.tsx"), "utf8");
+    expect(text).not.toMatch(/live from a running/i);
+  });
+
+  it("the demo panel discloses both provenance states", () => {
+    const text = readFileSync(join(COMPONENTS, "live-demo.tsx"), "utf8");
+    expect(text).toContain("Bundled synthetic sample");
+    expect(text).toContain("running StepStitch service");
+  });
+
+  it("the red-to-green demo page never presents its declared outcomes as measured CI", () => {
+    const text = readFileSync(join(APP, "demo/page.tsx"), "utf8");
+    expect(text).toContain("declared");
+    expect(text).toContain("synthetic");
+    expect(text).not.toContain("CI reports red");
+  });
+});
