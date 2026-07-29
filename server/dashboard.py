@@ -139,7 +139,10 @@ DASHBOARD_HTML = r"""<!doctype html>
     height:45px; flex:0 0 auto; display:flex; align-items:center; gap:10px;
     padding:0 16px; border-bottom:1px solid var(--line); background:var(--bg);
   }
-  .crumbs { font-size:13px; color:var(--fg); font-weight:500; display:flex; align-items:center; gap:7px; min-width:0; }
+  /* The topbar is a fixed 45px row, so a long failure headline must truncate rather than
+     wrap — wrapping pushed the breadcrumb over the toggle and status text on narrow screens. */
+  .crumbs { font-size:13px; color:var(--fg); font-weight:500; display:flex; align-items:center; gap:7px; min-width:0; flex-wrap:nowrap; overflow:hidden; }
+  .crumbs > * { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .crumbs .sep { color:var(--faint); }
   .crumbs button { background:none; border:none; color:var(--muted); font:inherit; padding:0; cursor:pointer; }
   .crumbs button:hover { color:var(--fg); }
@@ -411,6 +414,9 @@ DASHBOARD_HTML = r"""<!doctype html>
     body { overflow:auto; }
     aside.sidebar { display:none; }
     main.view { height:auto; }
+    /* Counts are a convenience, not navigation: drop them before the breadcrumb truncates. */
+    #statusbar { display:none; }
+    .detail { padding:18px 16px 48px; }
   }
 </style>
 </head>

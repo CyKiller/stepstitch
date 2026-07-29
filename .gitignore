@@ -39,3 +39,6 @@ skills-lock.json
 
 # Superpowers brainstorm scratch (visual companion mockups)
 .superpowers/
+
+# TinyTransfer example: scratch dir for the red-to-green verify run
+examples/tiny-transfer/.verify-run/
