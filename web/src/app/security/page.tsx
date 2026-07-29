@@ -38,13 +38,13 @@ const gates = [
   "test_profiles.py",
   "test_golden_path.py",
   "test_repro_eval.py",
-  ".importlinter",
+  "service/pyproject.toml (import-linter contract)",
   "test_compliance.py",
 ];
 
 const docs = [
   ["COMPLIANCE-EVIDENCE.md", "The regulation crosswalk and the named tests that back each control."],
-  ["THREAT-MODEL.md", "Assets, trust boundaries, and the threats the design addresses."],
+  ["docs/THREAT-MODEL.md", "Assets, trust boundaries, and the threats the design addresses."],
   ["SECURITY.md", "Disclosure policy and supported versions."],
   ["INCIDENT-RESPONSE.md", "The org-wide kill switch and containment procedure."],
 ];

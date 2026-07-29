@@ -26,7 +26,7 @@ const panels: Panel[] = [
   {
     icon: Plugs,
     title: "Connect any agent, scoped",
-    desc: "Register each AI agent and issue it a named token scoped to a tier — none, summaries, repros, or drafts. The host enforces the scope; an out-of-scope call is refused, not silently allowed.",
+    desc: "Register each AI agent and issue it a named token scoped to what it actually needs — none, summaries, repros or drafts for assistants, and a separate verify scope for CI that may fetch a reproduction and post a verdict and nothing else. The host enforces the scope; an out-of-scope call is refused, not silently allowed.",
     proof: "server/agents.py · POST /admin/agents",
   },
   {

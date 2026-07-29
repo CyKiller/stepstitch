@@ -1,6 +1,7 @@
 import { Check, X, Minus } from "@phosphor-icons/react/dist/ssr";
 import { Reveal } from "./reveal";
 import { Section, SectionHeader } from "./section";
+import { MCP_TOOL_COUNT } from "@/lib/mcp-tools";
 
 type Cell = { kind: "yes" | "no" | "partial"; text: string };
 type Row = {
@@ -24,7 +25,7 @@ const rows: Row[] = [
     replay: { kind: "no", text: "High" },
     openreplay: { kind: "partial", text: "Medium" },
     apm: { kind: "partial", text: "Medium" },
-    stitch: { kind: "yes", text: "Nothing sensitive captured" },
+    stitch: { kind: "yes", text: "No screens, values or PII captured" },
   },
   {
     axis: "Proves the bug is reproducible",
@@ -52,7 +53,7 @@ const rows: Row[] = [
     replay: { kind: "no", text: "No" },
     openreplay: { kind: "no", text: "No" },
     apm: { kind: "no", text: "No" },
-    stitch: { kind: "yes", text: "MCP, 8 read-only tools" },
+    stitch: { kind: "yes", text: `MCP, ${MCP_TOOL_COUNT} scoped tools` },
   },
 ];
 

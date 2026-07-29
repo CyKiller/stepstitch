@@ -12,7 +12,7 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **414** | `PYTHONPATH=service pytest service/tests/` |
+| Service (compiler, router, privacy, connectors) | **416** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **132** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **22** | `npx vitest run` |
 | Web (marketing site + copy claims) | **43** | `cd web && npx vitest run` |
@@ -56,6 +56,7 @@ the browser sent).
 | Runnable example proving the privacy claims + red→green | `examples/tiny-transfer/` | CI job `tiny-transfer` (13 Playwright tests over the captured payload) |
 | Public demo console — real UI, synthetic data, no credentials, read-only | `server/demo.py`, `scripts/build_demo_dataset.py` | `test_demo_app.py`, CI job `demo-console` (13 browser tests) |
 | Deep-linkable failures (`#/shape/…`) | `server/dashboard.py` | `test_host.py`, `dashboard-demo.spec.ts` |
+| Site's advertised MCP tool list matches the server | `web/src/lib/mcp-tools.ts` | `test_mcp_site_parity.py` |
 | End-to-end golden path | (all of the above) | `test_golden_path.py` |
 
 ### Host, governance and operations

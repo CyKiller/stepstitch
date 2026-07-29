@@ -27,9 +27,13 @@ const steps: { title: string; body: string; code?: string; caption?: string }[] 
   },
   {
     title: "Mount the service (or use the reference host)",
-    body: "For the live path, run the ingest service against a local Postgres. The server scrubber is the trust boundary — it strips NPI again on ingest, independent of the SDK.",
-    code: "export DATABASE_URL=postgres://localhost/stepstitch\nexport STEPSTITCH_INGEST_TOKEN=dev-ingest STEPSTITCH_ADMIN_TOKEN=dev-admin\nuvicorn server.app:app --port 8000",
-    caption: "Copy .env.example to .env and fill in the placeholders.",
+    body: "One command brings up Postgres and the ingest host with throwaway dev tokens. Prefer to run it yourself? The uvicorn line below does the same thing against your own database.",
+    code: "docker compose up --build      # Postgres + host, dev tokens, http://localhost:8000\n\n# or, against your own database:\nexport DATABASE_URL=postgres://localhost/stepstitch\nexport STEPSTITCH_INGEST_TOKEN=dev-ingest STEPSTITCH_ADMIN_TOKEN=dev-admin\nexport STEPSTITCH_APP_BASE_URL=https://staging.your-app.example   # where repros should point\nuvicorn server.app:app --port 8000",
+  },
+  {
+    title: "Check the install before going further",
+    body: "doctor walks the whole chain — environment, host, database, both tokens, capture policy and reproduction settings — and names the fix for anything broken. It never prints a secret value, so its output is safe to paste into an issue.",
+    code: "pip install ./service && stepstitch doctor",
   },
   {
     title: "Submit a demo trace",
@@ -42,15 +46,14 @@ const steps: { title: string; body: string; code?: string; caption?: string }[] 
     code: "open http://localhost:8000/dashboard",
   },
   {
-    title: "Generate a Playwright repro",
-    body: "Compile the trace into a deterministic Playwright test. It fails while the bug exists and passes once it is fixed. No credentials are embedded.",
-    code: "curl -H \"Authorization: Bearer $STEPSTITCH_ADMIN_TOKEN\" \\\n  http://localhost:8000/api/stepstitch/v1/session/<trace_id>/playwright",
+    title: "Point reproductions at your app, then generate one",
+    body: "A trace knows the route template, not your hostname, and never recorded what was typed. Supply the rest once and every generated test carries a READY / NEEDS-CONFIG checklist naming anything still missing. Configuration stores env var names, never credentials.",
+    code: "curl -X PUT -H \"Authorization: Bearer $STEPSTITCH_ADMIN_TOKEN\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"config\":{\"base_url\":\"https://staging.your-app.example\",\"route_params\":{\"id\":\"1001\"}}}' \\\n  http://localhost:8000/admin/config/repro\n\ncurl -H \"Authorization: Bearer $STEPSTITCH_ADMIN_TOKEN\" \\\n  http://localhost:8000/api/stepstitch/v1/session/<trace_id>/playwright",
   },
   {
-    title: "Walk the verification / corpus flow",
-    body: "Report a pre-fix run (red) then a post-fix run (green). Only red→green is recorded as confirmed_fixed in the regression corpus.",
-    code: "# POST /session/<trace_id>/verify  { \"pre_passed\": false }      -> reproduced_unfixed\n# POST /session/<trace_id>/verify  { \"pre_passed\": false, \"post_passed\": true } -> confirmed_fixed",
-    caption: "See demo/README.md for the full live walk-through.",
+    title: "Close the loop from CI",
+    body: "Your CI runs the reproduction on the buggy commit and again on the fix, then posts both measured outcomes. confirmed_fixed means StepStitch actually observed the test fail and then pass — if either run does not complete, nothing is recorded. Issue CI a verify-scoped token from the console's Agents tab; it never needs your admin token.",
+    code: "# the shipped workflow does this for you: .github/workflows/stepstitch-repro.yml\n# red  -> checkout the pre-fix ref, run the repro, expect FAIL\n# green -> checkout the fix,       run the repro, expect PASS\ncurl -X POST -H \"Authorization: Bearer $STEPSTITCH_VERIFY_TOKEN\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"pre_passed\": false, \"post_passed\": true, \"fix_ref\": \"PR #482\"}' \\\n  http://localhost:8000/api/stepstitch/v1/session/<trace_id>/verify   # -> confirmed_fixed",
   },
 ];
 
