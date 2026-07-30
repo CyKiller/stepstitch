@@ -182,6 +182,12 @@ jobs:
       # reported failure, so the published numbers cannot quietly go stale.
       - name: Benchmark (30 failure shapes)
         run: npm run test:benchmark
+      # Deep diagnostics must not change what they measure. Tracing adds a browser-level
+      # observer to every action; if that shifted a verdict or a failure fingerprint, every
+      # verdict StepStitch issues would be quietly corrupted. Real Chromium, twice per
+      # shape, on and off.
+      - name: Prove diagnostics are inert
+        run: npm run test:diagnostics-inert
 
   demo-console:
     name: Demo console (renders in a real browser)

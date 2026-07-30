@@ -1,7 +1,7 @@
 {
   "name": "@stepstitch/tracker",
   "version": "0.9.1",
-  "description": "StepStitch — issue-to-repro infrastructure (not session replay): turns a user-reported problem into scrubbed diagnostics, a replayability score, and a copyable Playwright reproduction, without capturing screens, input values, or page text. Zero runtime dependencies.",
+  "description": "StepStitch \u2014 issue-to-repro infrastructure (not session replay): turns a user-reported problem into scrubbed diagnostics, a replayability score, and a copyable Playwright reproduction, without capturing screens, input values, or page text. Zero runtime dependencies.",
   "license": "Apache-2.0",
   "keywords": [
     "playwright",
@@ -73,7 +73,8 @@
     "test:demo-console": "playwright test --config playwright.demo.config.ts",
     "test:runner-proof": "node scripts/prove-runner-executes.mjs",
     "test:agent-loop": "python3 scripts/demo_agent_loop.py",
-    "test:benchmark": "python3 scripts/benchmark_problems.py"
+    "test:benchmark": "python3 scripts/benchmark_problems.py",
+    "test:diagnostics-inert": "node scripts/prove-diagnostics-are-inert.mjs"
   },
   "dependencies": {},
   "devDependencies": {

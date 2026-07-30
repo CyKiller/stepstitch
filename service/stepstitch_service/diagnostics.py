@@ -28,8 +28,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import zipfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 # Bump when the shape of a stored record changes. Stored beside every record so a reader
 # (or a later migration) can tell what it is looking at without guessing.
@@ -170,3 +174,122 @@ def scrub_diagnostics(record: Dict[str, Any], redact: Any) -> Dict[str, Any]:
     # Provenance is structural and must survive scrubbing unchanged.
     cleaned.update(provenance())
     return cleaned
+
+
+# --- reading a Playwright trace -----------------------------------------------------------
+# Shapes below were read off a real trace.zip produced by this runner, not from docs:
+#   test.trace        -> {"type":"error","message":...,"stack":[{file,line,column}]}
+#   0-trace.trace     -> JSONL; {"type":"console","messageType":"error","text":...,"location":…}
+#   0-trace.network   -> JSONL; {"type":"resource-snapshot","snapshot":{request,response,time}}
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    """Playwright colours its failure messages. An agent reading escape codes is worse off."""
+    return _ANSI.sub("", text or "")
+
+
+def _templated(url: str) -> str:
+    """Path only, with id-shaped segments templated — the same discipline as the compiler.
+
+    A raw URL can carry an account number in a path segment and a session token in a query
+    string. Neither belongs in evidence, and the path *shape* is what a developer needs.
+    """
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return "/"
+    out = []
+    for segment in (parsed.path or "/").split("/"):
+        if not segment:
+            continue
+        if re.fullmatch(r"\d+", segment) or re.fullmatch(
+            r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", segment, re.I
+        ) or (len(segment) > 24 and not segment.count(".")):
+            out.append(":id")
+        else:
+            out.append(segment)
+    return "/" + "/".join(out)
+
+
+def _jsonl(blob: bytes) -> List[Dict[str, Any]]:
+    events = []
+    for line in blob.decode("utf-8", "replace").splitlines():
+        try:
+            events.append(json.loads(line))
+        except ValueError:
+            continue
+    return events
+
+
+def parse_trace(trace_path: Path) -> Diagnostics:
+    """Turn a Playwright trace into the four signals an agent can act on.
+
+    Deliberately narrow. A trace holds far more than this — screencast frames, DOM
+    snapshots, every API call — and shipping all of it would recreate the bloated,
+    privacy-hostile artifact this product exists to avoid. Four signals, bounded, then stop.
+    """
+    diags = Diagnostics()
+    with zipfile.ZipFile(trace_path) as archive:
+        names = set(archive.namelist())
+
+        # 1. the failure itself, with its source location
+        if "test.trace" in names:
+            for event in _jsonl(archive.read("test.trace")):
+                if event.get("type") != "error":
+                    continue
+                message = _strip_ansi(str(event.get("message", "")))
+                frames = [
+                    f"{f.get('file')}:{f.get('line')}:{f.get('column')}"
+                    for f in (event.get("stack") or [])
+                    if isinstance(f, dict)
+                ]
+                diags.failure_stack = ([message] if message else []) + frames
+                break
+
+        for name in sorted(names):
+            # 2. console ERRORS only — not every log line the app happens to print
+            if name.endswith(".trace") and name != "test.trace":
+                for event in _jsonl(archive.read(name)):
+                    if event.get("type") == "console" and \
+                            event.get("messageType") == "error":
+                        text = _strip_ansi(str(event.get("text", ""))).strip()
+                        if text:
+                            diags.console_errors.append(text)
+            # 3. failed requests: method, TEMPLATED path, status, duration
+            elif name.endswith(".network"):
+                for event in _jsonl(archive.read(name)):
+                    snap = event.get("snapshot") or {}
+                    status = (snap.get("response") or {}).get("status")
+                    if not isinstance(status, int) or status < 400:
+                        continue
+                    diags.failed_requests.append({
+                        "method": (snap.get("request") or {}).get("method", ""),
+                        "path": _templated((snap.get("request") or {}).get("url", "")),
+                        "status": status,
+                        "duration_ms": round(float(snap.get("time") or 0.0), 1),
+                    })
+
+        # 4. the state at the moment it broke: the last action that touched the PAGE.
+        # Deliberately not simply the last event: a trace ends with internal bookkeeping
+        # (waitForTimeout, closes), and reporting "the failure happened during
+        # waitForTimeout" tells a developer nothing. The last action carrying a selector is
+        # the last thing the user's flow actually did.
+        for name in sorted(n for n in names if n.endswith(".trace") and n != "test.trace"):
+            last_interaction = None
+            for event in _jsonl(archive.read(name)):
+                if event.get("type") != "before":
+                    continue
+                selector = (event.get("params") or {}).get("selector", "")
+                if event.get("method") and selector:
+                    last_interaction = {
+                        "action": event.get("method"),
+                        "target": selector,
+                        "url": (event.get("params") or {}).get("url", ""),
+                    }
+            if last_interaction:
+                diags.failure_snapshot = last_interaction
+                break
+
+    return diags
