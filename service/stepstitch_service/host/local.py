@@ -86,6 +86,7 @@ def create_local_app_from_env():
         admin_token=admin_token,
         ingest_token=ingest_token,
         base_url=base_url,
+        local_mode=True,
     )
     # For `stepstitch start` to surface — not logged.
     app.state.local_admin_token = admin_token
