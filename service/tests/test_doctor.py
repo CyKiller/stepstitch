@@ -250,3 +250,69 @@ def test_doctor_imports_without_fastapi_installed():
     assert "import fastapi" not in source
     assert "from fastapi" not in source
     assert "httpx" not in source
+
+
+# --- StepStitch Local: doctor must not invent findings on a working local install --------
+
+LOCAL_ENV = {"STEPSTITCH_MODE": "local"}
+
+
+def test_local_mode_does_not_report_deployment_variables_as_problems():
+    """`stepstitch start` generates credentials and uses a SQLite file. Telling that
+    developer to set DATABASE_URL and two tokens would be three wrong answers."""
+    checks = run_doctor(env=dict(LOCAL_ENV), transport=fake_transport())
+    st = statuses(checks)
+    assert st["mode"] == PASS
+    assert st["local store"] == PASS
+    for absent in ("DATABASE_URL", "STEPSTITCH_INGEST_TOKEN", "STEPSTITCH_ADMIN_TOKEN"):
+        assert absent not in st
+
+
+def test_local_mode_without_the_generated_admin_token_warns_rather_than_fails():
+    # A doctor run in a second terminal cannot know the token `start` printed.
+    checks = run_doctor(env=dict(LOCAL_ENV),
+                        transport=fake_transport({"/admin/status": (401, {})}))
+    admin = next(c for c in checks if c.name == "admin authentication")
+    assert admin.status == WARN
+    assert "generated its own admin token" in admin.detail
+    assert "stepstitch start" in admin.fix
+
+
+def test_a_deployed_host_still_fails_on_a_rejected_admin_token():
+    # The local leniency must not soften the deployment path.
+    checks = run_doctor(env=dict(GOOD_ENV),
+                        transport=fake_transport({"/admin/status": (401, {})}))
+    assert statuses(checks)["admin authentication"] == FAIL
+
+
+def test_missing_node_warns_because_capture_still_works(monkeypatch):
+    monkeypatch.setattr("stepstitch_service.cli._tool_version", lambda argv: None)
+    checks = run_doctor(env=dict(GOOD_ENV), transport=fake_transport())
+    node = next(c for c in checks if c.name == "node")
+    assert node.status == WARN
+    assert "Capture and evidence work without it" in node.fix
+    # Playwright is not probed when Node is absent: one fix at a time.
+    assert "playwright" not in statuses(checks)
+
+
+def test_node_and_playwright_pass_when_present(monkeypatch):
+    monkeypatch.setattr("stepstitch_service.cli._tool_version",
+                        lambda argv: "v22.0.0" if argv[0] == "node" else "Version 1.61.0")
+    st = statuses(run_doctor(env=dict(GOOD_ENV), transport=fake_transport()))
+    assert st["node"] == PASS
+    assert st["playwright"] == PASS
+
+
+def test_missing_playwright_names_the_install_command(monkeypatch):
+    monkeypatch.setattr("stepstitch_service.cli._tool_version",
+                        lambda argv: "v22.0.0" if argv[0] == "node" else None)
+    pw = next(c for c in run_doctor(env=dict(GOOD_ENV),
+                                    transport=fake_transport()) if c.name == "playwright")
+    assert pw.status == WARN
+    assert "npx playwright install" in pw.fix
+
+
+def test_tool_version_survives_a_missing_binary():
+    from stepstitch_service.cli import _tool_version
+
+    assert _tool_version(["stepstitch-no-such-binary-xyz", "--version"]) is None
