@@ -100,6 +100,17 @@ def test_the_launch_command_works_without_stepstitch_installed(tmp_path):
     assert tail.endswith("stepstitch mcp"), "should use the public entry point"
 
 
+def test_the_launch_command_pins_an_interpreter_floor(tmp_path):
+    """uvx resolves against whatever `python3` the machine has — on macOS still the system
+    3.9 — and the resulting unresolvable graph reaches the user only as
+    "Failed to connect". Found on a real machine during the agent trials."""
+    from stepstitch_service.connect import MIN_PYTHON
+
+    argv = plan(PLATFORMS["claude"], BASE, token_path("a1", tmp_path))["command"]
+    assert "--python" in argv
+    assert argv[argv.index("--python") + 1] == MIN_PYTHON
+
+
 def test_a_failing_vendor_command_is_reported_not_swallowed(tmp_path):
     """A half-done connect sends someone hunting through config files — the exact
     experience this replaces."""

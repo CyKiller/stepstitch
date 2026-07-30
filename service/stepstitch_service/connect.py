@@ -34,6 +34,10 @@ AGENT_SCOPE = "repros"
 
 SERVER_NAME = "stepstitch"
 
+# Matches requires-python in service/pyproject.toml. Kept as a specifier rather than an
+# exact version so uv may use anything new enough that is already installed.
+MIN_PYTHON = ">=3.10"
+
 
 @dataclass(frozen=True)
 class Platform:
@@ -104,12 +108,17 @@ def _launch_command(version: Optional[str] = None) -> Sequence[str]:
     # before the release that carries `stepstitch mcp`, and pointing uvx at a local
     # checkout is the only honest way to do that. Not a user-facing feature.
     override = os.environ.get("STEPSTITCH_MCP_SPEC")
-    if override:
-        return ["uvx", "--from", override, "stepstitch", "mcp"]
-    resolved = version or engine_version()
-    spec = (f"stepstitch-service[mcp]=={resolved}" if resolved
-            else "stepstitch-service[mcp]")
-    return ["uvx", "--from", spec, "stepstitch", "mcp"]
+    spec = override
+    if not spec:
+        resolved = version or engine_version()
+        spec = (f"stepstitch-service[mcp]=={resolved}" if resolved
+                else "stepstitch-service[mcp]")
+    # Pin the interpreter floor. uvx otherwise resolves against whatever `python3` the
+    # machine happens to have — on macOS that is still the system 3.9 — and the failure is
+    # an unresolvable dependency graph that the agent client surfaces only as
+    # "Failed to connect". Naming the floor turns an opaque dead end into uv fetching a
+    # suitable Python by itself.
+    return ["uvx", "--python", MIN_PYTHON, "--from", spec, "stepstitch", "mcp"]
 
 
 def detect(which: Optional[str] = None,
