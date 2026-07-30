@@ -1,0 +1,100 @@
+# Phase 0 installer experiment: measure the three candidate mechanisms behind the public
+# `npx stepstitch start` promise on clean Windows/macOS/Linux runners, so the selection
+# in docs/installer-decision.md is a measurement, not a preference.
+#
+#   A. npm shim -> uv bootstrap -> `uvx --from stepstitch-service stepstitch …`
+#   B. PyInstaller single-file binary (unsigned; signing cost is part of the criteria)
+#   C. direct uvx (the Python-native baseline the shim wraps)
+#
+# All three run `stepstitch doctor` against the local checkout (the published 0.8.0 wheel
+# predates the console script). Doctor exiting non-zero with findings IS the success
+# signal here — the mechanism launched the engine; a missing env is doctor's job to say.
+name: installer-experiment
+
+on:
+  pull_request:
+    paths:
+      - "packages/cli-shim/**"
+      - "service/pyproject.toml"
+      - ".github/workflows/installer-experiment.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: "A: npm shim (bootstraps uv itself, consent via env)"
+        shell: bash
+        env:
+          STEPSTITCH_SERVICE_SPEC: ./service
+          STEPSTITCH_AUTO_INSTALL: "1"
+        run: |
+          start=$(date +%s)
+          set +e
+          out=$(node packages/cli-shim/bin/stepstitch.js doctor 2>&1)
+          rc=$?
+          set -e
+          end=$(date +%s)
+          echo "$out"
+          # The engine must have launched: doctor prints its banner regardless of findings.
+          echo "$out" | grep -q "StepStitch doctor" || { echo "shim never reached the engine (rc=$rc)"; exit 1; }
+          echo "| A: npm shim + uv | ${{ matrix.os }} | $((end-start))s | rc=$rc |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "C: direct uvx (baseline)"
+        shell: bash
+        run: |
+          UVX=""
+          for c in uvx "$HOME/.local/bin/uvx" "$HOME/.local/bin/uvx.exe" "$HOME/.cargo/bin/uvx"; do
+            if command -v "$c" >/dev/null 2>&1 || [ -x "$c" ]; then UVX="$c"; break; fi
+          done
+          [ -n "$UVX" ] || { echo "no uvx found after step A"; exit 1; }
+          start=$(date +%s)
+          set +e
+          out=$("$UVX" --from ./service stepstitch doctor 2>&1)
+          set -e
+          end=$(date +%s)
+          echo "$out" | grep -q "StepStitch doctor" || { echo "uvx path failed"; exit 1; }
+          echo "| C: direct uvx | ${{ matrix.os }} | $((end-start))s | |" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: "B: PyInstaller single-file binary (unsigned)"
+        shell: bash
+        run: |
+          python -m pip install --quiet pyinstaller ./service
+          printf 'from stepstitch_service.cli import main\nmain()\n' > entry.py
+          start=$(date +%s)
+          pyinstaller --onefile --name stepstitch-bin entry.py --log-level ERROR
+          build_end=$(date +%s)
+          bin=dist/stepstitch-bin
+          [ -f "$bin.exe" ] && bin="$bin.exe"
+          set +e
+          out=$("$bin" doctor 2>&1)
+          set -e
+          run_end=$(date +%s)
+          echo "$out" | grep -q "StepStitch doctor" || { echo "binary failed to run doctor"; exit 1; }
+          size=$(du -h "$bin" | cut -f1)
+          echo "| B: PyInstaller binary | ${{ matrix.os }} | build $((build_end-start))s, run $((run_end-build_end))s | size $size, unsigned |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Summary header
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo ""
+            echo "Columns: approach | os | wall time | notes (see docs/installer-decision.md)"
+          } >> "$GITHUB_STEP_SUMMARY"
