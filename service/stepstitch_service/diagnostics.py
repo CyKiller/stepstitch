@@ -234,7 +234,31 @@ def parse_trace(trace_path: Path) -> Diagnostics:
     with zipfile.ZipFile(trace_path) as archive:
         names = set(archive.namelist())
 
-        # 1. the failure itself, with its source location
+        # 1. The failure itself. Two very different things live in a trace and only one of
+        # them is useful: `test.trace` holds the ASSERTION that failed ("the reported
+        # TypeError must not reproduce") with a frame pointing at the generated spec, while
+        # the browser's own `pageError` event holds the APPLICATION's exception with a
+        # stack pointing into the app's source. Shipping the former as "the failure stack"
+        # tells an agent only that a test failed — which it already knew. The real
+        # exception is preferred, and the assertion kept as context after it.
+        app_error: List[str] = []
+        for name in sorted(n for n in names if n.endswith(".trace") and n != "test.trace"):
+            for event in _jsonl(archive.read(name)):
+                if event.get("type") != "event" or event.get("method") != "pageError":
+                    continue
+                error = ((event.get("params") or {}).get("error") or {}).get("error") or {}
+                stack = _strip_ansi(str(error.get("stack") or ""))
+                message = _strip_ansi(str(error.get("message") or ""))
+                if stack:
+                    app_error = [line.strip() for line in stack.splitlines() if line.strip()]
+                elif message:
+                    app_error = [message]
+                if app_error:
+                    break
+            if app_error:
+                break
+
+        assertion: List[str] = []
         if "test.trace" in names:
             for event in _jsonl(archive.read("test.trace")):
                 if event.get("type") != "error":
@@ -245,8 +269,10 @@ def parse_trace(trace_path: Path) -> Diagnostics:
                     for f in (event.get("stack") or [])
                     if isinstance(f, dict)
                 ]
-                diags.failure_stack = ([message] if message else []) + frames
+                assertion = ([message] if message else []) + frames
                 break
+
+        diags.failure_stack = app_error + assertion
 
         for name in sorted(names):
             # 2. console ERRORS only — not every log line the app happens to print

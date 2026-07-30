@@ -263,3 +263,45 @@ def test_an_id_in_a_path_never_reaches_an_agent(tmp_path):
             "response": {"status": 500}, "time": 4.1}},
     ])
     assert "8675309" not in json.dumps(parse_trace(path).as_dict())
+
+
+def test_the_application_exception_is_preferred_over_the_test_assertion(tmp_path):
+    """Two failures live in a trace and only one is useful.
+
+    ``test.trace`` holds the assertion that failed — "the reported TypeError must not
+    reproduce" — with a frame pointing at the generated spec. The browser's ``pageError``
+    holds the APPLICATION's exception, with a stack pointing into the app's source.
+    Shipping the assertion as "the failure stack" tells an agent a test failed, which it
+    already knew. Found during the agent trials: the packet was arriving with no usable
+    stack, no suggested file, and nothing to act on.
+    """
+    path = tmp_path / "trace.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("test.trace", json.dumps({
+            "type": "error",
+            "message": "Error: the reported TypeError must not reproduce",
+            "stack": [{"file": "/w/tests/repro.spec.ts", "line": 9, "column": 3}]}))
+        archive.writestr("0-trace.trace", json.dumps({
+            "type": "event", "method": "pageError", "params": {"error": {"error": {
+                "message": "form.amount.toFixed is not a function",
+                "stack": ("TypeError: form.amount.toFixed is not a function\n"
+                          "    at submitTransfer (http://app/transfer.js:11:31)\n"
+                          "    at HTMLButtonElement.onclick (http://app/index.html:7:57)")}}}}))
+    stack = parse_trace(path).failure_stack
+    # The application's exception comes FIRST — it is the answer to "what broke".
+    assert stack[0] == "TypeError: form.amount.toFixed is not a function"
+    assert "transfer.js:11:31" in stack[1]
+    # The assertion is kept as context, not discarded.
+    assert any("must not reproduce" in line for line in stack)
+
+
+def test_a_failure_with_no_page_exception_still_reports_the_assertion(tmp_path):
+    """An assertion failure with no thrown exception — a wrong value, a missing element —
+    is a real failure and must not come back empty."""
+    path = tmp_path / "trace.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("test.trace", json.dumps({
+            "type": "error", "message": "Error: expected 'Sent', got ''",
+            "stack": [{"file": "/w/tests/repro.spec.ts", "line": 9, "column": 3}]}))
+    stack = parse_trace(path).failure_stack
+    assert stack and "expected 'Sent'" in stack[0]
