@@ -4,6 +4,40 @@ All notable changes to StepStitch are recorded here. Versions are repo-wide tags
 SDK (`@stepstitch/tracker`) and the backend (`stepstitch_service`) are versioned in
 lockstep per `RELEASE.md`.
 
+## [0.9.0](https://github.com/CyKiller/stepstitch/compare/v0.8.0...v0.9.0) (2026-07-30)
+
+
+### Features
+
+* **agent:** close the loop — the agent fixes, StepStitch judges ([7c706bf](https://github.com/CyKiller/stepstitch/commit/7c706bfde987cc94063f94741ad51a6cff51cfda))
+* **ci:** a clean-install gate that executes the quickstart's promises ([99e776d](https://github.com/CyKiller/stepstitch/commit/99e776d642ace4935265f582b2223eedf87e9239))
+* **core:** measure the red run and make reproductions configurable ([71cd6c4](https://github.com/CyKiller/stepstitch/commit/71cd6c462fccf6a6c01d0d690e1bf1e93a6799f0))
+* **demo:** serve the real console publicly over synthetic data ([02be1c6](https://github.com/CyKiller/stepstitch/commit/02be1c668d77c324186c3233a291192db98d8fc5))
+* **evidence:** say how we know, not just what we found ([b9e23c0](https://github.com/CyKiller/stepstitch/commit/b9e23c0e4161262b2f125c38d3dd133713515238))
+* **examples:** add TinyTransfer, a runnable proof of the privacy claims ([df615fb](https://github.com/CyKiller/stepstitch/commit/df615fb955adb334e97a86137bfbce0f0d41437f))
+* **install:** add stepstitch doctor and a first-run path that explains itself ([1392a33](https://github.com/CyKiller/stepstitch/commit/1392a3396729741fad0fcb54e8e9b8a67028eb8f))
+* **install:** the npm shim behind 'npx stepstitch', measured before locked ([42093db](https://github.com/CyKiller/stepstitch/commit/42093dbad5ded70ad9a0bc47196743039216adba))
+* **local:** connect your app without copying a token ([98a6706](https://github.com/CyKiller/stepstitch/commit/98a6706ac4314aceb888fe0d8ce1b161a15cf14f))
+* **local:** doctor speaks local mode, and CI proves the first run ([78261f3](https://github.com/CyKiller/stepstitch/commit/78261f36767a65ea1bdcc87fe6fd523e4ca84c2a))
+* **local:** stepstitch start — a dashboard in one command, no token pasting ([9dbd802](https://github.com/CyKiller/stepstitch/commit/9dbd8028c43b954d285bff89afa6dae838cb7598))
+* **repro:** one button, one command, and three bugs the demo found ([6142c3f](https://github.com/CyKiller/stepstitch/commit/6142c3fe0059b7ccd5fd98da2df47c6edc463a16))
+* **runner:** execute a reproduction locally, and refuse to guess ([6985e96](https://github.com/CyKiller/stepstitch/commit/6985e969d848719d788ddd313f7d516d668adfbf))
+* **sdk:** ship the Report a problem widget, framework-agnostic ([46d8a3e](https://github.com/CyKiller/stepstitch/commit/46d8a3ee98c88d7a0c2fb0c3e5de2328b7ca96ec))
+* **server:** a SQLite local store behind the same seam Postgres serves ([1476b10](https://github.com/CyKiller/stepstitch/commit/1476b10964e6627b14fe0370a2a9469452c43f5a))
+
+
+### Bug Fixes
+
+* **ci:** deployment has one owner, and verification replaces pretending ([16d6eb5](https://github.com/CyKiller/stepstitch/commit/16d6eb5f379445029527d8ba00a57a6392b2a188))
+* **ci:** install what the new gates actually need, and stop the count from moving ([ca3bff3](https://github.com/CyKiller/stepstitch/commit/ca3bff3b2103fe62aabd33de2af1e83737b6be93))
+* close the three verified gaps between what we claim and what runs ([719ae57](https://github.com/CyKiller/stepstitch/commit/719ae5714bf1bb3de83bf9d7d8b2b7859c67ec3a))
+* **docs:** a quickstart that works on a clean machine, in the order shown ([1477835](https://github.com/CyKiller/stepstitch/commit/1477835b00292ce7bca4ca7823aa573a5488c282))
+* **mcp:** the stdio server was broken on the current SDK ([235078b](https://github.com/CyKiller/stepstitch/commit/235078bb3c7ae96a4457d984973fec23cd18ca02))
+* **packaging:** declare the package typed, or the shims resolve to nothing ([a9ceb3b](https://github.com/CyKiller/stepstitch/commit/a9ceb3b080855650574f2aa16ddb1946a1bde1bf))
+* **sdk:** CJS-flavored declarations so typed require() consumers resolve ([bcd4b9b](https://github.com/CyKiller/stepstitch/commit/bcd4b9b8edc0c64da0739107a5391f12cb0ecc31))
+* **web:** correct six inaccuracies in the marketing site ([cbba3fe](https://github.com/CyKiller/stepstitch/commit/cbba3fea43422aca0629e0533f587d6771547867))
+* **web:** earn the word 'live' — provenance-truthful copy in every state ([7958058](https://github.com/CyKiller/stepstitch/commit/79580587557f1c85d4bd0cb156cd3a6a1c3f118f))
+
 ## [0.8.0](https://github.com/CyKiller/stepstitch/compare/v0.7.0...v0.8.0) (2026-07-26)
 
 
