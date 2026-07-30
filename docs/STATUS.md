@@ -4,7 +4,7 @@ This is the acceptance ledger. "Done" means backed by code **and** proven by a n
 test or gate that exists in this repository — a row with no runnable proof does not
 belong here. The single end-to-end acceptance test is `service/tests/test_golden_path.py`.
 
-**Current release: 0.8.0** <!-- x-release-please-version --> — published to npm, PyPI and
+**Current release: 0.9.0** <!-- x-release-please-version --> — published to npm, PyPI and
 GHCR (multi-arch), with the full CI gate re-run as the release gate before any artifact is
 pushed.
 
