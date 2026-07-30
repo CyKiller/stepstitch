@@ -12,7 +12,7 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **487** | `PYTHONPATH=service pytest service/tests/` |
+| Service (compiler, router, privacy, connectors) | **510** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **172** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **31** | `npx vitest run` |
 | Web (marketing site + copy claims) | **59** | `cd web && npx vitest run` |
@@ -66,6 +66,9 @@ the browser sent).
 | Evidence grade — asserted (a caller said so) / measured (StepStitch ran it) / signed; derived, never claimable | `stepstitch_service/evidence.py` | `test_evidence.py`, `test_evidence_endpoints.py` |
 | Attestation tamper rejection (altered bundle refused, not flagged) | `stepstitch_service/evidence.py` `verify_bundle` | `test_evidence.py`, `POST /attestation/verify` tests |
 | Fix Memory advises from measured evidence only | `router.py` similar-fixes | `test_similar_fixes.py` |
+| Deep diagnostics come from the SYNTHETIC reproduction, never the reported session (provenance stamped, bounded, scrubbed) | `stepstitch_service/diagnostics.py` | `test_diagnostics.py` |
+| Execution envelope frozen with the script — a run under a different browser/timeout/base URL is refused | `diagnostics.py` `check_envelope`, `runner.py` | `test_diagnostics.py`, `test_runner.py` |
+| Diagnostics do not change what they measure (same verdict, hash and failure fingerprint on/off) | `runner.py` config-side tracing | `test_runner.py`, verified against real Chromium |
 | End-to-end golden path | (all of the above) | `test_golden_path.py` |
 
 ### Host, governance and operations
