@@ -8,15 +8,18 @@ subprocess and talks real MCP to it: initialize, list tools, call one.
 Skipped when the optional ``mcp`` extra is absent (the core stays dependency-free).
 """
 import asyncio
+import importlib.util
 import os
 import sys
 
 import pytest
 
-mcp = pytest.importorskip("mcp", reason="needs the optional 'mcp' extra")
-
-from mcp import ClientSession, StdioServerParameters  # noqa: E402
-from mcp.client.stdio import stdio_client  # noqa: E402
+# skipif, not importorskip: importorskip skips at COLLECTION, so the test would vanish
+# from the count in an environment without the extra and the status ledger would disagree
+# with itself depending on how the venv was built. This way the test is always collected —
+# and CI installs the extra, so it always runs there too.
+_HAS_MCP = importlib.util.find_spec("mcp") is not None
+pytestmark = pytest.mark.skipif(not _HAS_MCP, reason="needs the optional 'mcp' extra")
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -35,6 +38,9 @@ asyncio.run(serve_stdio(call_route))
 
 
 async def _session_roundtrip():
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
     params = StdioServerParameters(
         command=sys.executable,
         args=["-c", _SERVER.format(service=os.path.join(REPO, "service"))],
