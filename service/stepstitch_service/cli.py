@@ -86,6 +86,24 @@ def _http(url: str, method: str, headers: Dict[str, str],
 
 
 # --- the checks -------------------------------------------------------------------------------
+def _tool_version(argv: List[str]) -> Optional[str]:
+    """First line of ``argv --version``, or None if the tool is absent or unhappy.
+
+    Fixed argv (never a shell string), short timeout, output truncated: doctor asks a
+    question about the machine, it does not run the machine's code.
+    """
+    import subprocess
+
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    line = (proc.stdout or proc.stderr or "").strip().splitlines()
+    return line[0][:60] if line else None
+
+
 def run_doctor(
     *,
     host: str = DEFAULT_HOST,
@@ -107,32 +125,49 @@ def run_doctor(
     issuer = env.get("STEPSTITCH_OIDC_ISSUER")
     database = env.get("DATABASE_URL")
     app_base = env.get("STEPSTITCH_APP_BASE_URL")
+    # StepStitch Local generates its own credentials and stores everything in a SQLite
+    # file, so the deployment variables below are not findings there — reporting three
+    # FAILs to a developer who ran `stepstitch start` would be telling them to fix
+    # something that is working.
+    local = (env.get("STEPSTITCH_MODE") or "").strip().lower() == "local"
 
     # 1. Environment ---------------------------------------------------------------------
-    checks.append(Check(
-        "DATABASE_URL",
-        PASS if database else FAIL,
-        mask(database),
-        "" if database else "Set DATABASE_URL to your Postgres DSN "
-                            "(docker compose sets this for you).",
-    ))
-    checks.append(Check(
-        "STEPSTITCH_INGEST_TOKEN",
-        PASS if ingest else FAIL,
-        mask(ingest),
-        "" if ingest else "Set an ingest token; the SDK uses it to POST traces.",
-    ))
-    if issuer:
-        checks.append(Check("operator auth", PASS,
-                            f"OIDC SSO via {issuer}",
-                            ""))
+    if local:
+        checks.append(Check(
+            "mode", PASS,
+            "local — SQLite store, generated credentials, loopback only", "",
+        ))
+        checks.append(Check(
+            "local store", PASS,
+            database or "sqlite:///.stepstitch/local.db (default)", "",
+        ))
     else:
         checks.append(Check(
-            "STEPSTITCH_ADMIN_TOKEN",
-            PASS if admin else FAIL,
-            mask(admin),
-            "" if admin else "Set an admin token, or enable SSO with STEPSTITCH_OIDC_ISSUER.",
+            "DATABASE_URL",
+            PASS if database else FAIL,
+            mask(database),
+            "" if database else "Set DATABASE_URL to your Postgres DSN "
+                                "(docker compose sets this for you), or run "
+                                "`stepstitch start` for a local store.",
         ))
+        checks.append(Check(
+            "STEPSTITCH_INGEST_TOKEN",
+            PASS if ingest else FAIL,
+            mask(ingest),
+            "" if ingest else "Set an ingest token; the SDK uses it to POST traces.",
+        ))
+        if issuer:
+            checks.append(Check("operator auth", PASS,
+                                f"OIDC SSO via {issuer}",
+                                ""))
+        else:
+            checks.append(Check(
+                "STEPSTITCH_ADMIN_TOKEN",
+                PASS if admin else FAIL,
+                mask(admin),
+                "" if admin else "Set an admin token, or enable SSO with "
+                                 "STEPSTITCH_OIDC_ISSUER.",
+            ))
     checks.append(Check(
         "STEPSTITCH_APP_BASE_URL",
         PASS if app_base else WARN,
@@ -141,6 +176,28 @@ def run_doctor(
                             "base_url with PUT /admin/config/repro. Without one, a "
                             "generated reproduction cannot run in CI.",
     ))
+
+    # 1b. Can this machine RUN a reproduction? ---------------------------------------------
+    # The compiler is Python but the reproduction it emits is a Playwright test executed by
+    # Node. Both are WARN, never FAIL: capture, scrubbing and evidence all work without
+    # them — only local execution does not.
+    node = _tool_version(["node", "--version"])
+    checks.append(Check(
+        "node",
+        PASS if node else WARN,
+        node or "not found",
+        "" if node else "Install Node 18+ to run a generated reproduction locally. "
+                        "Capture and evidence work without it.",
+    ))
+    if node:
+        playwright = _tool_version(["npx", "--no-install", "playwright", "--version"])
+        checks.append(Check(
+            "playwright",
+            PASS if playwright else WARN,
+            playwright or "not installed in this project",
+            "" if playwright else "Install it where reproductions run: "
+                                  "npm i -D @playwright/test && npx playwright install",
+        ))
 
     # 2. Host reachable -------------------------------------------------------------------
     status, body = send(f"{base}/healthz", "GET", {}, None)
@@ -192,14 +249,25 @@ def run_doctor(
     admin_headers = {"Authorization": f"Bearer {admin}"} if admin else {}
     status, body = send(f"{base}/admin/status", "GET", admin_headers, None)
     admin_ok = status == 200 and isinstance(body, dict)
-    checks.append(Check(
-        "admin authentication",
-        PASS if admin_ok else FAIL,
-        f"GET /admin/status -> {status}",
-        "" if admin_ok else ("The admin token was rejected. Does STEPSTITCH_ADMIN_TOKEN "
-                             "match the host's?" if status in (401, 403)
-                             else "Unexpected response; check the host logs."),
-    ))
+    if local and not admin and not admin_ok:
+        # `stepstitch start` generates the admin token and prints it once; a doctor run in
+        # a second terminal legitimately does not have it. That is not a misconfiguration,
+        # so it must not read as one.
+        checks.append(Check(
+            "admin authentication", WARN,
+            "not checked — this local host generated its own admin token",
+            "Open the dashboard link `stepstitch start` printed (it carries the token), "
+            "or re-run with STEPSTITCH_ADMIN_TOKEN set to check the admin surface.",
+        ))
+    else:
+        checks.append(Check(
+            "admin authentication",
+            PASS if admin_ok else FAIL,
+            f"GET /admin/status -> {status}",
+            "" if admin_ok else ("The admin token was rejected. Does STEPSTITCH_ADMIN_TOKEN "
+                                 "match the host's?" if status in (401, 403)
+                                 else "Unexpected response; check the host logs."),
+        ))
     if admin_ok and isinstance(body, dict):
         checks.append(Check(
             "database reachable",

@@ -214,3 +214,77 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose down -v
+
+  first-run:
+    name: npx stepstitch start -> dashboard + connected app, on a clean machine
+    # Phase 1's whole promise, executed: one command on a machine that has only Node,
+    # then a report from a real app shows up in the console. No repo venv, no Postgres,
+    # no Docker, no manually-handled token. Runs on all three OSes because "clean
+    # machine" cannot mean "clean Linux".
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: npx stepstitch start (the shim bootstraps uv and the engine)
+        shell: bash
+        env:
+          # The published wheel predates the console script; test the checkout until the
+          # next service release (see docs/installer-decision.md).
+          STEPSTITCH_SERVICE_SPEC: ./service[local]
+          STEPSTITCH_AUTO_INSTALL: "1"
+          # Pinned so the job can talk to the host; `start` generates these when unset.
+          STEPSTITCH_ADMIN_TOKEN: ci-admin-token
+          STEPSTITCH_INGEST_TOKEN: ci-ingest-token
+          RETENTION_PURGE_INTERVAL_SECONDS: "0"
+        run: |
+          node packages/cli-shim/bin/stepstitch.js start \
+            --no-browser --port 8321 --db "$RUNNER_TEMP/local.db" > /tmp/start.log 2>&1 &
+          echo $! > /tmp/start.pid
+          deadline=$((SECONDS + 240))
+          until curl -sf http://127.0.0.1:8321/healthz >/dev/null; do
+            [ $SECONDS -lt $deadline ] || { echo "::error::start never became healthy"; cat /tmp/start.log; exit 1; }
+            sleep 2
+          done
+          cat /tmp/start.log
+
+      - name: The dashboard serves, with the pairing link that avoids token pasting
+        shell: bash
+        run: |
+          curl -sf http://127.0.0.1:8321/dashboard -o /tmp/dashboard.html
+          grep -q "#ss=" /tmp/dashboard.html
+          grep -q "Connect your app" /tmp/dashboard.html
+
+      - name: A report from "my app" arrives and is visible in the console
+        shell: bash
+        run: |
+          curl -sf -X POST http://127.0.0.1:8321/api/stepstitch/v1/session \
+            -H "Authorization: Bearer ci-ingest-token" \
+            -H "Content-Type: application/json" \
+            -d '{"app_id":"my-app","explanation":"Transfer did nothing","footsteps":[{"timestamp":"2026-07-30T12:00:00.000Z","type":"navigation","route":"/transfer","label":"[masked]"},{"timestamp":"2026-07-30T12:00:04.000Z","type":"api_error","route":"/transfer","label":"[masked]","metadata":{"status":500,"method":"POST","endpoint":"/api/transfer"}}],"metadata":{"sdk_version":"ci"}}' \
+            -o /tmp/ingest.json
+          grep -q '"trace_id"' /tmp/ingest.json
+          # The connection check's question: a report from something other than the sample.
+          curl -sf "http://127.0.0.1:8321/api/stepstitch/v1/sessions?limit=50" \
+            -H "Authorization: Bearer ci-admin-token" -o /tmp/sessions.json
+          grep -q '"my-app"' /tmp/sessions.json
+          # And the console can hand the developer a ready-to-paste snippet.
+          curl -sf http://127.0.0.1:8321/admin/status \
+            -H "Authorization: Bearer ci-admin-token" -o /tmp/status.json
+          grep -q '"local_mode":true' /tmp/status.json
+
+      - name: The local store is a plain file — no database was ever installed
+        shell: bash
+        run: test -f "$RUNNER_TEMP/local.db"
+
+      - name: Stop the server
+        if: always()
+        shell: bash
+        run: kill "$(cat /tmp/start.pid)" 2>/dev/null || true

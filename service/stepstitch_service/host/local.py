@@ -136,11 +136,17 @@ def run_local(*, port: int = DEFAULT_LOCAL_PORT, db: str | None = None,
     dashboard_url = f"http://127.0.0.1:{port}/dashboard#ss={admin}"
 
     # The one place the generated credentials are shown. Loopback-only, this terminal.
-    print("StepStitch Local")
-    print(f"  Dashboard:     {dashboard_url}")
-    print(f"  Ingest token:  {ingest}")
-    print(f"  Local store:   {app.state.local_db_path}")
-    print("  Bound to 127.0.0.1 only. Ctrl+C stops it; the store persists.")
+    # flush=True because stdout is block-buffered when it is not a tty: piped through
+    # `tee`, or captured by CI, the dashboard link would otherwise not appear until the
+    # server exits — which is exactly when it stops being useful.
+    print(
+        "StepStitch Local\n"
+        f"  Dashboard:     {dashboard_url}\n"
+        f"  Ingest token:  {ingest}\n"
+        f"  Local store:   {app.state.local_db_path}\n"
+        "  Bound to 127.0.0.1 only. Ctrl+C stops it; the store persists.",
+        flush=True,
+    )
 
     if open_browser:
         _open_when_ready(dashboard_url, f"http://127.0.0.1:{port}/healthz")

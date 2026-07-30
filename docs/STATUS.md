@@ -12,7 +12,7 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **425** | `PYTHONPATH=service pytest service/tests/` |
+| Service (compiler, router, privacy, connectors) | **432** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **150** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **31** | `npx vitest run` |
 | Web (marketing site + copy claims) | **59** | `cd web && npx vitest run` |
@@ -54,6 +54,8 @@ the browser sent).
 | Fingerprint backfill for pre-0005 traces | `scripts/backfill_fingerprints.py` | `test_backfill_fingerprints.py` |
 | `stepstitch doctor` first-run diagnostic (never prints a secret) | `service/.../cli.py` | `test_doctor.py` |
 | Startup fails with every misconfiguration named, not `KeyError` | `stepstitch_service/host/envcheck.py` | `test_app_startup.py` |
+| `stepstitch start` — local dashboard in one command, no token pasting | `stepstitch_service/host/local.py`, `packages/cli-shim` | `test_local_start.py`, `test_local_onboarding.py`, CI job `first-run` (3 OSes) |
+| doctor knows local mode and reproduction prerequisites (node, playwright) | `stepstitch_service/cli.py` | `test_doctor.py` |
 | Runnable example proving the privacy claims + red→green | `examples/tiny-transfer/` | CI job `tiny-transfer` (13 Playwright tests over the captured payload) |
 | Public demo console — real UI, synthetic data, no credentials, read-only | `stepstitch_service/host/demo.py`, `scripts/build_demo_dataset.py` | `test_demo_app.py`, CI job `demo-console` (13 browser tests) |
 | Deep-linkable failures (`#/shape/…`) | `stepstitch_service/host/dashboard.py` | `test_host.py`, `dashboard-demo.spec.ts` |
