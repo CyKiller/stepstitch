@@ -66,6 +66,17 @@ def test_api_error_becomes_a_real_assertion():
     assert "waitForTimeout" not in code
 
 
+def test_the_captured_error_carries_its_type_not_only_its_message():
+    """The SDK records the exception TYPE (TypeError, RangeError). A type name lives in
+    `e.name`; `e.message` is only the text. Capturing the message alone made every
+    exception assertion vacuously true — `new TypeError("x is not a function").message`
+    does not contain "TypeError", so the reproduction always passed and every
+    exception-based failure reported "could not reproduce"."""
+    code = generate_playwright_test("t", TRACE)
+    assert "pageErrors.push(`${e.name}: ${e.message}`)" in code
+    assert "pageErrors.push(e.message)" not in code
+
+
 def test_exception_becomes_a_pageerror_assertion():
     code = generate_playwright_test("t_1", TRACE)
     assert "const pageErrors: string[] = [];" in code

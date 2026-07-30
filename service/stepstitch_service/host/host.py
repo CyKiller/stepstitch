@@ -6,6 +6,7 @@ testable (inject fakes); ``server.app`` wires it to asyncpg + env for deployment
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -57,6 +58,14 @@ class ScrubConfig(BaseModel):
 class ScrubPreview(BaseModel):
     text: str = ""
     extra_redactions: Optional[list] = None  # preview candidate patterns (unsaved)
+
+
+class ReproduceRequest(BaseModel):
+    """Ask the local host to run a session's reproduction. Bounds are enforced again in
+    the runner; these defaults keep a console click from tying up the machine."""
+
+    runs: int = 1
+    timeout_seconds: int = 120
 
 
 class ReproConfigBody(BaseModel):
@@ -366,6 +375,43 @@ def build_app(
             policy = await _scrub_policy_provider()
         redacted, kinds = redact_text(req.text or "", compile_extra_redactions(policy))
         return {"status": "ok", "input": req.text, "redacted": redacted, "kinds": kinds}
+
+    # --- Reproduce locally (StepStitch Local only) --------------------------------------
+    # Executing a browser test is a local-developer action, not something a deployed,
+    # multi-tenant host should do on request: it spawns processes and reaches the network.
+    # So the route exists ONLY in local mode, where the host is the developer's own machine
+    # bound to loopback. A deployed host has no such endpoint at all.
+    if local_mode:
+
+        @app.post("/admin/session/{trace_id}/reproduce")
+        async def reproduce_locally(trace_id: str, req: ReproduceRequest,
+                                    admin: Any = Depends(require_admin)) -> dict:
+            from ..runner import RunnerError, run_reproduction
+
+            row = await fetchone(
+                "SELECT footsteps FROM stepstitch_traces WHERE id = ?", (trace_id,))
+            if not row:
+                raise HTTPException(status_code=404, detail="Trace not found")
+            footsteps = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+            cfg = await _read_repro_config()
+            app_url = cfg.base_url or effective_base_url
+            script = generate_playwright_test(trace_id, footsteps, app_url, config=cfg)
+            items = readiness(cfg, footsteps, fallback_base_url=effective_base_url)
+
+            await audit("stepstitch.reproduce", _actor_name(admin),
+                        {"trace_id": trace_id, "runs": req.runs})
+            try:
+                result = await asyncio.to_thread(
+                    run_reproduction,
+                    session_id=trace_id, script=script, base_url=app_url,
+                    readiness=items, runs=req.runs, timeout_seconds=req.timeout_seconds,
+                )
+            except RunnerError as exc:
+                # A refusal is an answer, not a server fault: say what and why.
+                return {"status": "refused", "detail": str(exc)}
+            payload = result.as_dict()
+            payload["status"] = "ok"
+            return payload
 
     # --- Agent connections (named, scoped tokens) -------------------------------------
     # Only available in shared-admin-token mode (the host must have an admin token to

@@ -86,6 +86,72 @@ def _http(url: str, method: str, headers: Dict[str, str],
 
 
 # --- the checks -------------------------------------------------------------------------------
+_VERDICT_HEADLINES = {
+    "reproduced": "Reproduced",
+    "not_reproduced": "Could not reproduce",
+    "needs_setup": "Needs setup",
+    "inconclusive": "Inconclusive",
+}
+
+
+def _reproduce_command(args: Any) -> int:
+    """Fetch a session's reproduction, run it, and print what StepStitch observed.
+
+    Exit codes are for scripting, not for judgement: 0 when a verdict was reached
+    (reproduced or not), 1 when the run could not answer the question (needs setup,
+    inconclusive, refused). "Reproduced" is not a failure of this command.
+    """
+    # Imported here so `doctor` stays stdlib-only and importable in a broken environment.
+    from stepstitch_service.runner import RunnerError, run_reproduction, script_digest
+
+    base = args.host.rstrip("/")
+    admin = os.environ.get("STEPSTITCH_ADMIN_TOKEN")
+    headers = {"Authorization": f"Bearer {admin}"} if admin else {}
+
+    status, payload = _http(f"{base}/api/stepstitch/v1/session/{args.session}/playwright",
+                            "GET", headers, None)
+    if status != 200 or not isinstance(payload, dict):
+        print(f"Could not fetch the reproduction for {args.session}: "
+              f"{base} responded {status or 'nothing'}.\n"
+              "Is the host running, and is STEPSTITCH_ADMIN_TOKEN set? "
+              "Run `stepstitch doctor`.")
+        return 1
+    script = payload.get("playwright_code") or ""
+
+    # Readiness comes from the host, which owns the project's reproduction settings.
+    ready_status, ready_payload = _http(f"{base}/admin/config/repro", "GET", headers, None)
+    readiness: List[Dict[str, Any]] = []
+    if ready_status == 200 and isinstance(ready_payload, dict):
+        readiness = ready_payload.get("readiness") or []
+
+    app_url = args.app_url or os.environ.get("STEPSTITCH_APP_BASE_URL")
+    if not app_url:
+        print("No application address. Pass --app-url or set STEPSTITCH_APP_BASE_URL — "
+              "a reproduction has to run against something.")
+        return 1
+
+    try:
+        result = run_reproduction(
+            session_id=args.session, script=script, base_url=app_url,
+            readiness=readiness, runs=args.runs, timeout_seconds=args.timeout,
+        )
+    except RunnerError as exc:
+        print(f"Refused: {exc}")
+        return 1
+
+    if args.as_json:
+        print(json.dumps(result.as_dict(), indent=2))
+    else:
+        print(f"\n{_VERDICT_HEADLINES.get(result.verdict, result.verdict)} — "
+              f"{result.detail}")
+        if result.blockers:
+            print("\nWhat is missing:")
+            for blocker in result.blockers:
+                print(f"  - {blocker.get('title')}: {blocker.get('detail')}")
+        print(f"\nfrozen script sha256: {script_digest(script)[:16]}…")
+    return 0 if result.verdict in ("reproduced", "not_reproduced") else 1
+
+
 def _tool_version(argv: List[str]) -> Optional[str]:
     """First line of ``argv --version``, or None if the tool is absent or unhappy.
 
@@ -366,6 +432,27 @@ def main(argv: Optional[List[str]] = None) -> int:
     doctor.add_argument("--json", action="store_true", dest="as_json",
                         help="emit machine-readable results")
 
+    reproduce = sub.add_parser(
+        "reproduce",
+        help="run a session's reproduction locally and report what happened",
+        description="Fetch the compiled reproduction for a session, run it against your "
+                    "application, and report one of: reproduced, needs setup, could not "
+                    "reproduce, inconclusive. StepStitch derives the verdict from what it "
+                    "observed — it is never asserted by the caller.",
+    )
+    reproduce.add_argument("session", help="trace id to reproduce")
+    reproduce.add_argument("--host", default=os.environ.get("STEPSTITCH_HOST", DEFAULT_HOST),
+                           help=f"StepStitch host base URL (default {DEFAULT_HOST})")
+    reproduce.add_argument("--runs", type=int, default=1,
+                           help="run it N times to detect flakiness (capped at 10)")
+    reproduce.add_argument("--timeout", type=int, default=120,
+                           help="seconds per run (capped at 600)")
+    reproduce.add_argument("--app-url", default=None,
+                           help="the application to run against "
+                                "(default: STEPSTITCH_APP_BASE_URL)")
+    reproduce.add_argument("--json", action="store_true", dest="as_json",
+                           help="emit machine-readable results")
+
     start = sub.add_parser(
         "start",
         help="run StepStitch Local: dashboard + SQLite store on 127.0.0.1, no setup",
@@ -381,6 +468,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                        help="do not open the dashboard in a browser")
 
     args = parser.parse_args(argv)
+    if args.command == "reproduce":
+        return _reproduce_command(args)
     if args.command == "start":
         # Imported here, not at module top: doctor must stay importable in a broken or
         # minimal environment (stdlib only); start is where fastapi/uvicorn come in.
