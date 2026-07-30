@@ -153,7 +153,15 @@ class ReproductionResult:
 
     @property
     def blockers(self) -> List[Dict[str, Any]]:
-        return [item for item in self.readiness if not item.get("ready")]
+        """Unready items that prevent a correct run (not merely unconfigured ones)."""
+        return [item for item in self.readiness
+                if not item.get("ready") and item.get("blocking", True)]
+
+    @property
+    def advisories(self) -> List[Dict[str, Any]]:
+        """Unready but non-blocking — worth saying, never worth refusing over."""
+        return [item for item in self.readiness
+                if not item.get("ready") and not item.get("blocking", True)]
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -163,6 +171,7 @@ class ReproductionResult:
             "flaky": self.flaky,
             "cancelled": self.cancelled,
             "detail": self.detail,
+            "advisories": self.advisories,
             "runs": [
                 {
                     "index": r.index, "exit_code": r.exit_code, "passed": r.passed,
@@ -286,7 +295,11 @@ def run_reproduction(
         )
 
     readiness = list(readiness or [])
-    blockers = [item for item in readiness if not item.get("ready")]
+    # Only items that make the run *wrong* stop it. An unconfigured auth fixture is not one
+    # of those — plenty of flows need no session, and refusing them would be a false
+    # blocker that makes "needs setup" meaningless. repro_config declares which is which.
+    blockers = [item for item in readiness
+                if not item.get("ready") and item.get("blocking", True)]
     if blockers:
         # Do not run a reproduction that is known to be unrunnable: the honest answer is
         # the exact missing prerequisite, not a failure the developer has to decode.

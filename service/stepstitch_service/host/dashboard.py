@@ -513,11 +513,21 @@ DASHBOARD_HTML = r"""<!doctype html>
   // developer never handles the generated credential. Fragments are never sent to the
   // server or its logs; adopt into sessionStorage (same place a pasted token lives)
   // and strip the URL immediately so it cannot be bookmarked or shared by copy/paste.
-  if (!DEMO && location.hash && location.hash.indexOf("#ss=") === 0) {
+  function adoptPairingToken() {
+    if (DEMO || !location.hash || location.hash.indexOf("#ss=") !== 0) return false;
     token = decodeURIComponent(location.hash.slice(4));
     try { sessionStorage.setItem("ss_token", token); } catch (e) { /* private mode */ }
     try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+    return true;
   }
+  adoptPairingToken();
+  // Also on hashchange: restarting `stepstitch start` mints a new token, and a developer
+  // with the console already open follows the new link in that same tab. Only the hash
+  // changes, so without this the page keeps the dead token and answers 401 — with no
+  // clue that the fix is simply a reload.
+  window.addEventListener("hashchange", function () {
+    if (adoptPairingToken()) location.reload();
+  });
 
   // ---- operator preferences -------------------------------------------------------------
   // Persisted in localStorage (preferences, not credentials — the token stays in
@@ -631,7 +641,9 @@ DASHBOARD_HTML = r"""<!doctype html>
     var res = await fetch(base + path, {
       method: o.method || "GET",
       headers: Object.assign({}, hdr(), o.headers || {}),
-      body: o.body
+      body: o.body,
+      // Forwarded so a long-running call (a local reproduction) can be cancelled.
+      signal: o.signal
     });
     if (!res.ok) throw new Error("HTTP " + res.status + " on " + path);
     return res.json();
@@ -2080,14 +2092,99 @@ DASHBOARD_HTML = r"""<!doctype html>
     ]);
   }
 
+  // The four honest answers, in the words an operator uses. StepStitch derives these from
+  // what it observed; the console only renders them.
+  var REPRO_VERDICTS = {
+    reproduced: { label: "Reproduced", tone: "bad",
+      plain: "The failure happened again here." },
+    not_reproduced: { label: "Could not reproduce", tone: "ok",
+      plain: "The app behaved correctly — this evidence does not fail here." },
+    needs_setup: { label: "Needs setup", tone: "warn",
+      plain: "Something required is missing, so the test was not run." },
+    inconclusive: { label: "Inconclusive", tone: "warn",
+      plain: "No reliable answer — see the detail below." }
+  };
+
+  function reproVerdict(res) {
+    if (res && res.status === "refused") {
+      return el("div", {}, [
+        el("span", { class: "pill warn", text: "Refused" }),
+        el("p", { class: "muted", text: res.detail || "" })
+      ]);
+    }
+    var meta = REPRO_VERDICTS[res.verdict] || { label: res.verdict, tone: "warn", plain: "" };
+    var kids = [
+      el("div", { class: "row-actions" }, [
+        el("span", { class: "pill " + meta.tone, text: meta.label }),
+        res.flaky ? el("span", { class: "pill warn", text: "flaky" }) : null
+      ].filter(Boolean)),
+      el("p", {}, [document.createTextNode(meta.plain)]),
+      el("p", { class: "muted", text: res.detail || "" })
+    ];
+    (res.blockers || []).forEach(function (b) {
+      kids.push(el("p", { class: "muted", text: "· " + b.title + ": " + b.detail }));
+    });
+    if (res.script_sha256) {
+      kids.push(el("p", { class: "note",
+        text: "frozen test sha256 " + String(res.script_sha256).slice(0, 16) +
+              "… — verification reruns exactly these bytes." }));
+    }
+    return el("div", {}, kids);
+  }
+
   async function panelRepro(trace) {
     var wrap = el("div", {});
     var full = await api("/session/" + trace.id + "/playwright").catch(function () { return {}; });
     var code = full.playwright_code || "";
+    // In local mode StepStitch DOES run this, so the note must not claim otherwise.
+    var isLocal = !!(lastStatus && lastStatus.local_mode);
+    var actions = [copyBtn(function () { return code; }, "Copy test")];
+    var runOut = el("div", { style: "margin-top:12px" });
+    if (isLocal) {
+      var runBtn = el("button", { class: "primary", text: "Reproduce locally" });
+      var cancelBtn = el("button", { class: "ghost", text: "Cancel", hidden: true });
+      var inflight = null;
+      runBtn.onclick = async function () {
+        runBtn.disabled = true;
+        runBtn.textContent = "Running…";
+        cancelBtn.hidden = false;
+        clear(runOut);
+        runOut.appendChild(el("p", { class: "muted",
+          text: "Running the frozen test against your app. This opens a headless browser " +
+                "on this machine — nothing is uploaded." }));
+        var controller = new AbortController();
+        inflight = controller;
+        try {
+          var res = await adminApi("/session/" + trace.id + "/reproduce", {
+            method: "POST",
+            body: JSON.stringify({ runs: 1, timeout_seconds: 120 }),
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal
+          });
+          clear(runOut);
+          runOut.appendChild(reproVerdict(res));
+        } catch (e) {
+          clear(runOut);
+          runOut.appendChild(controller.signal.aborted
+            ? el("p", { class: "muted", text: "Cancelled — no verdict was reached." })
+            : fail(e));
+        }
+        inflight = null;
+        cancelBtn.hidden = true;
+        runBtn.disabled = false;
+        runBtn.textContent = "Reproduce locally";
+      };
+      cancelBtn.onclick = function () { if (inflight) inflight.abort(); };
+      actions.push(runBtn, cancelBtn);
+    }
     wrap.appendChild(box("Deterministic Playwright reproduction", [
-      el("div", { class: "row-actions" }, [copyBtn(function () { return code; }, "Copy test")]),
+      el("div", { class: "row-actions" }, actions),
       el("pre", { text: code }),
-      el("div", { class: "note", text: "Text only. StepStitch never runs this — your CI does." })
+      runOut,
+      el("div", { class: "note", text: isLocal
+        ? "Running it here uses a headless browser on this machine, against the app you " +
+          "configured. Your CI runs the identical test to prove a fix."
+        : "Text only. StepStitch never runs this — your CI does." })
     ]));
     var min = await api("/session/" + trace.id + "/minimal-repro").catch(function () { return null; });
     if (min && min.playwright_code) {

@@ -375,8 +375,15 @@ def readiness(
 ) -> List[Dict[str, Any]]:
     """Which parts of this trace's reproduction can run as-is, and which need configuration.
 
-    Each item is ``{id, ready, title, detail}``. ``detail`` names the exact setting to change,
-    so the compiler header and the dashboard checklist can both show an actionable next step.
+    Each item is ``{id, ready, blocking, title, detail}``. ``detail`` names the exact setting
+    to change, so the compiler header and the dashboard checklist can both show an actionable
+    next step.
+
+    ``blocking`` says whether an unready item makes the reproduction *wrong to run* rather
+    than merely less configured. A missing base URL or an unfilled route parameter sends the
+    test somewhere it does not belong; a missing auth fixture does not — plenty of flows need
+    no session, and refusing to run those would be a false blocker. The local runner reads
+    this field, so the module that knows what each item means is the one that decides.
     """
     cfg = config or ReproConfig()
     items: List[Dict[str, Any]] = []
@@ -385,6 +392,7 @@ def readiness(
     items.append({
         "id": "base_url",
         "ready": bool(base),
+        "blocking": True,
         "title": "Application base URL",
         "detail": (
             f"points at {base}" if base
@@ -399,6 +407,7 @@ def readiness(
         items.append({
             "id": "route_params",
             "ready": not missing,
+            "blocking": True,
             "title": "Templated route values",
             "detail": (
                 "every templated segment has a test value"
@@ -420,6 +429,7 @@ def readiness(
         items.append({
             "id": "input_values",
             "ready": not unresolved,
+            "blocking": True,
             "title": "Synthetic form values",
             "detail": (
                 f"{len(input_steps)} field(s) filled with synthetic test values"
@@ -433,6 +443,8 @@ def readiness(
     items.append({
         "id": "auth",
         "ready": auth_ready,
+        # Advisory: a flow that needs no session reproduces perfectly without a fixture.
+        "blocking": False,
         "title": "Authentication fixture",
         "detail": (
             f"uses {cfg.auth.fixture}"  # type: ignore[union-attr]

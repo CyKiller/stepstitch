@@ -177,8 +177,11 @@ def generate_playwright_test(
     if has_exception:
         lines += [
             "  // Capture uncaught client exceptions so we can assert they no longer occur.",
+            "  // Both name and message: the SDK records the exception TYPE (e.g. TypeError),",
+            "  // and a type name appears in `e.name`, never in `e.message` — matching on the",
+            "  // message alone made every exception assertion vacuously true.",
             "  const pageErrors: string[] = [];",
-            "  page.on('pageerror', (e) => pageErrors.push(e.message));",
+            "  page.on('pageerror', (e) => pageErrors.push(`${e.name}: ${e.message}`));",
             "",
         ]
 
