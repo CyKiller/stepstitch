@@ -31,6 +31,9 @@ mcp = ["mcp>=1.0", "httpx>=0.27"]
 delivery = ["httpx>=0.27"]
 # Reference GitHub client for the optional Repair Loop bridge (github_bridge/client.py).
 github = ["httpx>=0.27"]
+# StepStitch Local (`stepstitch start`): the packaged host served locally. Optional so
+# the base wheel stays two-dependency; the CLI names this extra when uvicorn is missing.
+local = ["uvicorn>=0.30"]
 # Architecture/layering boundary enforcement (docs/PRODUCT-PLAN.md P3). The boundary is also
 # proven dependency-free by tests/test_open_core_boundary.py; this is for CI `lint-imports`.
 # ruff/mypy are pinned-floor here so CI installs blocking-gate versions (no ad-hoc installs).
@@ -42,12 +45,18 @@ lint = ["import-linter>=2.0", "ruff>=0.6", "mypy>=1.8"]
 # See COMMERCIAL.md and tests/test_open_core_boundary.py.
 packages = [
     "stepstitch_service",
+    "stepstitch_service.host",
     "stepstitch_service.integrations",
     "stepstitch_service.integrations.contrib",
     "stepstitch_service.delivery",
     "stepstitch_service.github_bridge",
     "stepstitch_service.verification",
 ]
+
+[tool.setuptools.package-data]
+# The read-only demo console's synthetic dataset ships with the host so the packaged
+# demo works from a wheel exactly as it did from the repo.
+"stepstitch_service.host" = ["demo_dataset.json"]
 
 # Layering boundary: no core module may import a concrete adapter (keeps the privacy seam
 # clean and the adapter set swappable — independent of licensing).
@@ -113,6 +122,13 @@ select = ["E", "F", "I"]
 # customers' repos. Its long lines (curl/python one-liners) cannot be reflowed without changing
 # the generated workflow, so E501 is intentionally not enforced on this template file.
 "stepstitch_service/github_bridge/workflow.py" = ["E501"]
+# The host's console page and its embedded font moved here from server/ (Phase 1) and
+# carry the same exemptions the root pyproject gave them there: dashboard.py is one
+# verbatim HTML/JS string literal, fonts.py a generated ~93k-char base64 literal, and
+# db.py's SCHEMA_SQL has one CREATE INDEX line that cannot wrap without altering the SQL.
+"stepstitch_service/host/dashboard.py" = ["E501"]
+"stepstitch_service/host/fonts.py" = ["E501"]
+"stepstitch_service/host/db.py" = ["E501"]
 
 # Type gate (blocking in CI), scoped to the service package only. Non-strict baseline:
 # we do NOT enable disallow_untyped_defs etc. — the goal is a real, green floor we can ratchet up.

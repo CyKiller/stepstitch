@@ -48,14 +48,14 @@ the browser sent).
 | Project reproduction config (base URL, auth fixture, route/form values, API match) | `repro_config.py` | `test_repro_config.py`, `test_repro_config_host.py` |
 | Config refuses to store credentials (names only) | `repro_config.py` | `test_repro_config.py::TestSecretRefusal` |
 | **Measured** red run in the CI template (no assumed `pre_passed`) | `github_bridge/workflow.py` | `test_github_content.py::test_the_red_half_is_measured_not_assumed` |
-| Narrow `verify` CI scope (fetch repro + post verdict, nothing else) | `server/agents.py` | `test_agents.py::test_verify_scope_can_do_nothing_else` |
+| Narrow `verify` CI scope (fetch repro + post verdict, nothing else) | `stepstitch_service/host/agents.py` | `test_agents.py::test_verify_scope_can_do_nothing_else` |
 | Reproduction + attestation downloads | `router.py` | `test_repro_config_host.py` (downloads) |
 | Fingerprint backfill for pre-0005 traces | `scripts/backfill_fingerprints.py` | `test_backfill_fingerprints.py` |
 | `stepstitch doctor` first-run diagnostic (never prints a secret) | `service/.../cli.py` | `test_doctor.py` |
-| Startup fails with every misconfiguration named, not `KeyError` | `server/envcheck.py` | `test_app_startup.py` |
+| Startup fails with every misconfiguration named, not `KeyError` | `stepstitch_service/host/envcheck.py` | `test_app_startup.py` |
 | Runnable example proving the privacy claims + red→green | `examples/tiny-transfer/` | CI job `tiny-transfer` (13 Playwright tests over the captured payload) |
-| Public demo console — real UI, synthetic data, no credentials, read-only | `server/demo.py`, `scripts/build_demo_dataset.py` | `test_demo_app.py`, CI job `demo-console` (13 browser tests) |
-| Deep-linkable failures (`#/shape/…`) | `server/dashboard.py` | `test_host.py`, `dashboard-demo.spec.ts` |
+| Public demo console — real UI, synthetic data, no credentials, read-only | `stepstitch_service/host/demo.py`, `scripts/build_demo_dataset.py` | `test_demo_app.py`, CI job `demo-console` (13 browser tests) |
+| Deep-linkable failures (`#/shape/…`) | `stepstitch_service/host/dashboard.py` | `test_host.py`, `dashboard-demo.spec.ts` |
 | Site's advertised MCP tool list matches the server | `web/src/lib/mcp-tools.ts` | `test_mcp_site_parity.py` |
 | End-to-end golden path | (all of the above) | `test_golden_path.py` |
 
@@ -64,12 +64,12 @@ the browser sent).
 | Capability | Code | Proof |
 |---|---|---|
 | Per-operator OIDC SSO + RBAC | `server/oidc.py` (RS256/JWKS + `require_roles`) | `test_oidc.py`, `test_pg_integration.py` (real Postgres) |
-| Scoped, revocable agent tokens | `server/agents.py` | `test_agents.py`, `test_agent_enforcement.py` |
-| SQLite local store (`STEPSTITCH_MODE=local`, zero-config; Postgres path untouched) | `server/localdb.py` | `test_localdb.py` + shared `storage_suite.py` (also run against real Postgres) |
-| Durable audit trail | `server/audit.py` | `test_audit_endpoint.py` |
+| Scoped, revocable agent tokens | `stepstitch_service/host/agents.py` | `test_agents.py`, `test_agent_enforcement.py` |
+| SQLite local store (`STEPSTITCH_MODE=local`, zero-config; Postgres path untouched) | `stepstitch_service/host/localdb.py` | `test_localdb.py` + shared `storage_suite.py` (also run against real Postgres) |
+| Durable audit trail | `stepstitch_service/host/audit.py` | `test_audit_endpoint.py` |
 | Editable scrub policy | `server/` scrub config | `test_scrub_config.py` |
-| Observability | `server/metrics.py` | `test_observability.py` |
-| Operator console (read-only, CSP `default-src 'none'`) | `server/dashboard.py` | `test_host.py` |
+| Observability | `stepstitch_service/host/metrics.py` | `test_observability.py` |
+| Operator console (read-only, CSP `default-src 'none'`) | `stepstitch_service/host/dashboard.py` | `test_host.py` |
 | Overview dashboard — metrics, charts, glyph constellation | `metrics.py` (served on `/shapes`, not recomputed client-side) | `test_metrics.py`, `test_shapes_endpoints.py`, `test_dashboard_charts.py` |
 | Plain-language layer (technical detail behind a toggle) | `humanize.py` | `test_humanize.py` |
 
