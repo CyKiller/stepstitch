@@ -1634,9 +1634,12 @@ DASHBOARD_HTML = r"""<!doctype html>
   // stage IDs are the contract — only the wording changes with the toggle.
   var STAGES = [
     { id: "untriaged", label: "Untriaged", plain: "Waiting for a test run",
-      why: "no CI result reported yet",
-      teach: "Nobody has run the generated test against these yet, so we cannot say whether " +
-             "they are reproducible.",
+      why: "no verdict recorded yet",
+      // Careful wording: freezing a session RUNS the reproduction and measures a red run,
+      // so "nobody has run the test" became false the moment local reproduction shipped.
+      // What is actually missing at this stage is a recorded verdict on a FIX.
+      teach: "No fix has been verified for these yet. StepStitch may already have " +
+             "reproduced them locally — a verdict is recorded once a fix is checked.",
       blank: "Nothing waiting — everything here has been tested." },
     { id: "known_shape", label: "Known shape", plain: "Seen before",
       why: "you have fixed this before",
@@ -1930,8 +1933,12 @@ DASHBOARD_HTML = r"""<!doctype html>
     ]);
     root.appendChild(actions);
     var packetNote = teach("agent_packet",
-      "The agent packet is exactly what an AI assistant receives: structure, scores and the " +
-      "generated test. No page text, no values, no URLs — nothing that could carry customer data.");
+      "The agent packet is exactly what an AI assistant receives: structure, scores, the " +
+      "generated test, and — once a reproduction has run — the deep diagnostics from that " +
+      "synthetic run (failure stack, console errors, failed requests). Those come from " +
+      "StepStitch's own run on this machine, never from the person who reported the bug. " +
+      "From the report itself: no page text, no values, no raw URLs — nothing that could " +
+      "carry customer data.");
     if (packetNote) root.appendChild(packetNote);
 
     // Sections
@@ -2346,6 +2353,41 @@ DASHBOARD_HTML = r"""<!doctype html>
 
   // The model's-eye view: the literal payload an agent receives. This is the one place raw JSON
   // is the right rendering — the bytes ARE the claim.
+  // The four answers a fix can get. Wording matches the CLI and the API exactly, so an
+  // operator reading the console and an agent reading the packet see the same verdicts.
+  var FIX_VERDICTS = {
+    fixed: { label: "Fixed", tone: "ok",
+      plain: "Measured failing before the change, passing after — same frozen test." },
+    still_failing: { label: "Still failing", tone: "bad",
+      plain: "The same failure, in the same way." },
+    different_failure: { label: "Different failure", tone: "warn",
+      plain: "It still fails, but not how it failed before — the change moved the problem." },
+    unable_to_verify: { label: "Unable to verify", tone: "warn",
+      plain: "No reliable answer. Not a fix." }
+  };
+
+  function fixVerdict(res) {
+    if (res && res.status === "refused") {
+      return el("div", {}, [
+        el("span", { class: "pill warn", text: "Refused" }),
+        el("p", { class: "muted", text: res.detail || "" })
+      ]);
+    }
+    var meta = FIX_VERDICTS[res.verdict] || { label: res.verdict, tone: "warn", plain: "" };
+    var kids = [
+      el("div", { class: "row-actions" }, [
+        el("span", { class: "pill " + meta.tone, text: meta.label })
+      ]),
+      el("p", {}, [document.createTextNode(meta.plain)]),
+      el("p", { class: "muted", text: res.detail || "" })
+    ];
+    if (res.script_sha256) {
+      kids.push(el("p", { class: "note",
+        text: "judged by frozen test " + String(res.script_sha256).slice(0, 16) + "…" }));
+    }
+    return el("div", {}, kids);
+  }
+
   async function panelAgent(trace) {
     var tools = [
       ["get_trace_summary", "/summary"],
@@ -2361,6 +2403,47 @@ DASHBOARD_HTML = r"""<!doctype html>
     wrap.appendChild(el("div", { class: "note", style: "margin-bottom:12px",
       text: "This is the entire payload any connected LLM or agent can receive for this trace, " +
             "over the read-only MCP tools. Nothing outside this leaves your boundary." }));
+
+    // Hand-off controls. The commands are shown rather than run: connecting an agent
+    // touches the developer's own machine and their agent's config, which is not
+    // something a web page should do behind their back.
+    var handoff = el("div", { class: "row-actions", style: "margin-bottom:14px" }, [
+      copyBtn(function () { return "stepstitch connect claude"; }, "Open in Claude Code"),
+      copyBtn(function () { return "stepstitch connect codex"; }, "Open in Codex"),
+      copyBtn(function () {
+        return "stepstitch reproduce " + trace.id;
+      }, "Copy agent command")
+    ]);
+    if (lastStatus && lastStatus.local_mode) {
+      var verifyBtn = el("button", { class: "ghost", text: "Verify fix" });
+      var verifyOut = el("div", { style: "margin-top:10px" });
+      verifyBtn.onclick = async function () {
+        verifyBtn.disabled = true;
+        verifyBtn.textContent = "Verifying…";
+        clear(verifyOut);
+        verifyOut.appendChild(el("p", { class: "muted",
+          text: "Rerunning the frozen reproduction. StepStitch decides — the agent does " +
+                "not get a vote." }));
+        try {
+          var res = await adminApi("/session/" + trace.id + "/verify-fix", {
+            method: "POST", body: JSON.stringify({ runs: 1, timeout_seconds: 120 }),
+            headers: { "Content-Type": "application/json" }
+          });
+          clear(verifyOut);
+          verifyOut.appendChild(fixVerdict(res));
+        } catch (e) {
+          clear(verifyOut);
+          verifyOut.appendChild(fail(e));
+        }
+        verifyBtn.disabled = false;
+        verifyBtn.textContent = "Verify fix";
+      };
+      handoff.appendChild(verifyBtn);
+      wrap.appendChild(handoff);
+      wrap.appendChild(verifyOut);
+    } else {
+      wrap.appendChild(handoff);
+    }
     tools.forEach(function (t, i) {
       wrap.appendChild(box(null, [
         el("div", {}, [

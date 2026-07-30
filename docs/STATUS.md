@@ -12,7 +12,7 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **536** | `PYTHONPATH=service pytest service/tests/` |
+| Service (compiler, router, privacy, connectors) | **554** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **194** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **31** | `npx vitest run` |
 | Web (marketing site + copy claims) | **59** | `cd web && npx vitest run` |
@@ -75,6 +75,8 @@ the browser sent).
 | Every MCP tool is reachable by a scoped token, or an explicit documented exclusion | `host/agents.py` `_RULES` | `test_agent_scope_parity.py` |
 | A coding agent reads the failure and the reproduction, and can never record a verdict | `host/agents.py`, `connect.py` `AGENT_SCOPE` | `test_agent_scope_parity.py`, `test_connect.py` |
 | `stepstitch connect` registers via each vendor's own `mcp add`; token in an owner-only file, never in a config or argv | `connect.py`, `cli.py` | `test_connect.py` (verified live with Claude Code) |
+| Agent packet splits privacy by origin: `from_production` (unchanged, minimal) vs `from_reproduction` (rich, synthetic) — both true, neither hedged | `agent_packet.py` | `test_agent_packet.py` |
+| Packet carries both digests, the exact verification command, and file suggestions labelled as suggestions | `agent_packet.py` | `test_agent_packet.py` |
 | End-to-end golden path | (all of the above) | `test_golden_path.py` |
 
 ### Host, governance and operations

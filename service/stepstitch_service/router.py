@@ -21,6 +21,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field, field_validator
 
+from .agent_packet import (
+    NEVER_FROM_PRODUCTION,
+    NEVER_FROM_REPORTED_SESSION,
+)
+from .agent_packet import build_packet as build_agent_packet
 from .attestation import (
     build_attestation,
     bundle_sha256,
@@ -509,11 +514,14 @@ def create_stepstitch_router(
             "diagnostic": {
                 "summary": summary.as_dict(),
                 "recommended_next_step": _recommended_next_step(summary),
-                "never_included": [
-                    "raw console logs", "raw error messages", "stack traces",
-                    "request/response bodies", "headers", "cookies",
-                    "input values", "screenshots", "full URLs",
-                ],
+                # One constant, shared with the agent packet, so a privacy claim cannot
+                # drift between two places that both assert it.
+                "never_included": list(NEVER_FROM_REPORTED_SESSION),
+                "never_included_scope": (
+                    "from the reported session. Evidence collected from a synthetic "
+                    "reproduction is listed separately in the agent packet under "
+                    "privacy_posture.from_reproduction."
+                ),
             },
         }
 
@@ -536,10 +544,7 @@ def create_stepstitch_router(
             "trace_id": trace_id,
             "policy": scrub_policy.name,
             "scrub": scrub,
-            "never_captured": [
-                "screenshots", "video", "input values", "raw URLs", "page text",
-                "request/response bodies", "console messages", "network headers",
-            ],
+            "never_captured": list(NEVER_FROM_PRODUCTION),
         }
 
     @router.get("/session/{trace_id}/agent-packet")
@@ -562,30 +567,59 @@ def create_stepstitch_router(
         summary = build_trace_summary(trace_id, footsteps, project_id=row[1])
         meta = _loads(row[2]) or {}
         scrub = meta.get("_scrub") if isinstance(meta, dict) else None
+        # What the SYNTHETIC reproduction revealed, if one has been run. Read from the
+        # store rather than recomputed: the runner deletes its scratch dir, so this is the
+        # only copy, and it was scrubbed on the way in.
+        diagnostics = None
+        try:
+            diag_row = await fetchone(
+                "SELECT diagnostics_json FROM stepstitch_diagnostics WHERE trace_id = ? "
+                "ORDER BY created_at DESC LIMIT 1", (trace_id,))
+            if diag_row and diag_row[0]:
+                loaded = _loads(diag_row[0])
+                # Only a dict is a diagnostics record. Anything else is a legacy row or a
+                # store that answered a different question, and is not worth a 500.
+                diagnostics = loaded if isinstance(loaded, dict) else None
+        except Exception:
+            # A deployed host predating migration 0008 has no such table. Missing
+            # diagnostics must never cost a caller the rest of the packet.
+            logger.debug("stepstitch: no diagnostics store available", exc_info=True)
+
+        frozen: Dict[str, Any] = {}
+        try:
+            frozen_row = await fetchone(
+                "SELECT sha256 FROM stepstitch_frozen_repros WHERE trace_id = ?",
+                (trace_id,))
+            if frozen_row:
+                frozen["script_sha256"] = frozen_row[0]
+        except Exception:
+            logger.debug("stepstitch: no frozen-repro store available", exc_info=True)
+        if diagnostics:
+            # The envelope digest lives with the diagnostics record, which is written by
+            # the same run that froze the script.
+            try:
+                env_row = await fetchone(
+                    "SELECT execution_envelope_sha256 FROM stepstitch_diagnostics "
+                    "WHERE trace_id = ? ORDER BY created_at DESC LIMIT 1", (trace_id,))
+                if env_row:
+                    frozen["execution_envelope_sha256"] = env_row[0]
+            except Exception:
+                pass
+
         return {
             "status": "ok",
             "trace_id": trace_id,
-            "agent_packet": {
-                "summary": summary.as_dict(),
-                "replayability": score_trace(footsteps),
-                "privacy_posture": {
-                    "policy": scrub_policy.name,
-                    "scrub": scrub,
-                    "never_captured": [
-                        "screenshots", "video", "input values", "raw URLs", "page text",
-                        "request/response bodies", "console messages", "network headers",
-                    ],
-                },
-                "diagnostic": {
-                    "recommended_next_step": _recommended_next_step(summary),
-                    "never_included": [
-                        "raw console logs", "raw error messages", "stack traces",
-                        "request/response bodies", "headers", "cookies",
-                        "input values", "screenshots", "full URLs",
-                    ],
-                },
-                "playwright_code": await _compile(trace_id, footsteps),
-            },
+            "agent_packet": build_agent_packet(
+                trace_id=trace_id,
+                summary=summary.as_dict(),
+                replayability=score_trace(footsteps),
+                policy_name=scrub_policy.name,
+                scrub=scrub,
+                recommended_next_step=_recommended_next_step(summary),
+                playwright_code=await _compile(trace_id, footsteps),
+                diagnostics=diagnostics,
+                frozen=frozen,
+            ),
         }
 
     @router.post("/session/{trace_id}/export-preview")
