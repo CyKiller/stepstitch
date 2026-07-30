@@ -10,6 +10,15 @@ on:
   push:
     tags: [ "v*.*.*" ]
   workflow_dispatch:
+    inputs:
+      version:
+        description: >-
+          Version to publish/verify (e.g. 0.9.0). Lets a dispatch run from MAIN use the
+          current workflow definition while still targeting a released version — a
+          dispatch on the tag itself runs the workflow AS OF that tag, which is exactly
+          wrong when the fix being shipped is to this file.
+        required: false
+        type: string
 
 permissions:
   contents: write      # upload release assets
@@ -79,7 +88,9 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Attach SBOM + SRI to the GitHub release
-        run: gh release upload "${GITHUB_REF_NAME}" sbom.cdx.json dist/index.js.sri --clobber
+        run: |
+          RAW="${{ inputs.version || github.ref_name }}"
+          gh release upload "v${RAW#v}" sbom.cdx.json dist/index.js.sri --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -123,7 +134,8 @@ jobs:
       # thing a launch actually claims.
       - name: The launcher exists on npm
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          RAW="${{ inputs.version || github.ref_name }}"
+          VERSION="${RAW#v}"
           for i in $(seq 1 20); do
             npm view "stepstitch@${VERSION}" version && exit 0
             echo "not visible yet, retry $i"; sleep 30
@@ -131,7 +143,8 @@ jobs:
           echo "stepstitch@${VERSION} never appeared on the registry"; exit 1
       - name: The engine installs from PyPI and answers
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          RAW="${{ inputs.version || github.ref_name }}"
+          VERSION="${RAW#v}"
           pip install -q uv
           for i in $(seq 1 20); do
             uvx --from "stepstitch-service==${VERSION}" stepstitch --help && exit 0
@@ -143,7 +156,8 @@ jobs:
           STEPSTITCH_ADMIN_TOKEN: stranger-admin
           STEPSTITCH_INGEST_TOKEN: stranger-ingest
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          RAW="${{ inputs.version || github.ref_name }}"
+          VERSION="${RAW#v}"
           npx -y "stepstitch@${VERSION}" start --no-browser --port 8471 --db /tmp/s.db &
           for i in $(seq 1 60); do
             curl -sf http://127.0.0.1:8471/healthz && exit 0
@@ -162,7 +176,8 @@ jobs:
       - name: Compute version + lowercase owner
         id: meta
         run: |
-          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          RAW="${{ inputs.version || github.ref_name }}"
+          echo "version=${RAW#v}" >> "$GITHUB_OUTPUT"
           echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4
         with:
