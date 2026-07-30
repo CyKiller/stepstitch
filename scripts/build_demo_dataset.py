@@ -33,13 +33,17 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                 "service"))
 
+from stepstitch_service.evidence import derive_grade
 from stepstitch_service.fix_memory import fingerprint as fix_fingerprint  # noqa: E402
 from stepstitch_service.integrations.base import build_trace_summary  # noqa: E402
 from stepstitch_service.scrubber import (  # noqa: E402
     FINANCIAL_SERVICES_ENTERPRISE,
     scrub_trace_payload,
 )
-from stepstitch_service.verification.verdict import derive_verdict  # noqa: E402
+from stepstitch_service.verification.verdict import (
+    VERDICT_CONFIRMED_FIXED,
+    derive_verdict,
+)  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "server" / "demo_dataset.json"
@@ -199,6 +203,12 @@ def build() -> dict:
                 "fix_ref": fix_ref,
                 "run_url": run_url,
                 "fingerprint": traces[-1]["fingerprint"],
+                # The demo shows a product where StepStitch ran the reproduction itself,
+                # so its confirmed fixes are MEASURED — anything less would put asserted
+                # evidence on the screenshot that sells the measured claim. Derived from
+                # the same rule the product uses, never hardcoded per scenario.
+                "evidence_grade": derive_grade(
+                    measured_by_stepstitch=(verdict == VERDICT_CONFIRMED_FIXED)),
                 "created_at": reported.isoformat(),
             })
             audit.append({

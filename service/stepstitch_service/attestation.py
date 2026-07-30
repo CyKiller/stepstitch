@@ -60,6 +60,11 @@ def build_attestation(
                 "verdict": latest_verification.get("verdict"),
                 "fix_ref": latest_verification.get("fix_ref"),
                 "run_url": latest_verification.get("run_url"),
+                # The load-bearing field for anyone deciding how much this bundle is
+                # worth: asserted (a caller reported it) / measured (StepStitch ran the
+                # frozen reproduction itself) / signed. Inside the hashed payload, so it
+                # cannot be upgraded after the fact without breaking the hash.
+                "evidence_grade": latest_verification.get("evidence_grade"),
             }
             if latest_verification
             else None
