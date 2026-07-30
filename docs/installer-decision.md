@@ -1,6 +1,6 @@
 # Installer decision: what runs behind `npx stepstitch start`
 
-**Status: provisional — selection A (npm shim → uv), pending the 3-OS matrix.**
+**Status: SELECTED — A (npm shim → uv), confirmed by the 3-OS matrix (run 30537861366, 2026-07-30).**
 The public promise is fixed (`npx stepstitch start`); this document decides and records
 the mechanism behind it. The measurement lives in
 [.github/workflows/installer-experiment.yml](../.github/workflows/installer-experiment.yml)
@@ -26,11 +26,21 @@ the mechanism behind it. The measurement lives in
 5. **Failure modes**: network points-of-failure and the quality of the error when one
    fails.
 
-## Measurements so far
+## Measurements
 
-macOS (dev machine, warm uv cache): shim → engine output in **~3.3s**; the engine
-resolves and runs from the local checkout via `STEPSTITCH_SERVICE_SPEC`. Cross-OS numbers
-land in the workflow's job summary — re-run `installer-experiment` and read the table.
+Matrix run 30537861366 (clean GitHub runners, cold-start to first engine output;
+step wall-clock from the jobs API):
+
+| Approach | ubuntu | macos | windows |
+|---|---:|---:|---:|
+| A: npm shim + uv (incl. bootstrap when needed) | 3s | 4s | 20s |
+| B: PyInstaller binary (build + run, unsigned) | 32s | 24s | 57s |
+| C: direct uvx (baseline the shim wraps) | 1s | 1s | 5s |
+
+All three legs green on all three OSes. A's overhead vs C is the uv find/bootstrap; B's
+number is build time a *user* would not pay, but B still loses on criterion 3 (unsigned)
+and 4 (three build targets + signing for one maintainer). Local macOS dev machine (warm
+uv cache): shim → engine output in ~3.3s.
 
 **Finding (2026-07-30):** PyPI `stepstitch-service==0.8.0` predates the
 `[project.scripts]` console entry (landed post-tag in `1392a33`), so the shim's pinned
