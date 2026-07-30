@@ -71,7 +71,8 @@
     "release-gate:evidence": "python3 -m pytest service/tests/test_repro_eval.py service/tests/test_compliance.py service/tests/test_golden_path.py -q",
     "demo:dataset": "PYTHONPATH=service python3 scripts/build_demo_dataset.py",
     "test:demo-console": "playwright test --config playwright.demo.config.ts",
-    "test:runner-proof": "node scripts/prove-runner-executes.mjs"
+    "test:runner-proof": "node scripts/prove-runner-executes.mjs",
+    "test:agent-loop": "python3 scripts/demo_agent_loop.py"
   },
   "dependencies": {},
   "devDependencies": {

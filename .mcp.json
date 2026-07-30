@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "stepstitch": {
+      "command": "python3",
+      "args": ["-m", "stepstitch_service.mcp_cli"],
+      "env": {
+        "PYTHONPATH": "service",
+        "STEPSTITCH_BASE_URL": "http://127.0.0.1:8321/api/stepstitch/v1",
+        "STEPSTITCH_TOKEN": "${STEPSTITCH_ADMIN_TOKEN}"
+      }
+    }
+  }
+}

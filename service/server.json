@@ -2,17 +2,17 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.CyKiller/stepstitch",
   "title": "StepStitch",
-  "description": "Issue-to-repro infrastructure, not session replay. Turns a user-reported bug into a scrubbed event timeline, a replayability score, and a copyable Playwright reproduction — without ever capturing screens, keystrokes, input values, or page text. Exposes the Safe Agent Packet plus twelve individual read-only/draft tools; no destructive operation is ever on the agent surface.",
+  "description": "Issue-to-repro infrastructure, not session replay. Turns a user-reported bug into a scrubbed event timeline, a replayability score, and a copyable Playwright reproduction — without ever capturing screens, keystrokes, input values, or page text. Exposes the Safe Agent Packet plus thirteen individual read-only/draft tools; no destructive operation is ever on the agent surface.",
   "repository": {
     "url": "https://github.com/CyKiller/stepstitch",
     "source": "github"
   },
-  "version": "0.6.0",
+  "version": "0.8.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "stepstitch-service",
-      "version": "0.6.0",
+      "version": "0.8.0",
       "transport": {
         "type": "stdio"
       },

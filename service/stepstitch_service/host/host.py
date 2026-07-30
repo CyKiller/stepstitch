@@ -7,6 +7,7 @@ testable (inject fakes); ``server.app`` wires it to asyncpg + env for deployment
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -410,6 +411,114 @@ def build_app(
                 # A refusal is an answer, not a server fault: say what and why.
                 return {"status": "refused", "detail": str(exc)}
             payload = result.as_dict()
+            payload["status"] = "ok"
+            return payload
+
+        # --- The agent loop: freeze, hand off, then judge with the frozen bytes ---------
+        @app.post("/admin/session/{trace_id}/freeze")
+        async def freeze_reproduction(trace_id: str, req: ReproduceRequest,
+                                      admin: Any = Depends(require_admin)) -> dict:
+            """Record the exact reproduction that will judge a fix, and measure the red run.
+
+            Called before handing a session to an agent. Without a measured red run there
+            is nothing to prove a fix against, so this runs the reproduction first and
+            stores what it observed — the verdict is never taken on trust later.
+            """
+            from ..fixcheck import failure_signature
+            from ..runner import REPRODUCED, RunnerError, run_reproduction
+
+            row = await fetchone(
+                "SELECT footsteps FROM stepstitch_traces WHERE id = ?", (trace_id,))
+            if not row:
+                raise HTTPException(status_code=404, detail="Trace not found")
+            footsteps = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+            cfg = await _read_repro_config()
+            app_url = cfg.base_url or effective_base_url
+            script = generate_playwright_test(trace_id, footsteps, app_url, config=cfg)
+            items = readiness(cfg, footsteps, fallback_base_url=effective_base_url)
+
+            try:
+                red = await asyncio.to_thread(
+                    run_reproduction,
+                    session_id=trace_id, script=script, base_url=app_url,
+                    readiness=items, runs=req.runs, timeout_seconds=req.timeout_seconds,
+                )
+            except RunnerError as exc:
+                return {"status": "refused", "detail": str(exc)}
+
+            signature = ""
+            for attempt in red.runs:
+                if not attempt.passed and attempt.transcript:
+                    signature = failure_signature(attempt.transcript)
+                    if signature:
+                        break
+
+            digest = hashlib.sha256(script.encode("utf-8")).hexdigest()
+            now = datetime.now(timezone.utc)
+            await execute("DELETE FROM stepstitch_frozen_repros WHERE trace_id = ?",
+                          (trace_id,))
+            await execute(
+                "INSERT INTO stepstitch_frozen_repros (trace_id, script, sha256, "
+                "red_verdict, red_signature, frozen_at, frozen_by) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (trace_id, script, digest, red.verdict, signature, now,
+                 _actor_name(admin)),
+            )
+            await audit("stepstitch.freeze", _actor_name(admin),
+                        {"trace_id": trace_id, "sha256": digest,
+                         "red_verdict": red.verdict})
+            return {
+                "status": "ok", "trace_id": trace_id, "script_sha256": digest,
+                "red": red.as_dict(),
+                "ready_for_agent": red.verdict == REPRODUCED,
+                "detail": (
+                    "the failure was measured and the test is frozen — an agent may change "
+                    "the application, not this test."
+                    if red.verdict == REPRODUCED else
+                    "the failure was NOT observed, so there is nothing to prove a fix "
+                    f"against yet: {red.detail}"
+                ),
+            }
+
+        @app.post("/admin/session/{trace_id}/verify-fix")
+        async def verify_fix(trace_id: str, req: ReproduceRequest,
+                             admin: Any = Depends(require_admin)) -> dict:
+            """Rerun the frozen reproduction after a change and say what was observed."""
+            from ..fixcheck import UNABLE_TO_VERIFY, derive_fix_verdict
+            from ..runner import RunnerError, run_reproduction
+
+            frozen = await fetchone(
+                "SELECT script, sha256, red_verdict, red_signature "
+                "FROM stepstitch_frozen_repros WHERE trace_id = ?", (trace_id,))
+            if not frozen:
+                return {
+                    "status": "ok", "verdict": UNABLE_TO_VERIFY,
+                    "detail": "nothing is frozen for this session. Freeze the reproduction "
+                              "first so the same test judges before and after the change.",
+                }
+            script, digest, red_verdict, red_signature = (
+                frozen[0], frozen[1], frozen[2], frozen[3] or "")
+
+            cfg = await _read_repro_config()
+            app_url = cfg.base_url or effective_base_url
+            try:
+                after = await asyncio.to_thread(
+                    run_reproduction,
+                    session_id=trace_id, script=script, base_url=app_url,
+                    # The freeze enforced: these bytes, or nothing.
+                    expected_sha256=digest,
+                    readiness=readiness(cfg, [], fallback_base_url=effective_base_url),
+                    runs=req.runs, timeout_seconds=req.timeout_seconds,
+                )
+            except RunnerError as exc:
+                return {"status": "refused", "detail": str(exc)}
+
+            verdict = derive_fix_verdict(red_verdict=red_verdict,
+                                         red_signature=red_signature, after=after)
+            await audit("stepstitch.verify_fix", _actor_name(admin),
+                        {"trace_id": trace_id, "verdict": verdict.verdict,
+                         "sha256": digest})
+            payload = verdict.as_dict()
             payload["status"] = "ok"
             return payload
 
