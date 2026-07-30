@@ -263,6 +263,43 @@ and purge stay available so operators can still respond. This complements the SD
   erasing a body never destroys the record of who touched it.
 - **Right-to-delete:** delete-by-user removes bodies; the deletion audit record is kept.
 
+## Local runner security (normative — precedes any runner implementation)
+
+Any component that executes a compiled reproduction on a developer machine (the Phase 2
+"Reproduce locally" runner and everything built on it) MUST satisfy all of the following.
+These requirements are written before the runner exists so the implementation is held to
+them, not the reverse. Each MUST maps to a test in the release that ships the runner.
+
+**Execution limits**
+- A strict wall-clock timeout per run; on expiry the browser process tree is killed.
+- A maximum run count per invocation (`--runs N` is capped); no unbounded retry loops.
+- A cancel control: an in-flight reproduction can be aborted from the surface that
+  started it, and abort is recorded in the run transcript.
+
+**Isolation**
+- The child process environment is built from an explicit allowlist — never inherited
+  wholesale. Anything not allowlisted (cloud credentials, `*_TOKEN`, `*_KEY`, …) is absent.
+- A fixed working directory chosen by the runner; the reproduction cannot select paths.
+- The runner constructs no shell command from user-provided or capsule-provided text:
+  fixed argv arrays only, with capsule data passed as files or arguments, never
+  interpolated into a shell string.
+- The reproduction may only reach explicitly configured application addresses
+  (`STEPSTITCH_APP_BASE_URL` and operator-listed extras); other destinations are refused.
+
+**Evidence hygiene**
+- Run transcripts pass through the same secret-redaction rules as ingest before storage.
+- Screenshots, when enabled, are taken only of the synthetic reproduction run — never a
+  customer session — and are stored locally next to the run record, not uploaded.
+
+**Reproduction freezing (the referee property)**
+- Before a capsule is handed to any fixing agent, the compiled reproduction script is
+  frozen: its `sha256` is recorded with the session.
+- Verification MUST rerun the byte-identical frozen script. A hash mismatch is a refusal
+  (`Unable to verify`), not a warning: the agent may change application code, but it can
+  never weaken, replace, or regenerate the test that judges its fix.
+- The pre-fix and post-fix runs use the same frozen script, same runner limits, and the
+  verdict is derived by StepStitch from observed exit status — never asserted by the agent.
+
 ## Compatibility note
 
 This supersedes the original draft's `{ url, value }` footstep shape. The `value` field
