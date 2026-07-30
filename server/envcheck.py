@@ -15,8 +15,29 @@ def require_env(env: Dict[str, str]) -> None:
     A raw ``KeyError: 'DATABASE_URL'`` from a container that exits immediately is a bad first
     impression and a slow one: you fix one variable, redeploy, and discover the next. Collect
     them all, name the fix, and point at the tool that checks the rest.
+
+    Two modes (``STEPSTITCH_MODE``, default ``production``):
+
+    - ``production`` — the checks below, unchanged: Postgres DSN + tokens are mandatory.
+    - ``local`` — StepStitch Local (single developer, ``stepstitch start``): storage is a
+      ``sqlite:///`` path (or unset, for the default local file) and tokens may be absent
+      because the local entrypoint generates them. A Postgres DSN in local mode is refused
+      rather than half-honored: the operator clearly wanted the production path.
     """
     problems = []
+    mode = (env.get("STEPSTITCH_MODE") or "production").strip().lower()
+
+    if mode == "local":
+        dsn = env.get("DATABASE_URL")
+        if dsn and not dsn.startswith("sqlite:///"):
+            scheme = dsn.split("://", 1)[0][:20] if "://" in dsn else "(no scheme)"
+            raise SystemExit(
+                "StepStitch host cannot start:\n"
+                f"  - STEPSTITCH_MODE=local uses a sqlite:/// DATABASE_URL (found "
+                f"'{scheme}://'). Unset DATABASE_URL for the default local file, or unset "
+                "STEPSTITCH_MODE to run the production Postgres path.\n"
+            )
+        return
 
     dsn = env.get("DATABASE_URL")
     if not dsn:

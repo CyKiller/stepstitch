@@ -14,9 +14,9 @@ import json
 import time
 
 import jwt
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.algorithms import RSAAlgorithm
 
 from server.host import build_app
@@ -39,7 +39,7 @@ class _DB:
         self.agent = {
             "id": "agent-1", "name": "repro-bot",
             "token_hash": hashlib.sha256(AGENT_TOKEN.encode("utf-8")).hexdigest(),
-            "scope": "read", "revoked": False,
+            "scope": "summaries", "revoked": False,
         }
 
     async def execute(self, query, params=()):
@@ -115,7 +115,7 @@ def test_agent_token_gets_no_read_access_under_oidc():
     ok = client.get(f"{_PFX}/session/{tid}/summary",
                     headers={"Authorization": "Bearer " + _operator_token(priv)})
     assert ok.status_code == 200
-    # ...but the registered agent token — scope 'read', unrevoked — is a plain 401:
+    # ...but the registered agent token — scope 'summaries', unrevoked — is a plain 401:
     # it is not a JWT, and no middleware exists to translate it.
     r = client.get(f"{_PFX}/session/{tid}/summary", headers=_agent())
     assert r.status_code == 401
