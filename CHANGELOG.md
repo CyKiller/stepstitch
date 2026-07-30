@@ -4,6 +4,14 @@ All notable changes to StepStitch are recorded here. Versions are repo-wide tags
 SDK (`@stepstitch/tracker`) and the backend (`stepstitch_service`) are versioned in
 lockstep per `RELEASE.md`.
 
+## [0.9.1](https://github.com/CyKiller/stepstitch/compare/v0.9.0...v0.9.1) (2026-07-30)
+
+
+### Bug Fixes
+
+* **release:** let a dispatch name the version it publishes ([68a15d8](https://github.com/CyKiller/stepstitch/commit/68a15d8916a04b340b8413c51077bf63525e0cb4))
+* **release:** publish the launcher people were told to run ([e6fca31](https://github.com/CyKiller/stepstitch/commit/e6fca319e62e031facc5e99e2fca962071253c7b))
+
 ## [0.9.0](https://github.com/CyKiller/stepstitch/compare/v0.8.0...v0.9.0) (2026-07-30)
 
 
