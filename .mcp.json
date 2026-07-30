@@ -1,12 +1,12 @@
 {
   "mcpServers": {
     "stepstitch": {
-      "command": "python3",
-      "args": ["-m", "stepstitch_service.mcp_cli"],
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "stepstitch-service[mcp]", "stepstitch", "mcp"],
       "env": {
-        "PYTHONPATH": "service",
         "STEPSTITCH_BASE_URL": "http://127.0.0.1:8321/api/stepstitch/v1",
-        "STEPSTITCH_TOKEN": "${STEPSTITCH_ADMIN_TOKEN}"
+        "STEPSTITCH_TOKEN_FILE": "${STEPSTITCH_TOKEN_FILE}"
       }
     }
   }

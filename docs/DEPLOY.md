@@ -74,7 +74,7 @@ root `Dockerfile` builds it and `railway.json` health-checks `/healthz`.
 |---|---|---|---|
 | `DATABASE_URL` | yes | **Railway Postgres** (auto) | added when you attach the Postgres plugin |
 | `PORT` | — | **Railway** (auto) | the Dockerfile binds uvicorn to `$PORT` |
-| `STEPSTITCH_ADMIN_TOKEN` | yes (unless SSO) | you | bearer for operator reads/exports; also the MCP connector's `STEPSTITCH_TOKEN`. Not required when OIDC SSO is enabled (below) |
+| `STEPSTITCH_ADMIN_TOKEN` | yes (unless SSO) | you | bearer for operator reads/exports, and for registering scoped agents. **Not** what an MCP connector should carry — issue a `repros` agent token instead. Not required when OIDC SSO is enabled (below) |
 | `STEPSTITCH_INGEST_TOKEN` | yes | you | bearer the SDK/clients use to POST traces |
 | `STEPSTITCH_PROFILE` | no (default FS) | you | `financial-services-enterprise` / `healthcare-strict` / `internal-enterprise` / `open-source-default` |
 | `RETENTION_DAYS` | no (default 30) | you | trace-body retention window |
@@ -88,8 +88,13 @@ railway variables \
   --set "STEPSTITCH_PROFILE=financial-services-enterprise"
 ```
 
-Then point the SDK at `https://<your-app>.up.railway.app/api/stepstitch/v1/session` and
-the MCP connector at `…/api/stepstitch/v1` with `STEPSTITCH_TOKEN=$STEPSTITCH_ADMIN_TOKEN`.
+Then point the SDK at `https://<your-app>.up.railway.app/api/stepstitch/v1/session`.
+
+For the MCP connector, **do not hand an agent the admin token.** Register a scoped agent
+(`POST /admin/agents` with `{"scope": "repros"}`, or `stepstitch connect <agent>` locally)
+and give the connector that token — an agent then reads everything it needs to fix a
+failure and cannot record the verdict on its own fix, delete a trace, or change retention.
+See [connect-an-agent.md](connect-an-agent.md).
 
 > Demo-grade default: two shared bearer tokens (above). For FI / multi-operator
 > deployments, enable **per-operator SSO** below — StepStitch core is unchanged (auth is
