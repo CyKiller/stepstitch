@@ -178,6 +178,10 @@ jobs:
       # fixed, and a second agent that edits the test instead of the app gets nowhere.
       - name: Prove the agent loop closes with evidence the agent cannot touch
         run: npm run test:agent-loop
+      # Keeps docs/benchmark.md honest: it fails if the compiler ever stops asserting the
+      # reported failure, so the published numbers cannot quietly go stale.
+      - name: Benchmark (30 failure shapes)
+        run: npm run test:benchmark
 
   demo-console:
     name: Demo console (renders in a real browser)
