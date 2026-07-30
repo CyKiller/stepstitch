@@ -72,7 +72,8 @@
     "demo:dataset": "PYTHONPATH=service python3 scripts/build_demo_dataset.py",
     "test:demo-console": "playwright test --config playwright.demo.config.ts",
     "test:runner-proof": "node scripts/prove-runner-executes.mjs",
-    "test:agent-loop": "python3 scripts/demo_agent_loop.py"
+    "test:agent-loop": "python3 scripts/demo_agent_loop.py",
+    "test:benchmark": "python3 scripts/benchmark_problems.py"
   },
   "dependencies": {},
   "devDependencies": {
