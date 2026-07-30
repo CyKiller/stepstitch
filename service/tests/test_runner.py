@@ -5,8 +5,10 @@ be tests rather than intentions. Playwright is never actually launched here — 
 subprocess runner stands in — so the security properties are provable on any machine.
 """
 import subprocess
+from pathlib import Path
 
 import pytest
+from stepstitch_service.diagnostics import EnvelopeMismatch
 
 from stepstitch_service.runner import (
     INCONCLUSIVE,
@@ -318,3 +320,63 @@ def test_an_errored_run_is_never_called_flaky():
     result = _run(runs=3, runner=cannot_resolve)
     assert result.verdict == INCONCLUSIVE
     assert result.flaky is False    # nothing ran; there is no flakiness to report
+
+
+# --- the execution envelope: freezing HOW it ran, not only WHAT ran -----------------------
+
+def test_diagnostics_do_not_change_the_frozen_script(tmp_path):
+    """The whole design rests on this: instrumentation lives in the config, so the bytes
+    that judge a fix are identical whether or not we are collecting evidence. If turning
+    diagnostics on moved the hash, the referee property would die silently."""
+    off = _run(diagnostics=False, work_root=tmp_path)
+    on = _run(diagnostics=True, work_root=tmp_path)
+    assert off.script_sha256 == on.script_sha256 == script_digest(SCRIPT)
+
+
+def test_diagnostics_do_not_change_the_verdict(tmp_path):
+    """A measurement that alters what it measures is not a measurement."""
+    red_off = _run(diagnostics=False, runner=fake_runner([1]), work_root=tmp_path)
+    red_on = _run(diagnostics=True, runner=fake_runner([1]), work_root=tmp_path)
+    green_off = _run(diagnostics=False, runner=fake_runner([0]), work_root=tmp_path)
+    green_on = _run(diagnostics=True, runner=fake_runner([0]), work_root=tmp_path)
+    assert red_off.verdict == red_on.verdict == REPRODUCED
+    assert green_off.verdict == green_on.verdict == NOT_REPRODUCED
+
+
+def _capturing_runner(exit_code, sink):
+    """Read the generated config *during* the run.
+
+    It cannot be read afterwards: the runner deletes its scratch directory when the run
+    ends, which is the very reason diagnostics are persisted to the store rather than left
+    beside the run.
+    """
+    inner = fake_runner([exit_code])
+
+    def run(argv, **kwargs):
+        sink.append(Path(argv[argv.index("--config") + 1]).read_text())
+        return inner(argv, **kwargs)
+
+    return run
+
+
+def test_tracing_is_requested_only_when_diagnostics_are_on(tmp_path):
+    """Traces are large; a run nobody asked to diagnose should not pay for one."""
+    on: list = []
+    _run(diagnostics=True, runner=_capturing_runner(1, on), work_root=tmp_path)
+    assert '"trace"' in on[0] and "retain-on-failure" in on[0]
+
+    off: list = []
+    _run(diagnostics=False, runner=_capturing_runner(1, off), work_root=tmp_path)
+    assert '"trace"' not in off[0]
+
+
+def test_a_run_under_a_different_envelope_is_refused(tmp_path):
+    """Same script, different experiment. A fix 'proven' under another browser or timeout
+    was not proven against the run that was frozen."""
+    with pytest.raises(EnvelopeMismatch, match="different experiment"):
+        _run(expected_envelope_sha256="0" * 64, work_root=tmp_path)
+
+
+def test_a_session_frozen_before_envelopes_existed_still_verifies(tmp_path):
+    # No recorded envelope means there is nothing to enforce — not a refusal.
+    assert _run(expected_envelope_sha256=None, work_root=tmp_path).verdict

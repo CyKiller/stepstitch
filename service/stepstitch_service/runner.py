@@ -33,11 +33,17 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 from urllib.parse import urlparse
 
+from .diagnostics import ExecutionEnvelope, check_envelope
+
 # --- verdicts (the four honest answers) ---------------------------------------------------
 REPRODUCED = "reproduced"
 NEEDS_SETUP = "needs_setup"
 NOT_REPRODUCED = "not_reproduced"
 INCONCLUSIVE = "inconclusive"
+
+# Pinned into the execution envelope: a runner change can alter how a test behaves, so two
+# runs are only comparable when they came from the same runner.
+RUNNER_VERSION = "1"
 
 # --- limits -------------------------------------------------------------------------------
 DEFAULT_TIMEOUT_SECONDS = 120
@@ -71,6 +77,24 @@ _TRANSCRIPT_PATTERNS: Sequence[tuple[re.Pattern[str], str]] = (
 
 class RunnerError(Exception):
     """A refusal: the run must not proceed as asked."""
+
+
+def _browser_build() -> str:
+    """The browser identity that goes in the envelope.
+
+    Asked of the installed Playwright rather than assumed, because a browser upgrade
+    genuinely can change an outcome — that is precisely why it is pinned. A failure to
+    answer is recorded as "unknown" instead of raising: refusing to run because we could
+    not read a version string would be worse than the risk it guards.
+    """
+    try:
+        proc = subprocess.run(["npx", "--no-install", "playwright", "--version"],
+                              capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    if proc.returncode != 0:
+        return "unknown"
+    return (proc.stdout or "").strip()[:60] or "unknown"
 
 
 def script_digest(script: str) -> str:
@@ -246,12 +270,23 @@ def classify_run(exit_code: Optional[int], output: str) -> tuple[bool, bool, str
 
 
 def _playwright_config(tests_dir: Path, base_url: str, timeout_ms: int,
-                       screenshots: bool) -> str:
-    """A minimal config. Values are JSON-encoded, never string-concatenated into code."""
+                       screenshots: bool, diagnostics: bool = False) -> str:
+    """A minimal config. Values are JSON-encoded, never string-concatenated into code.
+
+    ``diagnostics`` turns on Playwright TRACING, which is how deep evidence is collected:
+    the trace carries actions, DOM snapshots, console output, network activity and timings,
+    and it is produced without the frozen script knowing anything about it. That matters —
+    instrumenting the test itself would move its hash and silently kill the referee
+    property. Everything here lives in the config, so the script stays byte-identical.
+    """
     use: Dict[str, Any] = {"headless": True, "baseURL": base_url}
     if screenshots:
         # Only ever the synthetic run, stored locally beside the run record.
         use["screenshot"] = "only-on-failure"
+    if diagnostics:
+        # Retained on failure only: a passing run has nothing to diagnose, and traces are
+        # large. The file stays local and short-lived; it is never exposed over MCP.
+        use["trace"] = "retain-on-failure"
     return (
         'import { defineConfig } from "@playwright/test"\n'
         "export default defineConfig({\n"
@@ -275,6 +310,8 @@ def run_reproduction(
     runs: int = 1,
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
     screenshots: bool = False,
+    diagnostics: bool = False,
+    expected_envelope_sha256: Optional[str] = None,
     work_root: Optional[Path] = None,
     project_dir: Optional[Path] = None,
     should_cancel: Optional[Callable[[], bool]] = None,
@@ -330,10 +367,24 @@ def run_reproduction(
     spec_path = tests_dir / "repro.spec.ts"
     spec_path.write_text(script, encoding="utf-8")
     config_path = work / "repro.config.ts"
-    config_path.write_text(
-        _playwright_config(tests_dir, base_url, timeout * 1000, screenshots),
-        encoding="utf-8",
+    config_text = _playwright_config(tests_dir, base_url, timeout * 1000, screenshots,
+                                     diagnostics=diagnostics)
+    config_path.write_text(config_text, encoding="utf-8")
+
+    # HOW this run is configured, hashed alongside the script. A verification whose
+    # envelope differs is comparing two different experiments, so it is refused rather
+    # than reported — see diagnostics.check_envelope.
+    envelope = ExecutionEnvelope(
+        config=config_text,
+        browser=_browser_build(),
+        base_url=base_url,
+        timeout_ms=timeout * 1000,
+        retries=0,
+        diagnostics_profile="four-signal" if diagnostics else "off",
+        runner_version=RUNNER_VERSION,
+        env_names=sorted(_ENV_ALLOWLIST),
     )
+    check_envelope(expected_envelope_sha256, envelope)
 
     env = child_env(extra={"STEPSTITCH_APP_BASE_URL": base_url})
     # Fixed argv — never a shell string, and no capsule text is interpolated into it.

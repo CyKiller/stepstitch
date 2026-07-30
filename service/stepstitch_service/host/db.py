@@ -94,6 +94,24 @@ CREATE TABLE IF NOT EXISTS stepstitch_frozen_repros (
 );
 CREATE INDEX IF NOT EXISTS ix_stepstitch_frozen_sha ON stepstitch_frozen_repros (sha256);
 
+-- Deep diagnostics from the SYNTHETIC reproduction — never from the reported session.
+-- The runner deletes its scratch dir after every run (runner.py), so the scrubbed record
+-- lives here instead; raw Playwright traces stay on local disk, are short-lived, and are
+-- never exposed over MCP. Both digests are stored because a verdict is only comparable
+-- when the script AND the way it ran are the same experiment.
+CREATE TABLE IF NOT EXISTS stepstitch_diagnostics (
+    id                        TEXT PRIMARY KEY,
+    trace_id                  TEXT NOT NULL,
+    run_id                    TEXT NOT NULL,
+    source                    TEXT NOT NULL,   -- always 'synthetic_reproduction'
+    schema_version            INTEGER NOT NULL,
+    script_sha256             TEXT NOT NULL,
+    execution_envelope_sha256 TEXT NOT NULL,
+    diagnostics_json          TEXT NOT NULL,
+    created_at                TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_stepstitch_diag_trace ON stepstitch_diagnostics (trace_id, created_at DESC);
+
 -- Operator config (dashboard). A small per-key JSON store; today holds the scrub overrides
 -- (custom redaction patterns + extra forbidden keys) that only ever TIGHTEN the base
 -- profile. Carries no NPI.
