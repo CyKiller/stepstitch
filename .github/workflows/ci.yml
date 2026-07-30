@@ -160,6 +160,12 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Prove generated reproduction executes
         run: npm run test:e2e-proof
+      # The runner drives real Playwright: red while the fixture is broken, green after it
+      # is fixed running the BYTE-IDENTICAL frozen script, and a refusal when the script is
+      # edited. The unit tests prove the security properties with a stand-in subprocess;
+      # this proves the verdicts match reality.
+      - name: Prove the runner is red-to-green and cannot be talked out of it
+        run: npm run test:runner-proof
 
   demo-console:
     name: Demo console (renders in a real browser)
