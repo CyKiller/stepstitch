@@ -106,6 +106,7 @@ def build_app(
     ingest_token: Optional[str] = None,
     sign_blob: Optional[Callable[..., Any]] = None,
     base_url: Optional[str] = None,
+    local_mode: bool = False,
 ) -> FastAPI:
     """Build the ingest API. ``draft_adapters`` are the injected (Apache-2.0) adapters;
     ``record_writers`` enable the optional governed direct-write; ``audit`` is the audit
@@ -264,6 +265,12 @@ def build_app(
             # this to know if the loop is closed — without it, the verified-fix corpus can never
             # fill and Fix Memory has nothing to match against.
             "verifications": await _count("stepstitch_verifications"),
+            # StepStitch Local pairing. In local mode the credentials are generated, so the
+            # console can hand the developer a ready-to-paste snippet instead of asking them
+            # to copy a token out of a terminal. Gated three ways: local mode only, admin
+            # only, and loopback-only binding — a deployed host never returns this.
+            "local_mode": local_mode,
+            "local_ingest_token": ingest_token if local_mode else None,
         }
 
     # --- Scrub-policy editor (operator config; only ever TIGHTENS the base profile) ---

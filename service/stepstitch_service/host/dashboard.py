@@ -1105,8 +1105,11 @@ DASHBOARD_HTML = r"""<!doctype html>
         detail: "You are connected. This token stays in this browser tab and is never shared " +
                 "with an agent." },
       { done: (s.traces || 0) > 0, title: "Receive your first report",
-        detail: "Install @stepstitch/tracker in your app, or send a sample below to see the " +
-                "console with real evidence in it." },
+        detail: s.local_mode
+          ? "Open \"Connect your app\" for a snippet that already carries this host's " +
+            "ingest credential, or send a sample below to see the console with evidence in it."
+          : "Install @stepstitch/tracker in your app, or send a sample below to see the " +
+            "console with real evidence in it." },
       { done: !!s.base_url_configured, title: "Point reproductions at your app",
         detail: "A generated test needs to know where your application lives, and which " +
                 "values to use for templated routes and form fields. Without this every " +
@@ -1145,9 +1148,144 @@ DASHBOARD_HTML = r"""<!doctype html>
     }));
   }
 
+  // ---- StepStitch Local: connect your app -------------------------------------------------
+  // In local mode the host generates the ingest credential, so the console can hand over a
+  // ready-to-paste snippet. The developer never copies a token out of a terminal — the same
+  // pairing idea as the dashboard's #ss= link, applied to the SDK side.
+  var CONNECT_KITS = [
+    { id: "next", label: "Next.js",
+      code: function (t, origin) {
+        return "// app/providers.tsx — client component\n" +
+          "\"use client\";\n" +
+          "import { StepStitchTracker } from \"@stepstitch/tracker\";\n\n" +
+          "const tracker = new StepStitchTracker({\n" +
+          "  ingestEndpoint: \"/api/stepstitch\",   // your route, below\n" +
+          "  appId: \"my-app\",\n" +
+          "});\n" +
+          "tracker.grantConsent(\"v1\");            // capture is OFF until this call\n\n" +
+          "// app/api/stepstitch/route.ts — the token stays on the server\n" +
+          "export async function POST(req: Request) {\n" +
+          "  return fetch(\"" + origin + "/api/stepstitch/v1/session\", {\n" +
+          "    method: \"POST\",\n" +
+          "    headers: {\n" +
+          "      \"Content-Type\": \"application/json\",\n" +
+          "      Authorization: `Bearer ${process.env.STEPSTITCH_INGEST_TOKEN}`,\n" +
+          "    },\n" +
+          "    body: await req.text(),\n" +
+          "  });\n" +
+          "}\n\n" +
+          "# .env.local\n" +
+          "STEPSTITCH_INGEST_TOKEN=" + t + "\n";
+      } },
+    { id: "express", label: "Express",
+      code: function (t, origin) {
+        return "// server.js — proxy so the browser never holds the token\n" +
+          "app.post(\"/api/stepstitch\", express.json(), async (req, res) => {\n" +
+          "  const r = await fetch(\"" + origin + "/api/stepstitch/v1/session\", {\n" +
+          "    method: \"POST\",\n" +
+          "    headers: {\n" +
+          "      \"Content-Type\": \"application/json\",\n" +
+          "      Authorization: `Bearer ${process.env.STEPSTITCH_INGEST_TOKEN}`,\n" +
+          "    },\n" +
+          "    body: JSON.stringify(req.body),\n" +
+          "  });\n" +
+          "  res.status(r.status).send(await r.text());\n" +
+          "});\n\n" +
+          "# .env\n" +
+          "STEPSTITCH_INGEST_TOKEN=" + t + "\n";
+      } },
+    { id: "browser", label: "Browser only",
+      code: function (t, origin) {
+        return "// Local evaluation only: this puts the token in the page. For anything\n" +
+          "// shared or deployed, proxy through your server (see the other tabs).\n" +
+          "import { StepStitchTracker } from \"@stepstitch/tracker\";\n\n" +
+          "const tracker = new StepStitchTracker({\n" +
+          "  ingestEndpoint: \"" + origin + "/api/stepstitch/v1/session\",\n" +
+          "  appId: \"my-app\",\n" +
+          "  headers: { Authorization: \"Bearer " + t + "\" },\n" +
+          "});\n" +
+          "tracker.grantConsent(\"v1\");\n\n" +
+          "// Report an API failure your app already caught:\n" +
+          "// tracker.recordApiError({ route: \"/orders/:id\", status: 500 });\n" +
+          "// Then submit when the user asks you to:\n" +
+          "// await tracker.submitTrace({ explanation: userText });\n";
+      } },
+  ];
+
+  function connectView(status) {
+    var t = (status || {}).local_ingest_token || "";
+    var origin = location.origin;
+    var active = CONNECT_KITS[0];
+    var codeBox = el("pre", { class: "code" });
+    var tabs = el("div", { class: "row-actions" });
+    var checkOut = el("div", { style: "margin-top:10px" });
+
+    function paint() {
+      clear(tabs);
+      CONNECT_KITS.forEach(function (k) {
+        var b = el("button", { class: k.id === active.id ? "primary" : "ghost", text: k.label,
+                               onclick: function () { active = k; paint(); } });
+        tabs.appendChild(b);
+      });
+      tabs.appendChild(copyBtn(function () { return active.code(t, origin); }, "Copy"));
+      clear(codeBox);
+      codeBox.appendChild(document.createTextNode(active.code(t, origin)));
+    }
+    paint();
+
+    // The connection check: has a report arrived from something OTHER than this console's
+    // sample? That is the only signal that the developer's own app is really wired up.
+    var checkBtn = el("button", { class: "primary", text: "Check my connection" });
+    checkBtn.onclick = async function () {
+      checkBtn.disabled = true; checkBtn.textContent = "Checking…";
+      clear(checkOut);
+      try {
+        var data = await api("/sessions?limit=50");
+        var traces = data.traces || data.sessions || [];
+        var real = traces.filter(function (tr) {
+          return (tr.app_id || "") !== "console-sample";
+        });
+        if (real.length) {
+          checkOut.appendChild(el("p", { class: "ok",
+            text: "Connected — " + real.length + " report" + (real.length === 1 ? "" : "s") +
+                  " from your app. Open Failures to see the evidence." }));
+        } else {
+          checkOut.appendChild(el("p", { class: "muted",
+            text: "No report from your app yet. Paste the snippet above, trigger the bug, " +
+                  "and submit a report — then check again." }));
+        }
+      } catch (e) { checkOut.appendChild(fail(e)); }
+      checkBtn.disabled = false; checkBtn.textContent = "Check my connection";
+    };
+
+    return el("div", { class: "detail setup" }, [
+      el("h1", { style: "font-size:21px;margin:0 0 6px;font-weight:640",
+                 text: "Connect your app" }),
+      el("p", { class: "muted", style: "margin:0 0 14px;font-size:13.5px",
+                text: t
+                  ? "This snippet already carries your local ingest credential — nothing to " +
+                    "copy from the terminal. StepStitch captures structure only: no screens, " +
+                    "no typed values, no page text."
+                  : "Set STEPSTITCH_INGEST_TOKEN in your app to the ingest token this host " +
+                    "was started with. StepStitch captures structure only: no screens, no " +
+                    "typed values, no page text." }),
+      tabs,
+      codeBox,
+      el("div", { class: "row-actions", style: "margin-top:14px" }, [checkBtn]),
+      checkOut,
+      el("div", { class: "note",
+                  text: "Capture stays off until grantConsent() is called, and honors Global " +
+                        "Privacy Control and Do Not Track." })
+    ]);
+  }
+
   function setupView(status) {
     var steps = setupSteps(status);
     var sampleBtn = el("button", { class: "primary", text: "Send a sample report" });
+    var connectBtn = (status || {}).local_mode
+      ? el("button", { class: "ghost", text: "Connect your app",
+                       onclick: function () { mount(connectView(status)); } })
+      : null;
     var out = el("div", {});
     sampleBtn.onclick = async function () {
       sampleBtn.disabled = true;
@@ -1177,8 +1315,9 @@ DASHBOARD_HTML = r"""<!doctype html>
       })),
       el("div", { class: "row-actions", style: "margin-top:18px" }, [
         sampleBtn,
+        connectBtn,
         el("button", { class: "ghost", text: "Check again", onclick: renderBoard })
-      ]),
+      ].filter(Boolean)),
       out,
       el("div", { class: "note", text: "Everything here is read-only. Nothing in this console " +
                                        "can delete evidence or send anything to another system." })
