@@ -1,72 +1,33 @@
 #!/usr/bin/env bash
-# Safety net, two gates:
-#   1. Authorship — refuse to push any commit not authored AND committed by
-#      CyKiller <cykiller@msn.com>, or that still carries an AI co-author trailer.
-#   2. Pre-flight — run the fast CI checks (lint + type-check) for the surfaces being
-#      pushed, so a lint/type failure can't reach `main` and turn CI red. Vitest is NOT
-#      run here (it needs Node >=20.12 and is slower) — full tests stay in CI.
+# Optional pre-flight: run the fast CI checks (lint + type-check) for the surfaces being
+# pushed, so a lint/type failure can't reach `main` and turn CI red. Vitest is NOT run here
+# (it needs Node >=20.12 and is slower) — full tests stay in CI.
+#
+# This hook is opt-in — nothing installs it for you. Enable it with:
+#   npm run hooks:install
+# It checks code quality only. It has no opinion about who you are: identity and commit
+# trailers are not this repository's business, and a hook that enforced one maintainer's
+# name would reject every other contributor's commits.
+#
 # stdin lines: <local ref> <local sha> <remote ref> <remote sha>
 set -euo pipefail
 
-EXPECTED_EMAIL="cykiller@msn.com"
-EXPECTED_NAME="CyKiller"
 Z40="0000000000000000000000000000000000000000"
-fail=0
 CHANGED=""        # accumulated changed paths across pushed ranges
 CHECK_ALL=0       # 1 when a new branch is pushed (no cheap range) -> check everything
 
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$Z40" ] && continue  # branch deletion
 
-  # Authorship is checked over commits that exist nowhere on the remote yet — `--not --remotes`
-  # in BOTH cases, not just for new branches. A plain `remote_sha..local_sha` range looks right
-  # but breaks on force-push after a rebase: it sweeps in every commit the new base added, and
-  # `main` legitimately carries GitHub-authored squashes (dependabot, release-please) that can
-  # never satisfy this gate. That made every branch rebased onto a current `main` unpushable and
-  # invited a habit of `--no-verify`, which would disable the check this hook exists to make.
-  # Rebased/amended commits get fresh SHAs, so they are still caught — nothing is smuggled past.
-  rev_args="$local_sha --not --remotes"
   if [ "$remote_sha" = "$Z40" ]; then
-    CHECK_ALL=1  # new branch: no cheap changed-path range, so gate 2 checks everything
+    CHECK_ALL=1  # new branch: no cheap changed-path range, so check everything
   else
     range="${remote_sha}..${local_sha}"
     CHANGED="$CHANGED
 $(git diff --name-only "$range" 2>/dev/null || true)"
   fi
-
-  for sha in $(git rev-list $rev_args); do
-    an=$(git show -s --format='%an' "$sha")
-    ae=$(git show -s --format='%ae' "$sha" | tr '[:upper:]' '[:lower:]')
-    cn=$(git show -s --format='%cn' "$sha")
-    ce=$(git show -s --format='%ce' "$sha" | tr '[:upper:]' '[:lower:]')
-    body=$(git show -s --format='%B' "$sha")
-
-    if [ "$ae" != "$EXPECTED_EMAIL" ] || [ "$an" != "$EXPECTED_NAME" ] \
-       || [ "$ce" != "$EXPECTED_EMAIL" ] || [ "$cn" != "$EXPECTED_NAME" ]; then
-      echo "✗ $sha has wrong identity: author='$an <$ae>' committer='$cn <$ce>'" >&2
-      echo "  expected '$EXPECTED_NAME <$EXPECTED_EMAIL>' for both." >&2
-      fail=1
-    fi
-
-    if printf '%s' "$body" | grep -qiE 'Co-[Aa]uthored-[Bb]y:[[:space:]]*Claude|Generated with \[?Claude|🤖'; then
-      echo "✗ $sha still has an AI co-author / 'Generated with' trailer." >&2
-      fail=1
-    fi
-  done
 done
 
-if [ "$fail" -ne 0 ]; then
-  cat >&2 <<'EOF'
-
-Push blocked: history must be CyKiller <cykiller@msn.com> only.
-Fix the offending commit(s), e.g.:
-  git commit --amend --reset-author     # fix the latest commit's identity
-  git rebase -i <base> --exec 'git commit --amend --reset-author --no-edit'
-EOF
-  exit 1
-fi
-
-# --- Gate 2: pre-flight lint + type-check ------------------------------------------
 # Scope to what's being pushed; only the cheap, deterministic gates (no vitest).
 repo_root=$(git rev-parse --show-toplevel)
 run_root_ts=0

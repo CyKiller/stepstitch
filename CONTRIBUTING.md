@@ -44,14 +44,22 @@ cd server && alembic upgrade head && cd ..
 uvicorn server.app:app --reload
 ```
 
-### Authorship & git hooks
+### Optional git hook
 
-All commit history is **CyKiller <cykiller@msn.com>** only — no AI co-author or
-"Generated with" trailers. `npm install` runs `scripts/setup-githooks.mjs`, which points
-git at `.githooks/` so this is enforced locally (`commit-msg` strips AI trailers,
-`pre-push` rejects any commit not authored *and* committed by CyKiller). If you skip the
-SDK install, enable it manually: `git config core.hooksPath .githooks` (see
-[.githooks/README.md](.githooks/README.md)).
+There is one hook, it is opt-in, and it only runs the checks CI already runs:
+
+```bash
+npm run hooks:install   # git config core.hooksPath .githooks
+```
+
+`pre-push` then runs the root type-check, plus `web/` lint and type-check when `web/`
+changed — so a red build is caught before it reaches a PR. Skip it once with
+`git push --no-verify`, or turn it off for good with `git config --unset core.hooksPath`.
+`npm install` does not install it and does not touch your git configuration. See
+[.githooks/README.md](.githooks/README.md).
+
+Commit under whatever name and email you normally use. This repository does not check
+authorship or commit trailers.
 
 ## Definition of Done (house rule)
 

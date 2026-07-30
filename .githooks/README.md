@@ -1,24 +1,27 @@
-# Git hooks (committed)
+# Git hooks (optional)
 
-These hooks keep the history attributed to **CyKiller &lt;cykiller@msn.com&gt;** only.
+One hook, opt-in, and it only runs the same lint and type checks CI runs.
 
 | Hook | What it does |
 |------|--------------|
-| `commit-msg` | Strips any `Co-Authored-By: Claude …` / "Generated with …" trailers from each commit message automatically. |
-| `pre-push`   | Refuses to push commits whose author **or** committer isn't `CyKiller <cykiller@msn.com>`, or that still carry an AI trailer. |
+| `pre-push` | Runs the root type-check, plus `web/` lint + type-check when `web/` changed. Skips loudly rather than blocking when a toolchain is missing. Vitest stays in CI. |
 
-## One-time setup per clone
-
-Hooks in a committed directory aren't active until you point git at them:
+## Enable it
 
 ```bash
-git config core.hooksPath .githooks
-chmod +x .githooks/*
+npm run hooks:install
 ```
 
-## Local identity (also recommended)
+That is `git config core.hooksPath .githooks` — local to your clone, and reversible with
+`git config --unset core.hooksPath`. Nothing installs it for you: `npm install` builds the
+package and does not touch your git configuration.
 
-```bash
-git config user.name  "CyKiller"
-git config user.email "cykiller@msn.com"
-```
+To bypass it once: `git push --no-verify`.
+
+## What this hook deliberately does not check
+
+**Identity.** It has no opinion about your name, your email, or the trailers in your commit
+messages. An earlier version of these hooks enforced a single maintainer's identity on every
+commit — which meant anyone who cloned the repository and ran `npm install` got a hook that
+rejected their own work. Attribution policy belongs in your own global git configuration,
+not in a repository other people contribute to.
