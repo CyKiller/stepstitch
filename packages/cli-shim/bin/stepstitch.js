@@ -97,8 +97,14 @@ function main() {
     process.exit(1);
   }
 
+  // The [local] extra carries uvicorn — without it `stepstitch start` can only print
+  // an apology. This shim EXISTS to run `start` on an empty machine, so the extra is
+  // not optional here. (The first-run CI gate overrides the spec with `./service[local]`,
+  // which is how a shim that omitted the extra shipped green: the registry 404 fix and
+  // this were both caught by the release pipeline's stranger job, not by CI.)
   const spec =
-    process.env.STEPSTITCH_SERVICE_SPEC || `stepstitch-service==${SERVICE_VERSION}`;
+    process.env.STEPSTITCH_SERVICE_SPEC ||
+    `stepstitch-service[local]==${SERVICE_VERSION}`;
   const child = spawnSync(
     uvx,
     ['--from', spec, 'stepstitch', ...args],
