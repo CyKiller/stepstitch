@@ -71,8 +71,11 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
-      - name: Install service with test + lint extras
-        run: pip install "./service[test,lint]"
+      # The `mcp` extra is here so test_mcp_stdio.py actually RUNS: it spawns the server
+      # and speaks real MCP to it. Without the extra the test skips, and a transport that
+      # no client could talk to would ship green.
+      - name: Install service with test + lint + mcp extras
+        run: pip install "./service[test,lint,mcp]"
       - name: Run service tests
         run: pytest service/tests -q
       - name: Layering boundary (import-linter contract)
@@ -156,6 +159,10 @@ jobs:
           python-version: "3.11"
       - name: Install
         run: npm ci
+      # demo_agent_loop.py starts a real StepStitch host (`stepstitch start`), so this job
+      # needs the service and its local-mode server, not just Node.
+      - name: Install the service (with the local-mode server)
+        run: pip install "./service[local]"
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Prove generated reproduction executes
@@ -192,6 +199,10 @@ jobs:
         run: pip install "./service" && pip install -r server/requirements.txt
       - name: Install
         run: npm ci
+      # demo_agent_loop.py starts a real StepStitch host (`stepstitch start`), so this job
+      # needs the service and its local-mode server, not just Node.
+      - name: Install the service (with the local-mode server)
+        run: pip install "./service[local]"
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Demo dataset is not stale
