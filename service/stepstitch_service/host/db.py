@@ -54,10 +54,15 @@ CREATE TABLE IF NOT EXISTS stepstitch_verifications (
     fix_ref      TEXT,
     run_url      TEXT,
     fingerprint  TEXT,
+    -- HOW the outcome was obtained: asserted (a caller said so) / measured (StepStitch ran
+    -- the frozen reproduction itself) / signed (measured + signed with the tenant's key).
+    -- Derived, never accepted from a caller. See stepstitch_service/evidence.py.
+    evidence_grade TEXT NOT NULL DEFAULT 'asserted',
     created_at   TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_stepstitch_verif_trace   ON stepstitch_verifications (trace_id);
 CREATE INDEX IF NOT EXISTS ix_stepstitch_verif_verdict ON stepstitch_verifications (verdict, created_at DESC);
+CREATE INDEX IF NOT EXISTS ix_stepstitch_verif_grade   ON stepstitch_verifications (evidence_grade);
 
 -- Agent connections: named, scoped bearer tokens for AI/MCP consumers. Only the token
 -- HASH is stored (never the token) + a scope tier; enforcement lives in the host

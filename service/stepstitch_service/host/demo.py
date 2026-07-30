@@ -27,6 +27,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
+from stepstitch_service.evidence import ASSERTED
 from stepstitch_service.profiles import load_profile
 from stepstitch_service.repro_config import ReproConfig
 
@@ -82,10 +83,12 @@ class _ReadOnlyStore:
                      "stepstitch_agents": 0}.get(table, 0),)
         if "FROM stepstitch_config" in q:
             return None  # no operator overrides in the demo
-        if q.startswith("SELECT verdict, fix_ref, run_url FROM stepstitch_verifications"):
+        if q.startswith("SELECT verdict, fix_ref, run_url, evidence_grade "
+                        "FROM stepstitch_verifications"):
             for v in self._verifs_desc:
                 if v["trace_id"] == params[0]:
-                    return (v["verdict"], v["fix_ref"], v["run_url"])
+                    return (v["verdict"], v["fix_ref"], v["run_url"],
+                            v.get("evidence_grade", ASSERTED))
             return None
 
         row = self._by_id.get(params[0]) if params else None
@@ -123,6 +126,17 @@ class _ReadOnlyStore:
             return [(t["id"], t["fingerprint"], t["created_at"])
                     for t in self._traces_desc if t["fingerprint"]][:limit]
 
+        if q.startswith("SELECT trace_id, fix_ref, run_url, fingerprint, evidence_grade "
+                        "FROM stepstitch_verifications"):
+            want = params[0] if params else None
+            grades = set(params[1:3])
+            return [
+                (v["trace_id"], v["fix_ref"], v["run_url"], v["fingerprint"],
+                 v.get("evidence_grade", ASSERTED))
+                for v in self._verifs_desc
+                if v["verdict"] == want and v.get("fingerprint") is not None
+                and v.get("evidence_grade", ASSERTED) in grades
+            ]
         if q.startswith("SELECT trace_id, verdict FROM stepstitch_verifications"):
             limit = int(params[0]) if params else 500
             return [(v["trace_id"], v["verdict"]) for v in self._verifs_desc[:limit]]

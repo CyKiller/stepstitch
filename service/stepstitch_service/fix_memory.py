@@ -97,7 +97,8 @@ def match(
 ) -> List[Dict[str, Any]]:
     """Rank corpus fixes by structural similarity to ``new_fp``.
 
-    ``candidates`` are ``{trace_id, fix_ref, run_url, fingerprint}`` (the stored corpus). Returns
+    ``candidates`` are ``{trace_id, fix_ref, run_url, fingerprint, evidence_grade}`` (the
+    stored corpus; the caller is expected to have filtered it to measured evidence). Returns
     the top matches at/above ``min_similarity``, each with a 0-1 ``similarity`` and the ``reasons``
     that drove it. Deterministic for a given input (ties broken by trace_id for stability).
     """
@@ -114,6 +115,9 @@ def match(
                 "trace_id": tid,
                 "fix_ref": c.get("fix_ref"),
                 "run_url": c.get("run_url"),
+                # How the earlier fix was established. A reader deciding whether to copy
+                # it deserves to know whether anyone actually watched it work.
+                "evidence_grade": c.get("evidence_grade"),
                 "similarity": round(sim, 4),
                 "reasons": reasons,
             })

@@ -12,8 +12,8 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **472** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **165** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Service (compiler, router, privacy, connectors) | **487** | `PYTHONPATH=service pytest service/tests/` |
+| Host (auth, dashboard, real Postgres) | **172** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **31** | `npx vitest run` |
 | Web (marketing site + copy claims) | **59** | `cd web && npx vitest run` |
 
@@ -63,6 +63,9 @@ the browser sent).
 | Local reproduction runner (frozen script, env allowlist, timeout, cancel, address allowlist) | `stepstitch_service/runner.py` | `test_runner.py`, `scripts/prove-runner-executes.mjs` (real Chromium, red-to-green) |
 | Agent loop: freeze the test, measure red, judge the fix (fixed / still failing / different failure / unable to verify) | `stepstitch_service/fixcheck.py`, `host/host.py` freeze + verify-fix | `test_fixcheck.py`, `test_agent_loop.py`, `scripts/demo_agent_loop.py` (CI gate) |
 | MCP stdio transport actually spoken by a client | `stepstitch_service/mcp_server.py` | `test_mcp_stdio.py` (spawn, initialize, list, call) |
+| Evidence grade — asserted (a caller said so) / measured (StepStitch ran it) / signed; derived, never claimable | `stepstitch_service/evidence.py` | `test_evidence.py`, `test_evidence_endpoints.py` |
+| Attestation tamper rejection (altered bundle refused, not flagged) | `stepstitch_service/evidence.py` `verify_bundle` | `test_evidence.py`, `POST /attestation/verify` tests |
+| Fix Memory advises from measured evidence only | `router.py` similar-fixes | `test_similar_fixes.py` |
 | End-to-end golden path | (all of the above) | `test_golden_path.py` |
 
 ### Host, governance and operations

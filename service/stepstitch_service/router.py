@@ -28,6 +28,8 @@ from .attestation import (
     verify_recipe,
 )
 from .delivery.base import DeliveryError, DeliveryService, RecordWriter
+from .evidence import ASSERTED, GRADE_MEANING, MEASURED, SIGNED, TamperError, derive_grade
+from .evidence import verify_bundle as verify_evidence_bundle
 from .fix_memory import fingerprint as fix_fingerprint
 from .fix_memory import match as fix_match
 from .fragility import compute_fragility_map, minimal_repro
@@ -95,6 +97,15 @@ class GitHubIssuePayload(BaseModel):
 class GitHubPrPayload(BaseModel):
     approved_by: str
     idempotency_key: str
+
+
+class AttestationCheck(BaseModel):
+    """A bundle handed back for checking. ``bundle`` may be the whole issued document, or
+    just the payload with the hash and signature supplied alongside it."""
+
+    bundle: dict = {}
+    bundle_sha256: Optional[str] = None
+    signature: Optional[str] = None
 
 
 class VerifyPayload(BaseModel):
@@ -755,8 +766,11 @@ def create_stepstitch_router(
         payload: VerifyPayload,
         admin: Any = Depends(require_admin),
     ) -> Dict[str, Any]:
-        # CI reports the repro outcome; StepStitch derives + stores the verdict. StepStitch
-        # never runs code itself. Red->green is the only confirmed fix.
+        # CI reports the repro outcome; StepStitch derives + stores the verdict. Nothing
+        # here was observed by StepStitch, so the evidence grade is ASSERTED — the caller
+        # is being trusted. (A local host that ran the frozen reproduction itself records a
+        # MEASURED verification instead; see host.verify_fix.) The grade is derived, never
+        # read from the payload: a caller claiming "signed" still lands here as asserted.
         row = await fetchone(
             "SELECT footsteps, project_id FROM stepstitch_traces WHERE id = ?",
             (trace_id,),
@@ -771,11 +785,12 @@ def create_stepstitch_router(
         fp_json = json.dumps(fix_fingerprint(summary.as_dict(), footsteps))
         await execute(
             "INSERT INTO stepstitch_verifications (id, trace_id, pre_passed, post_passed, "
-            "verdict, fix_ref, run_url, fingerprint, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "verdict, fix_ref, run_url, fingerprint, evidence_grade, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 str(uuid.uuid4()), trace_id, payload.pre_passed, payload.post_passed,
                 verdict, payload.fix_ref, payload.run_url, fp_json,
+                derive_grade(measured_by_stepstitch=False),
                 datetime.now(timezone.utc),
             ),
         )
@@ -786,6 +801,8 @@ def create_stepstitch_router(
             "status": "ok", "trace_id": trace_id, "verdict": verdict,
             "pre_passed": payload.pre_passed, "post_passed": payload.post_passed,
             "fix_ref": payload.fix_ref,
+            "evidence_grade": derive_grade(measured_by_stepstitch=False),
+            "evidence_detail": GRADE_MEANING[ASSERTED],
         }
 
     @router.get("/session/{trace_id}/verifications")
@@ -824,10 +841,17 @@ def create_stepstitch_router(
         footsteps = _loads(row[0])
         summary = build_trace_summary(trace_id, footsteps, project_id=row[1])
         new_fp = fix_fingerprint(summary.as_dict(), footsteps)
+        # MEASURED evidence only. "You have fixed this shape before" is worth acting on
+        # exactly to the degree the earlier fix was actually observed to work — a corpus
+        # padded with fixes somebody merely reported would make this feature confidently
+        # wrong, which is worse than not having it. Asserted rows stay in the table (they
+        # are real history) but they do not get to advise anyone.
         rows = await fetchall(
-            "SELECT trace_id, fix_ref, run_url, fingerprint FROM stepstitch_verifications "
-            "WHERE verdict = ? AND fingerprint IS NOT NULL ORDER BY created_at DESC LIMIT ?",
-            ("confirmed_fixed", 500),
+            "SELECT trace_id, fix_ref, run_url, fingerprint, evidence_grade "
+            "FROM stepstitch_verifications "
+            "WHERE verdict = ? AND fingerprint IS NOT NULL AND evidence_grade IN (?, ?) "
+            "ORDER BY created_at DESC LIMIT ?",
+            ("confirmed_fixed", MEASURED, SIGNED, 500),
         )
         candidates: List[Dict[str, Any]] = []
         for r in rows:
@@ -836,12 +860,16 @@ def create_stepstitch_router(
             except Exception:
                 continue
             candidates.append(
-                {"trace_id": r[0], "fix_ref": r[1], "run_url": r[2], "fingerprint": fp})
+                {"trace_id": r[0], "fix_ref": r[1], "run_url": r[2], "fingerprint": fp,
+                 "evidence_grade": r[4]})
         matches = fix_match(new_fp, candidates, top_k=limit, exclude_trace_id=trace_id)
         await _audit("stepstitch.similar_fixes", _actor_id(admin),
                      {"trace_id": trace_id, "matches": len(matches)})
         return {"status": "ok", "trace_id": trace_id, "fingerprint": new_fp,
-                "similar_fixes": matches}
+                "similar_fixes": matches,
+                # Say what the corpus is, so nobody reads an empty result as "no such bug
+                # has ever been fixed here" when it may mean "none were measured".
+                "corpus": "measured evidence only (asserted verifications are excluded)"}
 
     async def _attestation_payload(trace_id: str, admin: Any) -> Dict[str, Any]:
         # Evidence Attestation: a canonical, tamper-evident bundle (scrub report + replayability
@@ -859,9 +887,11 @@ def create_stepstitch_router(
         scrub = meta.get("_scrub") if isinstance(meta, dict) else None
         sdk_build = meta.get("sdk_build") if isinstance(meta, dict) else None
         vrow = await fetchone(
-            "SELECT verdict, fix_ref, run_url FROM stepstitch_verifications "
+            "SELECT verdict, fix_ref, run_url, evidence_grade FROM stepstitch_verifications "
             "WHERE trace_id = ? ORDER BY created_at DESC LIMIT 1", (trace_id,))
-        latest = ({"verdict": vrow[0], "fix_ref": vrow[1], "run_url": vrow[2]} if vrow else None)
+        latest = ({"verdict": vrow[0], "fix_ref": vrow[1], "run_url": vrow[2],
+                   "evidence_grade": (vrow[3] if len(vrow) > 3 else ASSERTED)}
+                  if vrow else None)
         bundle = build_attestation(
             trace_id,
             summary=summary.as_dict(),
@@ -897,6 +927,37 @@ def create_stepstitch_router(
         admin: Any = Depends(require_admin),
     ) -> Dict[str, Any]:
         return await _attestation_payload(trace_id, admin)
+
+    @router.post("/attestation/verify")
+    async def verify_attestation(
+        payload: AttestationCheck,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        """Check a bundle someone hands back, and REFUSE it if it has been altered.
+
+        Deliberately takes the document as input and consults nothing stored: the point of
+        an attestation is that it can be checked without trusting the issuer, and a check
+        that quietly re-derived the answer from our own database would prove nothing about
+        the copy in the caller's hand. It re-canonicalises and rehashes exactly what it was
+        given.
+
+        A mismatch is a 422 with a plain statement, not a field on a 200 — a caller that
+        forgets to read a boolean must not sail past a forged bundle.
+        """
+        document = dict(payload.bundle or {})
+        if payload.bundle_sha256 and "bundle_sha256" not in document:
+            document["bundle_sha256"] = payload.bundle_sha256
+        if payload.signature and "signature" not in document:
+            document["signature"] = payload.signature
+        try:
+            result = verify_evidence_bundle(document)
+        except TamperError as exc:
+            await _audit("stepstitch.attestation_verify", _actor_id(admin),
+                         {"verified": False})
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        await _audit("stepstitch.attestation_verify", _actor_id(admin),
+                     {"verified": True, "grade": result["evidence_grade"]})
+        return {"status": "ok", **result}
 
     @router.get("/session/{trace_id}/attestation/download")
     async def download_attestation(

@@ -14,6 +14,7 @@ import os
 import re
 import secrets
 import time
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, List, Optional
 
@@ -484,7 +485,7 @@ def build_app(
         async def verify_fix(trace_id: str, req: ReproduceRequest,
                              admin: Any = Depends(require_admin)) -> dict:
             """Rerun the frozen reproduction after a change and say what was observed."""
-            from ..fixcheck import UNABLE_TO_VERIFY, derive_fix_verdict
+            from ..fixcheck import FIXED, UNABLE_TO_VERIFY, derive_fix_verdict
             from ..runner import RunnerError, run_reproduction
 
             frozen = await fetchone(
@@ -515,6 +516,38 @@ def build_app(
 
             verdict = derive_fix_verdict(red_verdict=red_verdict,
                                          red_signature=red_signature, after=after)
+
+            # A fix StepStitch watched fail and then pass belongs in the corpus as MEASURED
+            # evidence — the whole point of the local runner. Only a real red-to-green is
+            # recorded: 'still failing', 'different failure' and 'unable to verify' are not
+            # fixes, and writing them here would quietly inflate the corpus.
+            if verdict.verdict == FIXED:
+                from ..evidence import derive_grade
+                from ..fix_memory import fingerprint as fix_fingerprint
+                from ..integrations.base import build_trace_summary
+
+                trace_row = await fetchone(
+                    "SELECT footsteps, project_id FROM stepstitch_traces WHERE id = ?",
+                    (trace_id,))
+                fp_json = None
+                if trace_row:
+                    steps = (json.loads(trace_row[0])
+                             if isinstance(trace_row[0], str) else trace_row[0])
+                    summary = build_trace_summary(trace_id, steps,
+                                                  project_id=trace_row[1])
+                    fp_json = json.dumps(fix_fingerprint(summary.as_dict(), steps))
+                await execute(
+                    "INSERT INTO stepstitch_verifications (id, trace_id, pre_passed, "
+                    "post_passed, verdict, fix_ref, run_url, fingerprint, evidence_grade, "
+                    "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (str(uuid.uuid4()), trace_id, False, True, "confirmed_fixed",
+                     None, None, fp_json,
+                     # measured_by_stepstitch=True: both runs happened here, under the
+                     # frozen script, with no caller asked to vouch for either.
+                     derive_grade(measured_by_stepstitch=True),
+                     datetime.now(timezone.utc)),
+                )
+
             await audit("stepstitch.verify_fix", _actor_name(admin),
                         {"trace_id": trace_id, "verdict": verdict.verdict,
                          "sha256": digest})
