@@ -13,7 +13,7 @@ pushed.
 | Suite | Tests | Command |
 |---|---|---|
 | Service (compiler, router, privacy, connectors) | **425** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **137** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Host (auth, dashboard, real Postgres) | **143** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **22** | `npx vitest run` |
 | Web (marketing site + copy claims) | **59** | `cd web && npx vitest run` |
 
@@ -65,6 +65,7 @@ the browser sent).
 |---|---|---|
 | Per-operator OIDC SSO + RBAC | `server/oidc.py` (RS256/JWKS + `require_roles`) | `test_oidc.py`, `test_pg_integration.py` (real Postgres) |
 | Scoped, revocable agent tokens | `server/agents.py` | `test_agents.py`, `test_agent_enforcement.py` |
+| SQLite local store (`STEPSTITCH_MODE=local`, zero-config; Postgres path untouched) | `server/localdb.py` | `test_localdb.py` + shared `storage_suite.py` (also run against real Postgres) |
 | Durable audit trail | `server/audit.py` | `test_audit_endpoint.py` |
 | Editable scrub policy | `server/` scrub config | `test_scrub_config.py` |
 | Observability | `server/metrics.py` | `test_observability.py` |

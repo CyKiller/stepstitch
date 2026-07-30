@@ -40,10 +40,27 @@ def test_the_message_names_the_fix_and_the_tool():
     assert "docs/DEPLOY.md" in message
 
 
-def test_a_non_postgres_dsn_is_rejected_with_the_reason():
+def test_production_mode_rejects_a_non_postgres_dsn_with_the_reason():
+    # Production (the default mode) still requires Postgres; sqlite is the LOCAL mode's
+    # store, never a silent production fallback.
     with pytest.raises(SystemExit) as exc:
         require_env(dict(GOOD, DATABASE_URL="sqlite:///local.db"))
     assert "must start with" in str(exc.value)
+
+
+def test_local_mode_accepts_a_sqlite_dsn_and_needs_no_tokens():
+    require_env({"STEPSTITCH_MODE": "local",
+                 "DATABASE_URL": "sqlite:///.stepstitch/local.db"})   # does not raise
+    require_env({"STEPSTITCH_MODE": "local"})   # unset DSN -> default local file
+
+
+def test_local_mode_refuses_a_postgres_dsn_rather_than_half_honoring_it():
+    with pytest.raises(SystemExit) as exc:
+        require_env({"STEPSTITCH_MODE": "local",
+                     "DATABASE_URL": "postgres://u:hunter2@db:5432/x"})
+    message = str(exc.value)
+    assert "STEPSTITCH_MODE=local" in message
+    assert "hunter2" not in message   # never echo credentials
 
 
 def test_oidc_removes_the_admin_token_requirement():
