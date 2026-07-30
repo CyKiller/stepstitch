@@ -45,3 +45,4 @@ skills-lock.json
 
 # TinyTransfer example: scratch dir for the red-to-green verify run
 examples/tiny-transfer/.verify-run/
+.stepstitch-agent-demo/

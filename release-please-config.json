@@ -8,6 +8,7 @@
       "extra-files": [
         "src/tracker.ts",
         "service/pyproject.toml",
+        "service/server.json",
         "web/src/lib/version.ts",
         "docs/STATUS.md"
       ]

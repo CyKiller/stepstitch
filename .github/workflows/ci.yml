@@ -166,6 +166,11 @@ jobs:
       # this proves the verdicts match reality.
       - name: Prove the runner is red-to-green and cannot be talked out of it
         run: npm run test:runner-proof
+      # The flagship claim, executed: a (deterministic, LLM-free) agent takes a real
+      # failure through freeze -> measured red -> patch -> rerun of the FROZEN test ->
+      # fixed, and a second agent that edits the test instead of the app gets nowhere.
+      - name: Prove the agent loop closes with evidence the agent cannot touch
+        run: npm run test:agent-loop
 
   demo-console:
     name: Demo console (renders in a real browser)

@@ -73,6 +73,22 @@ CREATE TABLE IF NOT EXISTS stepstitch_agents (
 );
 CREATE INDEX IF NOT EXISTS ix_stepstitch_agents_token ON stepstitch_agents (token_hash);
 
+-- The frozen reproduction: the exact bytes that judge a fix.
+-- Recorded before a session is handed to a fixing agent, together with the measured red run
+-- that proved the failure was present. Verification reruns THIS script; a different script is
+-- refused. The agent may change the application, never the test that judges it. Structural
+-- only (a compiled Playwright spec derived from already-scrubbed footsteps) — no NPI.
+CREATE TABLE IF NOT EXISTS stepstitch_frozen_repros (
+    trace_id     TEXT PRIMARY KEY,
+    script       TEXT NOT NULL,
+    sha256       TEXT NOT NULL,
+    red_verdict  TEXT,            -- what the pre-fix run observed (runner verdict)
+    red_signature TEXT,           -- how it failed, so a DIFFERENT failure is distinguishable
+    frozen_at    TIMESTAMPTZ NOT NULL,
+    frozen_by    TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_stepstitch_frozen_sha ON stepstitch_frozen_repros (sha256);
+
 -- Operator config (dashboard). A small per-key JSON store; today holds the scrub overrides
 -- (custom redaction patterns + extra forbidden keys) that only ever TIGHTEN the base
 -- profile. Carries no NPI.

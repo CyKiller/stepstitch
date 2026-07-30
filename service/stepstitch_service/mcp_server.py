@@ -320,7 +320,7 @@ def serve_stdio(call_route: CallRouteFn, *, server_name: str = "stepstitch") -> 
     server: Any = Server(server_name)
 
     @server.list_tools()
-    async def _list_tools():  # pragma: no cover - thin SDK glue
+    async def _list_tools():
         return [
             types.Tool(
                 name=d["name"],
@@ -331,13 +331,13 @@ def serve_stdio(call_route: CallRouteFn, *, server_name: str = "stepstitch") -> 
         ]
 
     @server.call_tool()
-    async def _call_tool(name: str, arguments: Dict[str, Any]):  # pragma: no cover
+    async def _call_tool(name: str, arguments: Dict[str, Any]):
         import json
 
         result = await dispatch_tool(name, arguments or {}, call_route)
         return [types.TextContent(type="text", text=json.dumps(result, default=str))]
 
-    async def _run():  # pragma: no cover - thin SDK glue
+    async def _run():
         async with stdio_server() as (read, write):
             await server.run(read, write, server.create_initialization_options())
 
