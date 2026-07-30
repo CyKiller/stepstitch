@@ -14,7 +14,7 @@ pushed.
 |---|---|---|
 | Service (compiler, router, privacy, connectors) | **425** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **150** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
-| SDK (type-check + redaction proof) | **22** | `npx vitest run` |
+| SDK (type-check + redaction proof) | **31** | `npx vitest run` |
 | Web (marketing site + copy claims) | **59** | `cd web && npx vitest run` |
 
 Counts are the number pytest/vitest **collect**, and they are enforced: each suite verifies
@@ -38,6 +38,7 @@ the browser sent).
 | Capability | Code | Proof |
 |---|---|---|
 | Privacy-by-default SDK + redaction | `src/` | `tests/redaction-proof.test.ts` |
+| Drop-in "Report a problem" widget (framework-agnostic, zero-dep) | `src/reporter.ts` | `tests/reporter.test.ts` |
 | Deterministic Playwright compiler | `service/.../compiler.py` | `test_compiler.py`, `scripts/prove-repro-executes.mjs` |
 | Decoupled router (host injects auth/DB) | `service/.../router.py` | `test_router_smoke.py` |
 | Server-side scrubber (NPI trust boundary) | `scrubber.py` | `test_scrubber.py`, `test_scrub_overrides.py` |
