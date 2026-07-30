@@ -298,7 +298,35 @@ def main(argv: Optional[List[str]] = None) -> int:
     doctor.add_argument("--json", action="store_true", dest="as_json",
                         help="emit machine-readable results")
 
+    start = sub.add_parser(
+        "start",
+        help="run StepStitch Local: dashboard + SQLite store on 127.0.0.1, no setup",
+        description="StepStitch Local. Generates credentials, stores everything in a "
+                    "local SQLite file, binds to loopback only, and opens the dashboard. "
+                    "No account, no Postgres, no Docker.",
+    )
+    start.add_argument("--port", type=int, default=None,
+                       help="dashboard/API port (default 8321)")
+    start.add_argument("--db", default=None,
+                       help="path for the local store (default .stepstitch/local.db)")
+    start.add_argument("--no-browser", action="store_true",
+                       help="do not open the dashboard in a browser")
+
     args = parser.parse_args(argv)
+    if args.command == "start":
+        # Imported here, not at module top: doctor must stay importable in a broken or
+        # minimal environment (stdlib only); start is where fastapi/uvicorn come in.
+        try:
+            from stepstitch_service.host.local import DEFAULT_LOCAL_PORT, run_local
+        except ImportError as exc:
+            print(f"stepstitch start needs the service host installed ({exc}).\n"
+                  "  pip install 'stepstitch-service[local]'")
+            return 2
+        return run_local(
+            port=args.port or DEFAULT_LOCAL_PORT,
+            db=args.db,
+            open_browser=not args.no_browser,
+        )
     if args.command != "doctor":
         parser.print_help()
         return 2

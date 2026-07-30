@@ -509,6 +509,15 @@ DASHBOARD_HTML = r"""<!doctype html>
   var crumbsEl = document.getElementById("crumbs");
   // The demo needs no credential; a placeholder keeps the transport code identical.
   var token = DEMO ? "demo" : (sessionStorage.getItem("ss_token") || "");
+  // StepStitch Local pairing: `stepstitch start` opens /dashboard#ss=<token> so the
+  // developer never handles the generated credential. Fragments are never sent to the
+  // server or its logs; adopt into sessionStorage (same place a pasted token lives)
+  // and strip the URL immediately so it cannot be bookmarked or shared by copy/paste.
+  if (!DEMO && location.hash && location.hash.indexOf("#ss=") === 0) {
+    token = decodeURIComponent(location.hash.slice(4));
+    try { sessionStorage.setItem("ss_token", token); } catch (e) { /* private mode */ }
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+  }
 
   // ---- operator preferences -------------------------------------------------------------
   // Persisted in localStorage (preferences, not credentials — the token stays in
