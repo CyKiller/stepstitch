@@ -13,7 +13,7 @@ pushed.
 | Suite | Tests | Command |
 |---|---|---|
 | Service (compiler, router, privacy, connectors) | **425** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **134** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Host (auth, dashboard, real Postgres) | **137** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **22** | `npx vitest run` |
 | Web (marketing site + copy claims) | **59** | `cd web && npx vitest run` |
 
@@ -128,9 +128,12 @@ the draft-only default and the no-NPI guarantee are unchanged.
   real (see above), but it can only do so if the pre-fix ref still builds and boots via
   `npm run stepstitch:app` / `STEPSTITCH_APP_CMD`. When it does not, the workflow records
   nothing rather than guessing — correct, but it means old traces can be unverifiable.
-- **The `verify` agent scope exists only in shared-admin-token mode.** Agent-scope
+- **Agents are unsupported under OIDC — a capability gap, not a bypass.** Agent-scope
   enforcement lives in the host middleware, which is active only when an admin token is
-  configured. OIDC deployments post verdicts with an OIDC admin identity instead.
+  configured. Under OIDC there is no middleware and no `/admin/agents` routes, and a
+  stored, unrevoked `ssa_` token is refused (401) on every route — proven by
+  `test_oidc_agent_access.py`, which fails if any future change lets an agent token
+  through. OIDC deployments post verdicts with an OIDC admin identity instead.
 
 ## Definition of 100%
 
