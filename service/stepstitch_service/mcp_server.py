@@ -317,27 +317,61 @@ def serve_stdio(call_route: CallRouteFn, *, server_name: str = "stepstitch") -> 
             "Install it with: pip install 'stepstitch-service[mcp]'"
         ) from exc
 
-    server: Any = Server(server_name)
+    import json
 
-    @server.list_tools()
-    async def _list_tools():
+    # SDK 2.0 renamed the field to snake_case. Ask the model which name it accepts rather
+    # than guessing from a version string.
+    _schema_field = ("input_schema"
+                     if "input_schema" in getattr(types.Tool, "model_fields", {})
+                     else "inputSchema")
+
+    def _tools() -> Any:
         return [
-            types.Tool(
-                name=d["name"],
-                description=d["description"],
-                inputSchema=d["inputSchema"],
-            )
+            types.Tool(name=d["name"], description=d["description"],
+                       **{_schema_field: d["inputSchema"]})
             for d in build_tool_definitions()
         ]
 
-    @server.call_tool()
-    async def _call_tool(name: str, arguments: Dict[str, Any]):
-        import json
-
+    async def _run_tool(name: str, arguments: Optional[Dict[str, Any]]) -> Any:
         result = await dispatch_tool(name, arguments or {}, call_route)
         return [types.TextContent(type="text", text=json.dumps(result, default=str))]
 
-    async def _run():
+    server: Any = Server(server_name)
+
+    # The SDK moved the low-level decorators off `Server` in 2.0 (they live on the
+    # high-level `MCPServer`, which infers schemas from function signatures — no use to a
+    # table of tools with explicit JSON Schema). Both generations are supported here
+    # because `mcp>=1.0` resolves to 2.x for anyone installing today, while existing
+    # deployments are on 1.x. test_mcp_stdio.py speaks real MCP against whichever is
+    # installed, which is how this difference was found at all.
+    if hasattr(server, "list_tools"):
+        # --- SDK 1.x: decorator registration -------------------------------------------
+        server.list_tools()(lambda: _tools_async())
+
+        async def _tools_async():
+            return _tools()
+
+        server.call_tool()(_run_tool)
+
+        async def _run_legacy() -> None:
+            async with stdio_server() as (read, write):
+                await server.run(read, write, server.create_initialization_options())
+
+        return _run_legacy()
+
+    # --- SDK 2.x: explicit request handlers --------------------------------------------
+    # 2.x hands the handler (context, validated_params) — in that order.
+    async def _handle_list(_context: Any, _params: Any) -> Any:
+        return types.ListToolsResult(tools=_tools())
+
+    async def _handle_call(_context: Any, params: Any) -> Any:
+        content = await _run_tool(params.name, getattr(params, "arguments", None))
+        return types.CallToolResult(content=content)
+
+    server.add_request_handler("tools/list", types.PaginatedRequestParams, _handle_list)
+    server.add_request_handler("tools/call", types.CallToolRequestParams, _handle_call)
+
+    async def _run() -> None:
         async with stdio_server() as (read, write):
             await server.run(read, write, server.create_initialization_options())
 

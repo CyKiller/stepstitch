@@ -55,7 +55,9 @@ async def _session_roundtrip():
             # Every advertised tool must carry a schema a client can render.
             for tool in tools.tools:
                 assert tool.description, f"{tool.name} has no description"
-                assert tool.inputSchema is not None, f"{tool.name} has no input schema"
+                schema = getattr(tool, "input_schema", None) or getattr(
+                    tool, "inputSchema", None)     # the SDK renamed this in 2.0
+                assert schema is not None, f"{tool.name} has no input schema"
             result = await session.call_tool(
                 "get_agent_packet", {"trace_id": "t-1"})
             text = "".join(
