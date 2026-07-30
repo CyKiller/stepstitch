@@ -1158,11 +1158,13 @@ DASHBOARD_HTML = r"""<!doctype html>
         return "// app/providers.tsx — client component\n" +
           "\"use client\";\n" +
           "import { StepStitchTracker } from \"@stepstitch/tracker\";\n\n" +
+          "import { StepStitchTracker, mountReporter } from \"@stepstitch/tracker\";\n\n" +
           "const tracker = new StepStitchTracker({\n" +
           "  ingestEndpoint: \"/api/stepstitch\",   // your route, below\n" +
           "  appId: \"my-app\",\n" +
           "});\n" +
-          "tracker.grantConsent(\"v1\");            // capture is OFF until this call\n\n" +
+          "tracker.grantConsent(\"v1\");            // capture is OFF until this call\n" +
+          "mountReporter({ tracker });            // the \"Report a problem\" control\n\n" +
           "// app/api/stepstitch/route.ts — the token stays on the server\n" +
           "export async function POST(req: Request) {\n" +
           "  return fetch(\"" + origin + "/api/stepstitch/v1/session\", {\n" +

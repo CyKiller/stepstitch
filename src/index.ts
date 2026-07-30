@@ -1,5 +1,6 @@
 export { StepStitchTracker, SDK_VERSION } from "./tracker.js"
 export { BUILD_HASH } from "./buildinfo.js"
+export { mountReporter } from "./reporter.js"
 export {
   buildSelector,
   routeTemplate,
@@ -16,3 +17,4 @@ export type {
   StepStitchConfig,
   SubmitResult,
 } from "./types.js"
+export type { ReporterOptions, ReporterHandle } from "./reporter.js"
