@@ -56,8 +56,26 @@ _RULES: Tuple[Tuple[str, str, frozenset], ...] = (
     ("GET", rf"^{_PFX}/session/[^/]+/privacy-posture$", _from_tier("summaries")),
     ("GET", rf"^{_PFX}/session/[^/]+/diagnostic-summary$", _from_tier("summaries")),
     ("GET", rf"^{_PFX}/correlation/[^/]+/summary$", _from_tier("summaries")),
+    # Structural reads that carry no reproduction code: a fix reference matched by shape,
+    # and the signed evidence bundle. Both are already-sanitized composites of summary-tier
+    # facts, so they sit with the summaries.
+    ("GET", rf"^{_PFX}/session/[^/]+/similar-fixes$", _from_tier("summaries")),
+    ("GET", rf"^{_PFX}/session/[^/]+/attestation$", _from_tier("summaries")),
     # CI needs the reproduction it is about to run, so 'verify' joins the repro readers.
     ("GET", rf"^{_PFX}/session/[^/]+/playwright$", _from_tier("repros", "verify")),
+    # These describe or reduce the reproduction itself — fragility scores its selectors,
+    # minimal-repro returns a shorter version of the test — so they are repro-tier, not
+    # summary-tier. CI is not on them: it runs the frozen script it was given, and has no
+    # business fetching a different, shorter one.
+    ("GET", rf"^{_PFX}/session/[^/]+/fragility$", _from_tier("repros")),
+    ("GET", rf"^{_PFX}/session/[^/]+/minimal-repro$", _from_tier("repros")),
+    # The Safe Agent Packet composes summary + score + posture + the compiled reproduction
+    # into one call. It is exactly repro-tier because it CONTAINS the reproduction —
+    # granting it below that tier would let a summaries-only agent read repro code through
+    # the side door. This is the tool a coding agent actually uses; before it had a rule,
+    # `scope_allows` default-denied it and the only credential that worked was the admin
+    # token, which defeated the entire point of scoped agents.
+    ("GET", rf"^{_PFX}/session/[^/]+/agent-packet$", _from_tier("repros")),
     ("POST", rf"^{_PFX}/session/[^/]+/export-preview$", _from_tier("drafts")),
     ("POST", rf"^{_PFX}/session/[^/]+/financial-services-export-preview$", _from_tier("drafts")),
     # Writing a verdict is exclusive to 'verify' — no read tier can record evidence.

@@ -152,6 +152,117 @@ def _reproduce_command(args: Any) -> int:
     return 0 if result.verdict in ("reproduced", "not_reproduced") else 1
 
 
+def _connect_command(args: Any) -> int:
+    """Wire an installed coding agent to this StepStitch, with least privilege.
+
+    Registration goes through the agent's OWN ``mcp add`` command, which knows its config
+    format and preserves anything already configured — hand-writing another vendor's TOML
+    is how you clobber somebody's unrelated MCP server.
+    """
+    from stepstitch_service.connect import (
+        AGENT_SCOPE,
+        apply,
+        detect,
+        plan,
+        render_plan,
+        token_path,
+        verify,
+        write_token,
+    )
+
+    host = args.host.rstrip("/")
+    platforms = detect(args.agent)
+    if not platforms:
+        wanted = args.agent or "claude, codex or gemini"
+        print(f"No supported coding agent found on PATH ({wanted}).\n"
+              "Install one, or see docs/connect-an-agent.md to configure it by hand.")
+        return 1
+
+    base_url = f"{host}/api/stepstitch/v1"
+    if args.dry_run:
+        print("\nWould connect:\n")
+        for platform in platforms:
+            print(render_plan(plan(platform, base_url, token_path("<agent-id>"))))
+        return 0
+
+    # The admin token is needed to REGISTER an agent. `stepstitch start` already owns it,
+    # which is why `start --connect` is the smoother path — nobody has to paste anything.
+    admin = os.environ.get("STEPSTITCH_ADMIN_TOKEN")
+    if not admin:
+        print("STEPSTITCH_ADMIN_TOKEN is not set, so a scoped agent token cannot be "
+              "issued.\nEasiest path: `stepstitch start --connect "
+              f"{args.agent or 'claude'}` — that process already holds the credential.")
+        return 1
+
+    status, payload = _http(f"{host}/admin/agents", "POST",
+                            {"Authorization": f"Bearer {admin}",
+                             "Content-Type": "application/json"},
+                            json.dumps({"name": f"{platforms[0].key}-local",
+                                        "scope": AGENT_SCOPE}).encode())
+    if status != 200 or not isinstance(payload, dict) or not payload.get("token"):
+        print(f"Could not register an agent with {host} (HTTP {status or 'no response'}). "
+              "Is `stepstitch start` running?")
+        return 1
+
+    # Shown once by the host, then ours to store safely. It never touches a config file.
+    # The register endpoint returns the agent under "id" (see host.post /admin/agents).
+    # Naming the file after it is what makes revocation obvious later — every agent gets
+    # its own file rather than all of them sharing one.
+    token_file = write_token(str(payload.get("id") or payload.get("agent_id") or "agent"),
+                             payload["token"])
+
+    failures = 0
+    for platform in platforms:
+        result = apply(platform, base_url, token_file)
+        if not result["ok"]:
+            print(f"  could not connect {platform.label}: {result['detail']}")
+            failures += 1
+            continue
+        # Registered is not the same as working. The vendor command can write a perfect
+        # config that launches an engine which cannot start — which is exactly what
+        # happens when the pinned version predates `stepstitch mcp`.
+        if verify([platform.executable, "mcp", "list"]):
+            print(f"  {platform.label}: connected ({result['config']})")
+        else:
+            failures += 1
+            print(f"  {platform.label}: registered in {result['config']}, but it does "
+                  f"not start.\n"
+                  f"    Check with `{platform.executable} mcp list`. The usual cause is "
+                  f"an engine\n"
+                  f"    without the `stepstitch mcp` entry point — it needs a version "
+                  f"that ships it.")
+
+    if failures:
+        return 1
+    print(f"\nScope: {AGENT_SCOPE} — the agent can read the failure and the "
+          "reproduction,\nand cannot record the verdict on its own fix.")
+    print(f"Token: {token_file} (owner-only; delete it or revoke in the dashboard)")
+    return 0
+
+
+def _mcp_command(args: Any) -> int:
+    """Serve the MCP tools over stdio.
+
+    A public entry point on purpose: the portable launch command becomes
+    ``uvx --from 'stepstitch-service[mcp]==X' stepstitch mcp`` rather than an incantation
+    naming an internal module, which is both nicer to read in an agent's config file and
+    something we can keep working across refactors.
+    """
+    import asyncio
+
+    from stepstitch_service.mcp_cli import _build_http_call_route, read_token
+    from stepstitch_service.mcp_server import serve_stdio
+
+    base_url = args.base_url or os.environ.get("STEPSTITCH_BASE_URL")
+    if not base_url:
+        print("STEPSTITCH_BASE_URL is required (the service mount, including "
+              "/api/stepstitch/v1). Run `stepstitch connect <agent>` to write a config "
+              "that sets it.", file=sys.stderr)
+        return 2
+    asyncio.run(serve_stdio(_build_http_call_route(base_url, read_token())))
+    return 0
+
+
 def _tool_version(argv: List[str]) -> Optional[str]:
     """First line of ``argv --version``, or None if the tool is absent or unhappy.
 
@@ -453,6 +564,31 @@ def main(argv: Optional[List[str]] = None) -> int:
     reproduce.add_argument("--json", action="store_true", dest="as_json",
                            help="emit machine-readable results")
 
+    connect = sub.add_parser(
+        "connect",
+        help="connect a coding agent (claude, codex, gemini) to a running StepStitch",
+        description="Register StepStitch's MCP tools with an installed coding agent, "
+                    "using that agent's own `mcp add` command. Issues a least-privilege "
+                    "token stored outside the agent's config, and checks the connection.",
+    )
+    connect.add_argument("agent", nargs="?", default=None,
+                         choices=["claude", "codex", "gemini"],
+                         help="which agent (default: every one that is installed)")
+    connect.add_argument("--host", default=os.environ.get("STEPSTITCH_HOST", DEFAULT_HOST),
+                         help=f"the running StepStitch host (default {DEFAULT_HOST})")
+    connect.add_argument("--dry-run", action="store_true", dest="dry_run",
+                         help="print exactly what would be done, and do nothing")
+
+    mcp = sub.add_parser(
+        "mcp",
+        help="serve the StepStitch MCP tools over stdio (an agent client launches this)",
+        description="Speak MCP over stdio so any agent client can use StepStitch's "
+                    "read-only/draft tools. Started by the agent, not by you — "
+                    "`stepstitch connect <agent>` writes the config that runs it.",
+    )
+    mcp.add_argument("--base-url", default=None,
+                     help="service mount incl. prefix (default: STEPSTITCH_BASE_URL)")
+
     start = sub.add_parser(
         "start",
         help="run StepStitch Local: dashboard + SQLite store on 127.0.0.1, no setup",
@@ -468,6 +604,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                        help="do not open the dashboard in a browser")
 
     args = parser.parse_args(argv)
+    if args.command == "connect":
+        return _connect_command(args)
+    if args.command == "mcp":
+        return _mcp_command(args)
     if args.command == "reproduce":
         return _reproduce_command(args)
     if args.command == "start":

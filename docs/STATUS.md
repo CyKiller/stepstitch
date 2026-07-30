@@ -12,8 +12,8 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **518** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **175** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Service (compiler, router, privacy, connectors) | **536** | `PYTHONPATH=service pytest service/tests/` |
+| Host (auth, dashboard, real Postgres) | **194** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **31** | `npx vitest run` |
 | Web (marketing site + copy claims) | **59** | `cd web && npx vitest run` |
 
@@ -72,6 +72,9 @@ the browser sent).
 | Four signals parsed from the Playwright trace (failure stack, console errors only, failed requests with templated paths, failure snapshot) | `diagnostics.py` `parse_trace` | `test_diagnostics.py` |
 | Planted credentials and raw ids never reach a diagnostics record | `diagnostics.py` `scrub_diagnostics` + compiler templating | `test_diagnostics.py` (uses the real redactor) |
 | Diagnostics survive the runner's scratch-dir cleanup, with both digests | `host.py` `_store_diagnostics`, migration 0008 | `test_diagnostics_persistence.py` |
+| Every MCP tool is reachable by a scoped token, or an explicit documented exclusion | `host/agents.py` `_RULES` | `test_agent_scope_parity.py` |
+| A coding agent reads the failure and the reproduction, and can never record a verdict | `host/agents.py`, `connect.py` `AGENT_SCOPE` | `test_agent_scope_parity.py`, `test_connect.py` |
+| `stepstitch connect` registers via each vendor's own `mcp add`; token in an owner-only file, never in a config or argv | `connect.py`, `cli.py` | `test_connect.py` (verified live with Claude Code) |
 | End-to-end golden path | (all of the above) | `test_golden_path.py` |
 
 ### Host, governance and operations
