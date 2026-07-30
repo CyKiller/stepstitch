@@ -12,8 +12,8 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **510** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **172** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Service (compiler, router, privacy, connectors) | **518** | `PYTHONPATH=service pytest service/tests/` |
+| Host (auth, dashboard, real Postgres) | **175** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **31** | `npx vitest run` |
 | Web (marketing site + copy claims) | **59** | `cd web && npx vitest run` |
 
@@ -68,7 +68,10 @@ the browser sent).
 | Fix Memory advises from measured evidence only | `router.py` similar-fixes | `test_similar_fixes.py` |
 | Deep diagnostics come from the SYNTHETIC reproduction, never the reported session (provenance stamped, bounded, scrubbed) | `stepstitch_service/diagnostics.py` | `test_diagnostics.py` |
 | Execution envelope frozen with the script — a run under a different browser/timeout/base URL is refused | `diagnostics.py` `check_envelope`, `runner.py` | `test_diagnostics.py`, `test_runner.py` |
-| Diagnostics do not change what they measure (same verdict, hash and failure fingerprint on/off) | `runner.py` config-side tracing | `test_runner.py`, verified against real Chromium |
+| Diagnostics do not change what they measure (same verdict, hash and failure fingerprint on/off) | `runner.py` config-side tracing | `test_runner.py`, `scripts/prove-diagnostics-are-inert.mjs` (real Chromium, CI) |
+| Four signals parsed from the Playwright trace (failure stack, console errors only, failed requests with templated paths, failure snapshot) | `diagnostics.py` `parse_trace` | `test_diagnostics.py` |
+| Planted credentials and raw ids never reach a diagnostics record | `diagnostics.py` `scrub_diagnostics` + compiler templating | `test_diagnostics.py` (uses the real redactor) |
+| Diagnostics survive the runner's scratch-dir cleanup, with both digests | `host.py` `_store_diagnostics`, migration 0008 | `test_diagnostics_persistence.py` |
 | End-to-end golden path | (all of the above) | `test_golden_path.py` |
 
 ### Host, governance and operations

@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
 from stepstitch_service.compiler import DEFAULT_BASE_URL
+from stepstitch_service.diagnostics import SOURCE_SYNTHETIC
 from stepstitch_service.profiles import load_profile
 from stepstitch_service.repro_config import ReproConfig, ReproConfigError, readiness
 from stepstitch_service.scrubber import (
@@ -415,6 +416,31 @@ def build_app(
             payload["status"] = "ok"
             return payload
 
+        async def _store_diagnostics(trace_id: str, result: Any) -> None:
+            """Persist what the synthetic run revealed, if anything.
+
+            The runner deletes its scratch directory when a run ends, so this is the only
+            place the record survives. Diagnostics are the extra, never the product: a
+            failure to store them must not disturb a verdict that was correctly measured.
+            """
+            record = getattr(result, "diagnostics", None)
+            if not record:
+                return
+            try:
+                await execute(
+                    "INSERT INTO stepstitch_diagnostics (id, trace_id, run_id, source, "
+                    "schema_version, script_sha256, execution_envelope_sha256, "
+                    "diagnostics_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (str(uuid.uuid4()), trace_id, str(uuid.uuid4()),
+                     record.get("source", SOURCE_SYNTHETIC),
+                     int(record.get("schema_version", 1)),
+                     result.script_sha256, result.execution_envelope_sha256,
+                     json.dumps(record), datetime.now(timezone.utc)),
+                )
+            except Exception:
+                logger.warning("stepstitch: could not store reproduction diagnostics",
+                               exc_info=True)
+
         # --- The agent loop: freeze, hand off, then judge with the frozen bytes ---------
         @app.post("/admin/session/{trace_id}/freeze")
         async def freeze_reproduction(trace_id: str, req: ReproduceRequest,
@@ -443,6 +469,9 @@ def build_app(
                     run_reproduction,
                     session_id=trace_id, script=script, base_url=app_url,
                     readiness=items, runs=req.runs, timeout_seconds=req.timeout_seconds,
+                    # The red run is where the failure is actually present, so it is the
+                    # run worth inspecting deeply — a green run has nothing to diagnose.
+                    diagnostics=True,
                 )
             except RunnerError as exc:
                 return {"status": "refused", "detail": str(exc)}
@@ -453,6 +482,8 @@ def build_app(
                     signature = failure_signature(attempt.transcript)
                     if signature:
                         break
+
+            await _store_diagnostics(trace_id, red)
 
             digest = hashlib.sha256(script.encode("utf-8")).hexdigest()
             now = datetime.now(timezone.utc)

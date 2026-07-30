@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -33,7 +34,15 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 from urllib.parse import urlparse
 
-from .diagnostics import ExecutionEnvelope, check_envelope
+from .diagnostics import (
+    Diagnostics,
+    ExecutionEnvelope,
+    check_envelope,
+    parse_trace,
+    scrub_diagnostics,
+)
+
+logger = logging.getLogger("stepstitch.runner")
 
 # --- verdicts (the four honest answers) ---------------------------------------------------
 REPRODUCED = "reproduced"
@@ -95,6 +104,26 @@ def _browser_build() -> str:
     if proc.returncode != 0:
         return "unknown"
     return (proc.stdout or "").strip()[:60] or "unknown"
+
+
+def _collect_diagnostics(artifacts_dir: Path) -> Optional["Diagnostics"]:
+    """Find the trace Playwright kept and read the four signals out of it.
+
+    Returns None rather than raising when there is nothing to read: a passing run keeps no
+    trace (``retain-on-failure``), and a diagnostics failure must never turn a good verdict
+    into an error. The verdict is the product; diagnostics are the extra.
+    """
+    try:
+        traces = sorted(artifacts_dir.rglob("trace.zip"))
+    except OSError:
+        return None
+    if not traces:
+        return None
+    try:
+        return parse_trace(traces[0])
+    except Exception:
+        logger.warning("stepstitch: could not read the reproduction trace", exc_info=True)
+        return None
 
 
 def script_digest(script: str) -> str:
@@ -174,6 +203,8 @@ class ReproductionResult:
     readiness: List[Dict[str, Any]] = field(default_factory=list)
     detail: str = ""
     cancelled: bool = False
+    execution_envelope_sha256: str = ""
+    diagnostics: Optional[Dict[str, Any]] = None
 
     @property
     def blockers(self) -> List[Dict[str, Any]]:
@@ -195,6 +226,8 @@ class ReproductionResult:
             "flaky": self.flaky,
             "cancelled": self.cancelled,
             "detail": self.detail,
+            "execution_envelope_sha256": self.execution_envelope_sha256,
+            "diagnostics": self.diagnostics,
             "advisories": self.advisories,
             "runs": [
                 {
@@ -270,7 +303,8 @@ def classify_run(exit_code: Optional[int], output: str) -> tuple[bool, bool, str
 
 
 def _playwright_config(tests_dir: Path, base_url: str, timeout_ms: int,
-                       screenshots: bool, diagnostics: bool = False) -> str:
+                       screenshots: bool, diagnostics: bool = False,
+                       output_dir: Optional[Path] = None) -> str:
     """A minimal config. Values are JSON-encoded, never string-concatenated into code.
 
     ``diagnostics`` turns on Playwright TRACING, which is how deep evidence is collected:
@@ -287,10 +321,17 @@ def _playwright_config(tests_dir: Path, base_url: str, timeout_ms: int,
         # Retained on failure only: a passing run has nothing to diagnose, and traces are
         # large. The file stays local and short-lived; it is never exposed over MCP.
         use["trace"] = "retain-on-failure"
+    # Artifacts belong in the runner's own scratch dir. Playwright's default outputDir is
+    # relative to the config's rootDir, and because the runner must run from the project
+    # (so Node can resolve @playwright/test), that default writes trace.zip and
+    # screenshots into the DEVELOPER'S repository — surprising, and outside the lifecycle
+    # the runner manages.
+    out = output_dir or (tests_dir.parent / "artifacts")
     return (
         'import { defineConfig } from "@playwright/test"\n'
         "export default defineConfig({\n"
         f"  testDir: {json.dumps(str(tests_dir))},\n"
+        f"  outputDir: {json.dumps(str(out))},\n"
         f"  timeout: {int(timeout_ms)},\n"
         "  retries: 0,\n"
         "  workers: 1,\n"
@@ -367,8 +408,9 @@ def run_reproduction(
     spec_path = tests_dir / "repro.spec.ts"
     spec_path.write_text(script, encoding="utf-8")
     config_path = work / "repro.config.ts"
+    artifacts_dir = work / "artifacts"
     config_text = _playwright_config(tests_dir, base_url, timeout * 1000, screenshots,
-                                     diagnostics=diagnostics)
+                                     diagnostics=diagnostics, output_dir=artifacts_dir)
     config_path.write_text(config_text, encoding="utf-8")
 
     # HOW this run is configured, hashed alongside the script. A verification whose
@@ -396,6 +438,7 @@ def run_reproduction(
 
     attempts: List[RunAttempt] = []
     cancelled = False
+    diagnostics_record: Optional[Dict[str, Any]] = None
     try:
         for index in range(run_count):
             if should_cancel and should_cancel():
@@ -435,16 +478,28 @@ def run_reproduction(
                 errored=errored,
                 error_detail=scrub_transcript(error_detail),
             ))
+        # Read the trace BEFORE the scratch dir goes away. The record is scrubbed here
+        # and persisted by the caller; the raw trace never outlives this block, and is
+        # never exposed over MCP.
+        if diagnostics:
+            collected = _collect_diagnostics(artifacts_dir)
+            if collected is not None:
+                collected.browser = envelope.browser
+                collected.stepstitch_version = RUNNER_VERSION
+                diagnostics_record = scrub_diagnostics(collected.as_dict(),
+                                                       scrub_transcript)
     finally:
         if not screenshots:
             shutil.rmtree(work, ignore_errors=True)
 
     verdict, flaky = derive_verdict(attempts)
+    envelope_sha = envelope.sha256()
     if cancelled:
         verdict, flaky = INCONCLUSIVE, flaky
     result = ReproductionResult(
         verdict=verdict, session_id=session_id, script_sha256=digest,
         runs=attempts, flaky=flaky, readiness=readiness, cancelled=cancelled,
+        execution_envelope_sha256=envelope_sha, diagnostics=diagnostics_record,
     )
     result.detail = _explain(result)
     return result
