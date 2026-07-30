@@ -8,9 +8,28 @@
       "extra-files": [
         "src/tracker.ts",
         "service/pyproject.toml",
-        "service/server.json",
         "web/src/lib/version.ts",
-        "docs/STATUS.md"
+        "docs/STATUS.md",
+        {
+          "type": "json",
+          "path": "service/server.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "service/server.json",
+          "jsonpath": "$.packages[0].version"
+        },
+        {
+          "type": "json",
+          "path": "packages/cli-shim/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "packages/cli-shim/package.json",
+          "jsonpath": "$.stepstitch.serviceVersion"
+        }
       ]
     }
   }

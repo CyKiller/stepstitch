@@ -60,6 +60,24 @@ jobs:
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish the launcher shim to npm (provenance)
+        if: steps.tok.outputs.has == 'true'
+        # The package `npx stepstitch start` actually installs. It sat unpublished
+        # through 0.9.0's first dispatch — the first-run CI gate exercises a local
+        # `npm pack` of it, so nothing ever noticed the registry 404 until a
+        # stranger-verification ran against the real registry. Same idempotent
+        # guard as the tracker: re-running a tag must not hard-fail.
+        working-directory: packages/cli-shim
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if npm view "stepstitch@${VERSION}" version >/dev/null 2>&1; then
+            echo "npm: stepstitch@${VERSION} already published — skipping."
+          else
+            npm publish --provenance --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Attach SBOM + SRI to the GitHub release
         run: gh release upload "${GITHUB_REF_NAME}" sbom.cdx.json dist/index.js.sri --clobber
         env:
@@ -85,6 +103,53 @@ jobs:
           password: ${{ secrets.PYPI_API_TOKEN }}
           packages-dir: dist
           skip-existing: true
+
+  installable:
+    name: a stranger can install what we just published
+    needs: [npm, pypi]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      # Deliberately NO checkout: this job impersonates a stranger with an empty
+      # machine. The first-run gate exercises a local `npm pack` of the shim, which is
+      # how `stepstitch` sat unpublished on the registry through a whole release while
+      # every check stayed green. Only an install from the real registry proves the
+      # thing a launch actually claims.
+      - name: The launcher exists on npm
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          for i in $(seq 1 20); do
+            npm view "stepstitch@${VERSION}" version && exit 0
+            echo "not visible yet, retry $i"; sleep 30
+          done
+          echo "stepstitch@${VERSION} never appeared on the registry"; exit 1
+      - name: The engine installs from PyPI and answers
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          pip install -q uv
+          for i in $(seq 1 20); do
+            uvx --from "stepstitch-service==${VERSION}" stepstitch --help && exit 0
+            echo "not visible yet, retry $i"; sleep 30
+          done
+          exit 1
+      - name: npx stepstitch start serves a stranger
+        env:
+          STEPSTITCH_ADMIN_TOKEN: stranger-admin
+          STEPSTITCH_INGEST_TOKEN: stranger-ingest
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          npx -y "stepstitch@${VERSION}" start --no-browser --port 8471 --db /tmp/s.db &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8471/healthz && exit 0
+            sleep 2
+          done
+          echo "never became healthy"; exit 1
 
   docker:
     name: build + push images (GHCR, multi-arch)

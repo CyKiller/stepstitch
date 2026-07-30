@@ -18,9 +18,10 @@
  * overrides the pinned version, and STEPSTITCH_SERVICE_SPEC overrides the whole
  * `--from` spec (e.g. `./service` in CI, to test unreleased engines).
  *
- * NOTE: PyPI's stepstitch-service 0.8.0 predates the `stepstitch` console script
- * ([project.scripts] landed after the v0.8.0 tag), so the pinned version stays at the
- * first release that ships it once published; until then CI uses the spec override.
+ * The pin follows the release train: release-please rewrites both this package's
+ * version and `stepstitch.serviceVersion` on every release, so the shim on npm and the
+ * engine on PyPI always move together. (0.9.0 was the first engine release to ship the
+ * `stepstitch` console script; nothing before it is launchable this way.)
  */
 'use strict';
 
