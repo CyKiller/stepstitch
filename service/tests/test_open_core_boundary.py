@@ -134,3 +134,22 @@ def test_router_serves_reads_with_zero_adapters():
     # Export preview succeeds but yields no drafts (no commercial adapters configured).
     drafts = client.post(f"{pfx}/session/{tid}/export-preview").json()["drafts"]
     assert drafts == {}, f"expected empty drafts without adapters, got {json.dumps(drafts)}"
+
+
+def test_the_package_declares_itself_typed():
+    """PEP 561: without this marker an installed stepstitch_service is Any to mypy — the
+    repo's own `mypy server` reads the INSTALLED package, so the shims at server/ would
+    resolve to nothing and every re-exported name would be an attr-defined error. It is
+    also what consumers need to get types at all."""
+    import pathlib
+
+    import stepstitch_service
+
+    marker = pathlib.Path(stepstitch_service.__file__).parent / "py.typed"
+    assert marker.exists(), "service/stepstitch_service/py.typed is missing"
+
+    pyproject = (pathlib.Path(__file__).resolve().parents[1] / "pyproject.toml").read_text()
+    assert '"stepstitch_service" = ["py.typed"]' in pyproject, (
+        "py.typed exists but is not in [tool.setuptools.package-data], so it would not "
+        "ship in the wheel"
+    )
