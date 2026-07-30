@@ -12,7 +12,7 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **433** | `PYTHONPATH=service pytest service/tests/` |
+| Service (compiler, router, privacy, connectors) | **460** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **150** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **31** | `npx vitest run` |
 | Web (marketing site + copy claims) | **59** | `cd web && npx vitest run` |
@@ -60,6 +60,7 @@ the browser sent).
 | Public demo console — real UI, synthetic data, no credentials, read-only | `stepstitch_service/host/demo.py`, `scripts/build_demo_dataset.py` | `test_demo_app.py`, CI job `demo-console` (13 browser tests) |
 | Deep-linkable failures (`#/shape/…`) | `stepstitch_service/host/dashboard.py` | `test_host.py`, `dashboard-demo.spec.ts` |
 | Site's advertised MCP tool list matches the server | `web/src/lib/mcp-tools.ts` | `test_mcp_site_parity.py` |
+| Local reproduction runner (frozen script, env allowlist, timeout, cancel, address allowlist) | `stepstitch_service/runner.py` | `test_runner.py`, `scripts/prove-runner-executes.mjs` (real Chromium, red-to-green) |
 | End-to-end golden path | (all of the above) | `test_golden_path.py` |
 
 ### Host, governance and operations

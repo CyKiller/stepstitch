@@ -25,6 +25,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .stepstitch-proof/
+.stepstitch-runner-proof/
+# `stepstitch start` local store + the runner's in-project scratch dirs
+.stepstitch/
 test-results/
 playwright-report/
 
