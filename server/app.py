@@ -56,7 +56,11 @@ class _PoolProxy:
 def create_app_from_env():
     require_env(dict(os.environ))
     if (os.environ.get("STEPSTITCH_MODE") or "").strip().lower() == "local":
-        return _create_local_app_from_env()
+        # StepStitch Local lives in the package (stepstitch start works from PyPI);
+        # this entrypoint honors the same env switch for parity.
+        from stepstitch_service.host.local import create_local_app_from_env
+
+        return create_local_app_from_env()
     database_url = os.environ["DATABASE_URL"]
     ingest_token = os.environ["STEPSTITCH_INGEST_TOKEN"]
     profile = os.environ.get("STEPSTITCH_PROFILE", "financial-services-enterprise")
@@ -161,73 +165,6 @@ def create_app_from_env():
         from .demo import build_demo_app
         stepstitch_app.mount("/demo", build_demo_app())
 
-    return stepstitch_app
-
-
-def _create_local_app_from_env():
-    """StepStitch Local: SQLite storage, generated credentials, no Postgres/Alembic.
-
-    The storage seam is identical to production (three async callables, ``?``
-    placeholders); only the implementation behind it changes — see ``server/localdb.py``.
-    Tokens may be pre-set by the entrypoint (``stepstitch start`` surfaces them) or are
-    generated here so a bare local app never starts unauthenticated. Generated values are
-    exposed on ``app.state`` for the local entrypoint, never logged.
-    """
-    import secrets
-
-    from .localdb import build_local_db_callables, connect_local, local_path_from_dsn
-
-    dsn = os.environ.get("DATABASE_URL", "sqlite:///.stepstitch/local.db")
-    db_path = local_path_from_dsn(dsn)
-    ingest_token = os.environ.get("STEPSTITCH_INGEST_TOKEN") or secrets.token_urlsafe(24)
-    admin_token = os.environ.get("STEPSTITCH_ADMIN_TOKEN") or secrets.token_urlsafe(24)
-    profile = os.environ.get("STEPSTITCH_PROFILE", "open-source-default")
-    base_url = os.environ.get("STEPSTITCH_APP_BASE_URL")
-    retention_days = int(os.environ.get("RETENTION_DAYS", "30"))
-
-    conn = connect_local(db_path)
-    execute, fetchone, fetchall = build_local_db_callables(conn)
-    get_user_id, require_admin = build_auth(admin_token, ingest_token)
-    audit = make_db_audit(execute)
-    purge_interval = purge_interval_from_env()
-
-    @asynccontextmanager
-    async def lifespan(app):
-        purge_task = None
-        if purge_interval > 0:
-            purge_task = asyncio.create_task(
-                run_purge_loop(execute=execute, fetchone=fetchone,
-                               interval_seconds=purge_interval)
-            )
-        try:
-            yield
-        finally:
-            if purge_task is not None:
-                purge_task.cancel()
-                try:
-                    await purge_task
-                except asyncio.CancelledError:
-                    pass
-            conn.close()
-
-    stepstitch_app = build_app(
-        get_user_id=get_user_id,
-        require_admin=require_admin,
-        execute=execute,
-        fetchone=fetchone,
-        fetchall=fetchall,
-        profile=profile,
-        retention_days=retention_days,
-        audit=audit,
-        lifespan=lifespan,
-        admin_token=admin_token,
-        ingest_token=ingest_token,
-        base_url=base_url,
-    )
-    # For the local entrypoint (Phase 1's `stepstitch start`) to surface — not logged.
-    stepstitch_app.state.local_admin_token = admin_token
-    stepstitch_app.state.local_ingest_token = ingest_token
-    stepstitch_app.state.local_db_path = str(db_path)
     return stepstitch_app
 
 
