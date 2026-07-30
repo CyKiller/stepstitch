@@ -119,7 +119,7 @@ jobs:
     name: a stranger can install what we just published
     needs: [npm, pypi]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4
         with:
@@ -127,43 +127,62 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
-      # Deliberately NO checkout: this job impersonates a stranger with an empty
-      # machine. The first-run gate exercises a local `npm pack` of the shim, which is
-      # how `stepstitch` sat unpublished on the registry through a whole release while
-      # every check stayed green. Only an install from the real registry proves the
-      # thing a launch actually claims.
-      - name: The launcher exists on npm
+      # Deliberately NO checkout: this job impersonates a stranger with an empty machine.
+      # The first-run gate exercises a local `npm pack` of the shim, which is how
+      # `stepstitch` sat unpublished on the registry through a whole release with every
+      # check green. Only an install from the real registry proves what a launch claims.
+      #
+      # Propagation, not correctness, is what makes this job flaky: a package is live at
+      # the registry API minutes before every CDN edge and every client cache agrees. So
+      # each wait polls the registry's HTTP API (authoritative, uncacheable by us) and only
+      # then runs the real client with its caches disabled. Getting this wrong once already
+      # failed a release whose artifacts were perfectly fine, which is worse than useless —
+      # a check that cries wolf is a check people learn to skip.
+      - name: Wait for both registries to serve the new version
         run: |
           RAW="${{ inputs.version || github.ref_name }}"
           VERSION="${RAW#v}"
-          for i in $(seq 1 20); do
-            npm view "stepstitch@${VERSION}" version && exit 0
-            echo "not visible yet, retry $i"; sleep 30
-          done
-          echo "stepstitch@${VERSION} never appeared on the registry"; exit 1
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          wait_for () {   # $1 human name, $2 url, $3 jq-ish grep for the version
+            for i in $(seq 1 60); do
+              if curl -fsSL "$2" | grep -q "\"$VERSION\""; then
+                echo "$1 is serving ${VERSION} (after $((i*10))s)"; return 0
+              fi
+              sleep 10
+            done
+            echo "::error::$1 never served ${VERSION} within 10 minutes"; return 1
+          }
+          wait_for "npm (stepstitch)" \
+            "https://registry.npmjs.org/stepstitch" "$VERSION"
+          wait_for "PyPI (stepstitch-service)" \
+            "https://pypi.org/pypi/stepstitch-service/json" "$VERSION"
       - name: The engine installs from PyPI and answers
+        # --refresh so uv consults the index rather than a warm local cache.
         run: |
-          RAW="${{ inputs.version || github.ref_name }}"
-          VERSION="${RAW#v}"
           pip install -q uv
-          for i in $(seq 1 20); do
-            uvx --from "stepstitch-service==${VERSION}" stepstitch --help && exit 0
-            echo "not visible yet, retry $i"; sleep 30
-          done
-          exit 1
+          uvx --refresh --from "stepstitch-service==${VERSION}" stepstitch --help
       - name: npx stepstitch start serves a stranger
         env:
           STEPSTITCH_ADMIN_TOKEN: stranger-admin
           STEPSTITCH_INGEST_TOKEN: stranger-ingest
         run: |
-          RAW="${{ inputs.version || github.ref_name }}"
-          VERSION="${RAW#v}"
+          npm cache clean --force || true
           npx -y "stepstitch@${VERSION}" start --no-browser --port 8471 --db /tmp/s.db &
-          for i in $(seq 1 60); do
-            curl -sf http://127.0.0.1:8471/healthz && exit 0
+          for i in $(seq 1 90); do
+            if curl -sf http://127.0.0.1:8471/healthz >/dev/null; then
+              echo "healthy after $((i*2))s"; break
+            fi
             sleep 2
           done
-          echo "never became healthy"; exit 1
+          curl -sf http://127.0.0.1:8471/healthz >/dev/null || {
+            echo "::error::npx stepstitch@${VERSION} start never became healthy"; exit 1; }
+          # Health alone only proves a process bound a port. Ingest proves the product.
+          TRACE=$(curl -s -X POST http://127.0.0.1:8471/api/stepstitch/v1/session \
+            -H "Authorization: Bearer stranger-ingest" -H "Content-Type: application/json" \
+            -d '{"app_id":"stranger","footsteps":[{"timestamp":"t","type":"exception","route":"/x","label":"[masked]","metadata":{"error_type":"TypeError"}}],"metadata":{}}' \
+            | python3 -c "import json,sys; print(json.load(sys.stdin).get('trace_id',''))")
+          test -n "$TRACE" || { echo "::error::ingest returned no trace_id"; exit 1; }
+          echo "a stranger ingested ${TRACE} on the published build"
 
   docker:
     name: build + push images (GHCR, multi-arch)
