@@ -54,6 +54,9 @@ packages = [
 ]
 
 [tool.setuptools.package-data]
+# PEP 561: the package is typed, so consumers (and the repo's own `mypy server`, which
+# reads the INSTALLED package, not this source tree) get real types instead of Any.
+"stepstitch_service" = ["py.typed"]
 # The read-only demo console's synthetic dataset ships with the host so the packaged
 # demo works from a wheel exactly as it did from the repo.
 "stepstitch_service.host" = ["demo_dataset.json"]
