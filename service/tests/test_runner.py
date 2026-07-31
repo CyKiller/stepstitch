@@ -524,3 +524,78 @@ def test_an_unreadable_browser_probe_reports_unknown_rather_than_absent(monkeypa
 
     _fake_probe(monkeypatch, stdout="something unparseable")
     assert _browser_identity().present is None
+
+
+# --- the envelope is a fingerprint, not a run id ------------------------------------------
+
+def _root(tmp_path, name):
+    """A scratch root that exists — mkdtemp will not create its parent."""
+    d = tmp_path / name
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+def test_two_comparable_runs_produce_the_same_envelope_digest(tmp_path, monkeypatch):
+    """The assertion whose absence let a run nonce ship as a fingerprint.
+
+    The envelope used to hash the rendered config text, which embeds the mkdtemp scratch
+    directory — so the digest changed on every run and could never match. The one test that
+    existed passed "0"*64 and asserted a refusal, which succeeds even if the digest is pure
+    noise. Nothing checked the direction that actually matters: two runs of the same
+    experiment must agree.
+    """
+    _fake_probe(monkeypatch)
+    monkeypatch.setattr("stepstitch_service.runner.Path.exists", lambda self: True)
+    first = _run(work_root=_root(tmp_path, "a"), project_dir=_root(tmp_path, "a"),
+                 runner=fake_runner([1]))
+    second = _run(work_root=_root(tmp_path, "b"), project_dir=_root(tmp_path, "b"),
+                  runner=fake_runner([0]))
+    assert first.execution_envelope_sha256 == second.execution_envelope_sha256
+
+
+def test_a_run_with_diagnostics_on_matches_the_envelope_frozen_with_them_off(
+        tmp_path, monkeypatch):
+    """The exact production pairing: freeze traces, verify does not.
+
+    While diagnostics_profile was hashed, this pair could never agree, so enforcing the
+    envelope would have refused every verification StepStitch ever performed.
+    """
+    _fake_probe(monkeypatch)
+    monkeypatch.setattr("stepstitch_service.runner.Path.exists", lambda self: True)
+    red = _run(work_root=_root(tmp_path, "red"), diagnostics=True, runner=fake_runner([1]))
+    green = _run(work_root=_root(tmp_path, "green"), diagnostics=False, runner=fake_runner([0]))
+    assert red.execution_envelope_sha256 == green.execution_envelope_sha256
+
+
+@pytest.mark.parametrize("change", [
+    {"base_url": "http://127.0.0.1:9999"},
+    {"timeout_seconds": 7},
+])
+def test_a_genuinely_different_experiment_still_moves_the_digest(change, tmp_path,
+                                                                 monkeypatch):
+    """Stops the fix degenerating into "hash a constant", which a same-digest test alone
+    invites. Two runs must agree; two DIFFERENT runs must not."""
+    _fake_probe(monkeypatch)
+    monkeypatch.setattr("stepstitch_service.runner.Path.exists", lambda self: True)
+    base = _run(work_root=_root(tmp_path, "base"), runner=fake_runner([1]))
+    other = _run(work_root=_root(tmp_path, "other"), runner=fake_runner([1]),
+                 allowed_addresses=[BASE, "http://127.0.0.1:9999"], **change)
+    assert base.execution_envelope_sha256 != other.execution_envelope_sha256
+
+
+def test_the_browser_build_is_part_of_the_experiment(tmp_path, monkeypatch):
+    # The reason the browser is pinned at all: an upgrade genuinely can change an outcome.
+    monkeypatch.setattr("stepstitch_service.runner.Path.exists", lambda self: True)
+    _fake_probe(monkeypatch)
+    before = _run(work_root=_root(tmp_path, "1"), runner=fake_runner([1]))
+    _fake_probe(monkeypatch, stdout=_DRY_RUN.replace("149.0.7827.55", "150.0.9000.1"))
+    after = _run(work_root=_root(tmp_path, "2"), runner=fake_runner([1]))
+    assert before.execution_envelope_sha256 != after.execution_envelope_sha256
+
+
+def test_the_scratch_directory_is_not_left_behind_when_the_envelope_is_refused(tmp_path):
+    """check_envelope used to fire after mkdtemp and outside the try/finally, so every
+    refusal leaked a scratch directory. It is now checked before anything is created."""
+    before = set(tmp_path.iterdir()) if tmp_path.exists() else set()
+    with pytest.raises(EnvelopeMismatch):
+        _run(expected_envelope_sha256="0" * 64, work_root=tmp_path)
+    assert set(tmp_path.iterdir()) == before, "a refused run created a directory"
