@@ -15,6 +15,7 @@ import pytest
 _SPEC = importlib.util.spec_from_file_location(
     "prove_migrations_replay",
     Path(__file__).resolve().parents[2] / "scripts" / "prove_migrations_replay.py")
+assert _SPEC is not None and _SPEC.loader is not None, "the script moved"
 script = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(script)
 
