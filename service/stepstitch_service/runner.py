@@ -372,10 +372,25 @@ def classify_run(exit_code: Optional[int], output: str) -> tuple[bool, bool, str
     return False, False, ""
 
 
-def _playwright_config(tests_dir: Path, base_url: str, timeout_ms: int,
-                       screenshots: bool, diagnostics: bool = False,
-                       output_dir: Optional[Path] = None) -> str:
-    """A minimal config. Values are JSON-encoded, never string-concatenated into code.
+# The scratch paths, as they appear in the CANONICAL spec. Real absolute paths are
+# substituted only when the file is rendered. See _config_spec.
+_TESTS_PLACEHOLDER = "<scratch>/tests"
+_OUT_PLACEHOLDER = "<scratch>/artifacts"
+
+
+def _config_spec(base_url: str, timeout_ms: int, screenshots: bool,
+                 diagnostics: bool = False) -> Dict[str, Any]:
+    """The reproduction's configuration as DATA, with paths as fixed placeholders.
+
+    This exists because the execution envelope has to hash something stable. It used to hash
+    the rendered config text, which embeds the ``mkdtemp`` scratch directory — so the digest
+    changed on every single run and was a run nonce wearing a fingerprint's name. Nothing
+    could ever match it, which is why the envelope check was dead code in production.
+
+    Hashing the spec rather than a hand-listed set of scalars is deliberate: a hand-listed
+    set silently stops covering the config the day someone adds a knob here and forgets to
+    add it there. This is fail-closed — a new key enters the hash automatically, and a path
+    can never leak back in because the spec never holds one.
 
     ``diagnostics`` turns on Playwright TRACING, which is how deep evidence is collected:
     the trace carries actions, DOM snapshots, console output, network activity and timings,
@@ -391,23 +406,35 @@ def _playwright_config(tests_dir: Path, base_url: str, timeout_ms: int,
         # Retained on failure only: a passing run has nothing to diagnose, and traces are
         # large. The file stays local and short-lived; it is never exposed over MCP.
         use["trace"] = "retain-on-failure"
-    # Artifacts belong in the runner's own scratch dir. Playwright's default outputDir is
-    # relative to the config's rootDir, and because the runner must run from the project
-    # (so Node can resolve @playwright/test), that default writes trace.zip and
-    # screenshots into the DEVELOPER'S repository — surprising, and outside the lifecycle
-    # the runner manages.
-    out = output_dir or (tests_dir.parent / "artifacts")
-    return (
-        'import { defineConfig } from "@playwright/test"\n'
-        "export default defineConfig({\n"
-        f"  testDir: {json.dumps(str(tests_dir))},\n"
-        f"  outputDir: {json.dumps(str(out))},\n"
-        f"  timeout: {int(timeout_ms)},\n"
-        "  retries: 0,\n"
-        "  workers: 1,\n"
-        f"  use: {json.dumps(use)},\n"
-        "})\n"
-    )
+    return {
+        # Artifacts belong in the runner's own scratch dir. Playwright's default outputDir
+        # is relative to the config's rootDir, and because the runner must run from the
+        # project (so Node can resolve @playwright/test), that default writes trace.zip and
+        # screenshots into the DEVELOPER'S repository — surprising, and outside the
+        # lifecycle the runner manages.
+        "testDir": _TESTS_PLACEHOLDER,
+        "outputDir": _OUT_PLACEHOLDER,
+        "timeout": int(timeout_ms),
+        "retries": 0,
+        "workers": 1,
+        "use": use,
+    }
+
+
+def canonical_spec(spec: Dict[str, Any]) -> str:
+    """The spec as the bytes that get hashed: sorted keys, no incidental whitespace."""
+    return json.dumps(spec, sort_keys=True, separators=(",", ":"))
+
+
+def _render_config(spec: Dict[str, Any], tests_dir: Path, output_dir: Path) -> str:
+    """Substitute the real scratch paths and emit the file. Values are JSON-encoded,
+    never string-concatenated into code."""
+    rendered = dict(spec)
+    rendered["testDir"] = str(tests_dir)
+    rendered["outputDir"] = str(output_dir)
+    body = "".join(f"  {key}: {json.dumps(value)},\n" for key, value in rendered.items())
+    return ('import { defineConfig } from "@playwright/test"\n'
+            "export default defineConfig({\n" + body + "})\n")
 
 
 def run_reproduction(
@@ -446,6 +473,36 @@ def run_reproduction(
     # Only items that make the run *wrong* stop it. An unconfigured auth fixture is not one
     # of those — plenty of flows need no session, and refusing them would be a false
     # blocker that makes "needs setup" meaningless. repro_config declares which is which.
+    run_count = max(1, min(int(runs), MAX_RUNS))
+    timeout = max(1, min(int(timeout_seconds), MAX_TIMEOUT_SECONDS))
+    execute = runner or subprocess.run
+
+    # The envelope is built BEFORE anything touches the filesystem, which is possible only
+    # because the spec no longer needs the scratch paths. Two bugs fall out of that ordering
+    # for free: a mismatch now refuses without having created a scratch directory it would
+    # then leak (check_envelope used to fire after mkdtemp and outside the try/finally), and
+    # nothing is spawned on a machine that cannot spawn it.
+    spec = _config_spec(base_url, timeout * 1000, screenshots, diagnostics=diagnostics)
+    identity = _browser_identity(headless=bool(spec["use"].get("headless", True)))
+
+    # The observers are stripped from what gets hashed, for the reason argued at length in
+    # ExecutionEnvelope.hashed_payload: red traces, green does not, and hashing that
+    # difference would refuse every verification that ever runs.
+    hashable = dict(spec)
+    hashable["use"] = {k: v for k, v in spec["use"].items()
+                       if k not in ("trace", "screenshot")}
+    envelope = ExecutionEnvelope(
+        config_canonical=canonical_spec(hashable),
+        browser=identity.build,
+        base_url=base_url,
+        timeout_ms=timeout * 1000,
+        retries=0,
+        diagnostics_profile="four-signal" if diagnostics else "off",
+        runner_version=RUNNER_VERSION,
+        env_names=sorted(_ENV_ALLOWLIST),
+    )
+    check_envelope(expected_envelope_sha256, envelope)
+
     blockers = [item for item in readiness
                 if not item.get("ready") and item.get("blocking", True)]
     if blockers:
@@ -458,10 +515,6 @@ def run_reproduction(
         )
 
     check_address_allowed(base_url, list(allowed_addresses or [base_url]))
-
-    run_count = max(1, min(int(runs), MAX_RUNS))
-    timeout = max(1, min(int(timeout_seconds), MAX_TIMEOUT_SECONDS))
-    execute = runner or subprocess.run
 
     # A fixed working directory the runner chooses; the reproduction cannot select paths.
     # It defaults to a scratch dir INSIDE the project, because Node resolves
@@ -486,25 +539,7 @@ def run_reproduction(
     spec_path.write_text(script, encoding="utf-8")
     config_path = work / "repro.config.ts"
     artifacts_dir = work / "artifacts"
-    config_text = _playwright_config(tests_dir, base_url, timeout * 1000, screenshots,
-                                     diagnostics=diagnostics, output_dir=artifacts_dir)
-    config_path.write_text(config_text, encoding="utf-8")
-
-    # HOW this run is configured, hashed alongside the script. A verification whose
-    # envelope differs is comparing two different experiments, so it is refused rather
-    # than reported — see diagnostics.check_envelope.
-    envelope = ExecutionEnvelope(
-        config=config_text,
-        # Headless is what _playwright_config writes, so it is what will actually launch.
-        browser=_browser_identity(headless=True).build,
-        base_url=base_url,
-        timeout_ms=timeout * 1000,
-        retries=0,
-        diagnostics_profile="four-signal" if diagnostics else "off",
-        runner_version=RUNNER_VERSION,
-        env_names=sorted(_ENV_ALLOWLIST),
-    )
-    check_envelope(expected_envelope_sha256, envelope)
+    config_path.write_text(_render_config(spec, tests_dir, artifacts_dir), encoding="utf-8")
 
     env = child_env(extra={"STEPSTITCH_APP_BASE_URL": base_url})
     # Fixed argv — never a shell string, and no capsule text is interpolated into it.

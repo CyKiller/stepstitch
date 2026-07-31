@@ -25,7 +25,8 @@ from stepstitch_service.diagnostics import (
 
 def _envelope(**over):
     base = dict(
-        config="export default {}", browser="chromium 141.0.7390.37",
+        config_canonical='{"retries":0,"timeout":120000,"use":{"headless":true}}',
+        browser="chromium 141.0.7390.37",
         base_url="http://127.0.0.1:4321", timeout_ms=120000, retries=0,
         diagnostics_profile="four-signal", runner_version="0.9.1",
         env_names=["PATH", "HOME"],
@@ -111,12 +112,31 @@ def test_the_same_envelope_hashes_the_same():
     ("base_url", "http://127.0.0.1:9999"),
     ("timeout_ms", 5000),
     ("retries", 2),
-    ("diagnostics_profile", "off"),
     ("runner_version", "0.9.2"),
-    ("config", "export default { different: true }"),
+    ("config_canonical", '{"retries":0,"timeout":1,"use":{"headless":true}}'),
 ])
 def test_any_change_to_how_it_runs_moves_the_hash(field, value):
     assert _envelope(**{field: value}).sha256() != _envelope().sha256()
+
+
+def test_the_observer_settings_do_not_move_the_hash():
+    """``diagnostics_profile`` used to be in this hash, and that made the envelope check
+    unenforceable: the freeze traces and the verification does not, so red and green
+    differed by construction on every fix that was ever verified. A check that always
+    refuses is indistinguishable from one that is never reached — which is where this was.
+
+    The justification is not an assumption. ``scripts/prove-diagnostics-are-inert.mjs`` is a
+    blocking CI gate that runs every failure shape twice against real Chromium, tracing off
+    and on, asserting identical verdict, frozen hash and failure fingerprint. If that gate
+    is ever deleted, this exclusion loses its basis and belongs back in the hash.
+    """
+    assert _envelope(diagnostics_profile="off").sha256() == _envelope(
+        diagnostics_profile="four-signal").sha256()
+
+
+def test_the_envelope_record_still_says_which_profile_ran():
+    # Excluded from the hash, never dropped from the record — a reader still needs to know.
+    assert _envelope(diagnostics_profile="off").as_dict()["diagnostics_profile"] == "off"
 
 
 def test_a_matching_envelope_is_allowed_through():

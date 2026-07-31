@@ -61,6 +61,13 @@ def provenance() -> Dict[str, Any]:
     }
 
 
+# Bump when the MEANING of the envelope digest changes, so old digests are refused rather
+# than silently compared against a hash computed a different way. Separate from
+# SCHEMA_VERSION on purpose: that one stamps stored diagnostics records, whose shape is
+# untouched by how the envelope happens to be hashed.
+ENVELOPE_SCHEMA_VERSION = 2
+
+
 @dataclass(frozen=True)
 class ExecutionEnvelope:
     """*How* the frozen script ran — the other half of a reproducible verdict.
@@ -69,8 +76,8 @@ class ExecutionEnvelope:
     worth pinning; the values are exactly what must never be recorded.
     """
 
-    config: str                       # the generated repro.config.ts, verbatim
-    browser: str                      # e.g. "chromium 141.0.7390.37"
+    config_canonical: str             # the config SPEC as canonical JSON, paths placeheld
+    browser: str                      # e.g. "chromium 149.0.7827.55 (playwright build 1228)"
     base_url: str                     # identity of the app under test
     timeout_ms: int
     retries: int
@@ -79,8 +86,10 @@ class ExecutionEnvelope:
     env_names: List[str] = field(default_factory=list)
 
     def as_dict(self) -> Dict[str, Any]:
+        """The full record — everything about how the run was configured, for humans and
+        for the refusal message. A superset of what is hashed."""
         return {
-            "config": self.config,
+            "config_canonical": self.config_canonical,
             "browser": self.browser,
             "base_url": self.base_url,
             "timeout_ms": self.timeout_ms,
@@ -88,12 +97,35 @@ class ExecutionEnvelope:
             "diagnostics_profile": self.diagnostics_profile,
             "runner_version": self.runner_version,
             "schema_version": SCHEMA_VERSION,
+            "envelope_schema_version": ENVELOPE_SCHEMA_VERSION,
             "env_names": sorted(self.env_names),
         }
 
+    def hashed_payload(self) -> Dict[str, Any]:
+        """The subset that decides whether two runs are the same experiment.
+
+        ``diagnostics_profile`` is deliberately EXCLUDED, and this is the one judgement
+        call in the envelope worth defending. Including it would make the check
+        unenforceable exactly where it matters: the freeze traces (that run is the one worth
+        inspecting) and the verification does not (a green run has nothing to diagnose), so
+        the two would differ by construction on every single fix that ever gets verified. A
+        check that always refuses is indistinguishable from one that is never reached.
+
+        The empirical basis for excluding it is not an assumption — it is a blocking CI
+        gate. ``scripts/prove-diagnostics-are-inert.mjs`` runs every failure shape twice
+        against real Chromium, tracing off and on, and asserts identical verdict, identical
+        frozen hash and identical failure fingerprint. If that gate is ever deleted or
+        weakened, this exclusion loses its justification and belongs back in the hash.
+        ``screenshots`` and ``use.trace`` are the same class of observer and are stripped
+        from ``config_canonical`` for the same reason.
+        """
+        record = self.as_dict()
+        record.pop("diagnostics_profile", None)
+        return record
+
     def sha256(self) -> str:
         """Canonical hash of the envelope, computed the way the attestation is."""
-        payload = json.dumps(self.as_dict(), sort_keys=True,
+        payload = json.dumps(self.hashed_payload(), sort_keys=True,
                              separators=(",", ":")).encode("utf-8")
         return hashlib.sha256(payload).hexdigest()
 
