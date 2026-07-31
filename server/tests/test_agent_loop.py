@@ -231,6 +231,32 @@ def test_the_packet_serves_the_frozen_envelope_not_the_latest_diagnostics(tmp_pa
         conn.close()
 
 
+def test_a_reproduction_that_could_not_launch_is_not_frozen(tmp_path):
+    """Freezing a run that never ran records a referee that never refereed.
+
+    The worst case this guards: browser purged, freeze called, a "red baseline" written
+    whose signature is the launch error. The session then reads ready-for-agent, and the
+    moment the browser comes back the agent is asked to fix a bug that does not exist.
+    """
+    client, conn, trace = _client(tmp_path)
+    try:
+        needs_setup = ReproductionResult(
+            verdict="needs_setup", session_id="s", script_sha256="a" * 64,
+            detail="Playwright browser: chromium is not installed. "
+                   "Run: npx playwright install chromium")
+        with patch("stepstitch_service.runner.run_reproduction",
+                   return_value=needs_setup):
+            body = client.post(f"/admin/session/{trace}/freeze", json={},
+                               headers=_admin()).json()
+        assert body["ready_for_agent"] is False
+        assert "cannot run the reproduction" in body["detail"]
+        row = conn.execute("SELECT count(*) FROM stepstitch_frozen_repros "
+                           "WHERE trace_id = ?", (trace,)).fetchone()
+        assert row == (0,), "nothing ran, so nothing may be frozen"
+    finally:
+        conn.close()
+
+
 def test_an_envelope_mismatch_is_refused_not_a_server_error(tmp_path):
     """A refusal is an answer. Presented as a 500 it reads as "StepStitch is broken".
 

@@ -510,11 +510,28 @@ def run_reproduction(
     )
     check_envelope(expected_envelope_sha256, envelope)
 
+    # An absent browser is a prerequisite, and it is knowable BEFORE running — so it is
+    # NEEDS_SETUP with the exact fix, not an INCONCLUSIVE the developer has to decode after
+    # a run that was doomed. Strictly `is False`: `None` means the probe could not answer,
+    # and refusing runs over an unanswerable question would break working machines (pnpm,
+    # Yarn PnP) to guard broken ones. This lives here, not in repro_config.readiness() —
+    # that function is pure, and a dashboard GET must not shell out.
+    readiness = list(readiness)
+    if identity.present is False:
+        readiness.append({
+            "id": "browser", "ready": False, "blocking": True,
+            "title": "Playwright browser",
+            "detail": (f"{identity.build} is not installed"
+                       f" (expected at {identity.install_location})."
+                       " Run: npx playwright install chromium"),
+        })
+
     blockers = [item for item in readiness
                 if not item.get("ready") and item.get("blocking", True)]
     if blockers:
         # Do not run a reproduction that is known to be unrunnable: the honest answer is
         # the exact missing prerequisite, not a failure the developer has to decode.
+        # No envelope digest on purpose: a digest for a run that never happened is noise.
         return ReproductionResult(
             verdict=NEEDS_SETUP, session_id=session_id, script_sha256=digest,
             readiness=readiness,

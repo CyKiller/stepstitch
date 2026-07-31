@@ -13,6 +13,7 @@ from stepstitch_service.fixcheck import (
 )
 from stepstitch_service.runner import (
     INCONCLUSIVE,
+    NEEDS_SETUP,
     NOT_REPRODUCED,
     REPRODUCED,
     ReproductionResult,
@@ -112,3 +113,17 @@ def test_two_genuinely_different_failures_do_not_collide():
 
 def test_an_empty_transcript_has_no_signature():
     assert failure_signature("") == ""
+
+
+def test_a_run_that_could_not_launch_is_unable_to_verify():
+    """The module docstring reserves `unable_to_verify` for a broken toolchain, and the
+    wording must name the machine — "no reliable answer" sends the developer hunting
+    through their application for a problem that is on their box."""
+    after = ReproductionResult(
+        verdict=NEEDS_SETUP, session_id="s", script_sha256="a" * 64,
+        detail="Playwright browser: chromium is not installed. "
+               "Run: npx playwright install chromium")
+    verdict = derive_fix_verdict(red_verdict=REPRODUCED, red_signature="sig", after=after)
+    assert verdict.verdict == UNABLE_TO_VERIFY
+    assert "this machine cannot run the reproduction" in verdict.detail
+    assert "npx playwright install chromium" in verdict.detail

@@ -476,6 +476,18 @@ def build_app(
             except (RunnerError, EnvelopeMismatch) as exc:
                 return {"status": "refused", "detail": str(exc)}
 
+            if red.verdict == "needs_setup":
+                # Nothing ran, so there is nothing to freeze. Writing this row would
+                # record a referee that never refereed — a red baseline whose "failure"
+                # is the machine — and the session would read ready-for-agent with a
+                # fabricated signature the moment the browser came back.
+                return {
+                    "status": "ok", "trace_id": trace_id,
+                    "ready_for_agent": False, "red": red.as_dict(),
+                    "detail": "this machine cannot run the reproduction, so nothing was "
+                              f"frozen: {red.detail}",
+                }
+
             signature = ""
             for attempt in red.runs:
                 if not attempt.passed and attempt.transcript:
