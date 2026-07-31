@@ -34,15 +34,21 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+# IF NOT EXISTS on both statements, because this migration is not the only writer of the
+# schema: the host CI job (and any fresh deployment) bootstraps from db.py's SCHEMA_SQL,
+# which already declares these columns, and alembic then replays history on top. Every
+# earlier migration is idempotent against that pattern via CREATE TABLE IF NOT EXISTS;
+# an ALTER without the guard was the one statement in nine migrations that could not be
+# replayed — found by CI, not by the local suite, because SQLite tests never run alembic.
 def upgrade() -> None:
     op.execute("ALTER TABLE stepstitch_frozen_repros "
-               "ADD COLUMN execution_envelope_sha256 TEXT")
+               "ADD COLUMN IF NOT EXISTS execution_envelope_sha256 TEXT")
     op.execute("ALTER TABLE stepstitch_frozen_repros "
-               "ADD COLUMN execution_envelope_json TEXT")
+               "ADD COLUMN IF NOT EXISTS execution_envelope_json TEXT")
 
 
 def downgrade() -> None:
     op.execute("ALTER TABLE stepstitch_frozen_repros "
-               "DROP COLUMN execution_envelope_sha256")
+               "DROP COLUMN IF EXISTS execution_envelope_sha256")
     op.execute("ALTER TABLE stepstitch_frozen_repros "
-               "DROP COLUMN execution_envelope_json")
+               "DROP COLUMN IF EXISTS execution_envelope_json")
