@@ -312,7 +312,11 @@ def parse_trace(trace_path: Path) -> Diagnostics:
                     last_interaction = {
                         "action": event.get("method"),
                         "target": selector,
-                        "url": (event.get("params") or {}).get("url", ""),
+                        # Templated, and named `path` like the sibling structure above: a raw
+                        # `url` here would carry the query string the failed-request branch
+                        # already refuses to carry, and would put a key named `url` in a
+                        # packet that promises it captures none.
+                        "path": _templated((event.get("params") or {}).get("url", "")),
                     }
             if last_interaction:
                 diags.failure_snapshot = last_interaction
