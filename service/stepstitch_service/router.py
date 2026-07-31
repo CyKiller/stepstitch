@@ -1206,7 +1206,18 @@ def create_stepstitch_router(
         target_user_id: str,
         admin: Any = Depends(require_destructive),
     ) -> Dict[str, Any]:
-        # Right-to-delete: remove trace bodies; the deletion itself is audit-logged.
+        # Right-to-delete: remove trace bodies AND their diagnostics. The diagnostics are
+        # keyed by trace_id with no foreign key, so without the explicit cascade this
+        # endpoint audit-logged a deletion, returned ok, and left the single richest
+        # per-trace record in the store — orphaned and unreachable by any code path, which
+        # is not deleted, only lost. Diagnostics go first, while the trace rows still
+        # exist to resolve the join.
+        try:
+            await execute(
+                "DELETE FROM stepstitch_diagnostics WHERE trace_id IN ("
+                "SELECT id FROM stepstitch_traces WHERE user_id = ?)", (target_user_id,))
+        except Exception:
+            logger.debug("stepstitch: no diagnostics table to purge", exc_info=True)
         await execute("DELETE FROM stepstitch_traces WHERE user_id = ?", (target_user_id,))
         await _audit("stepstitch.delete_by_user", _actor_id(admin),
                      {"target_user_id": target_user_id})

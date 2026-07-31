@@ -64,3 +64,35 @@ def test_purge_defaults_to_now_utc():
     asyncio.run(purge_expired_traces(execute=execute))
     after = datetime.now(timezone.utc) + timedelta(seconds=5)
     assert before <= captured["cutoff"] <= after
+
+
+def test_purge_takes_diagnostics_with_the_traces_they_belong_to():
+    """No foreign key does this. A diagnostics row that outlives its trace is unreachable
+    by every read path yet still holds the richest data in the store — not deleted, only
+    lost. Diagnostics go FIRST, while the expiring trace rows still exist to resolve the
+    join; deleting traces first would strand exactly the rows this exists to remove."""
+    order = []
+
+    async def execute(query, params=()):
+        if "stepstitch_diagnostics" in query:
+            order.append("diagnostics")
+            assert "SELECT id FROM stepstitch_traces" in query, \
+                "diagnostics are found through their expiring traces"
+        else:
+            order.append("traces")
+
+    asyncio.run(purge_expired_traces(execute=execute))
+    assert order == ["diagnostics", "traces"]
+
+
+def test_purge_survives_a_store_without_a_diagnostics_table():
+    """A pre-0008 store has no diagnostics table; the body purge must still run."""
+    ran = []
+
+    async def execute(query, params=()):
+        if "stepstitch_diagnostics" in query:
+            raise RuntimeError("no such table: stepstitch_diagnostics")
+        ran.append("traces")
+
+    asyncio.run(purge_expired_traces(execute=execute))
+    assert ran == ["traces"]
