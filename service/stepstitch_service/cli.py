@@ -302,6 +302,31 @@ def _tool_version(argv: List[str]) -> Optional[str]:
     return line[0][:60] if line else None
 
 
+def _browsers_check() -> Check:
+    """Is the browser a reproduction would actually launch present on this machine?
+
+    A separate function so tests can stub it: the probe shells out, and a doctor test that
+    reaches the real filesystem answers differently on every machine.
+
+    WARN, never FAIL — the same reasoning as its siblings above. Capture, scrubbing and
+    evidence all work with no browser installed; only local execution does not.
+    """
+    from .runner import _browser_identity
+
+    identity = _browser_identity(headless=True)
+    if identity.present is True:
+        return Check("playwright browsers", PASS, identity.build, "")
+    if identity.present is False:
+        return Check(
+            "playwright browsers", WARN,
+            f"{identity.build} is not installed",
+            "Reproductions cannot run until it is: npx playwright install chromium",
+        )
+    # None — the probe could not answer. Not the same as absent, and not worth a warning
+    # that would fire on every unusual but working layout (pnpm, Yarn PnP).
+    return Check("playwright browsers", PASS, "could not be determined", "")
+
+
 def run_doctor(
     *,
     host: str = DEFAULT_HOST,
@@ -396,6 +421,12 @@ def run_doctor(
             "" if playwright else "Install it where reproductions run: "
                                   "npm i -D @playwright/test && npx playwright install",
         ))
+        # A separate check, because the package and the browser fail separately and the
+        # package answering says nothing about the browser. `playwright --version` above
+        # passes with every browser deleted — which is exactly how a machine that cannot
+        # run anything used to look healthy here.
+        if playwright:
+            checks.append(_browsers_check())
 
     # 2. Host reachable -------------------------------------------------------------------
     status, body = send(f"{base}/healthz", "GET", {}, None)
