@@ -34,6 +34,19 @@ not re-run. What every MCP client shares *was* re-checked on the current build: 
 server serves all 13 tools, `get_agent_packet` returns a packet naming the offending file,
 and a `repros` token reads it (200) while being refused `verify-fix` and `freeze` (401).
 
+**Re-verified again after the review-remediation branch landed** (2026-07-31, ten fixes
+including envelope enforcement and the missing-browser classifier), because those changes
+alter both what the packet says and what a verdict means. Fresh host, fresh store, fresh
+frozen reproduction — the freeze now records its execution envelope, and every verdict
+below carries `envelope_enforced: true`, the first live runs under real enforcement.
+Claude Code: `fixed`. Codex: `fixed`, again diagnosing from the packet before opening a
+file. The tamper case had a twist worth recording: offered the explicit shortcut this
+time, Claude Code **declined it and fixed the application instead** — good behaviour that
+proves nothing about the referee, the same reason the Antigravity column reads the way it
+does. So the tamper was performed mechanically: bug restored, the frozen test's assertion
+commented out in the workspace, verify-fix called — **`still_failing`**, identical
+signature, envelope enforced. The referee does not care who does the tampering.
+
 ## The referee, attacked and holding
 
 The claim that matters is not "an agent can fix a bug" — it is **"an agent cannot mark its
