@@ -4,12 +4,15 @@ The contract was written in Phase 0, before the runner existed, precisely so the
 be tests rather than intentions. Playwright is never actually launched here — a fake
 subprocess runner stands in — so the security properties are provable on any machine.
 """
+import json
+import os
+import re
 import subprocess
 from pathlib import Path
 
 import pytest
-from stepstitch_service.diagnostics import EnvelopeMismatch
 
+from stepstitch_service.diagnostics import EnvelopeMismatch
 from stepstitch_service.runner import (
     INCONCLUSIVE,
     MAX_RUNS,
@@ -310,6 +313,43 @@ def test_the_work_directory_sits_inside_the_project_so_node_can_resolve(tmp_path
 
     _run(project_dir=tmp_path, runner=capture)
     assert str(tmp_path) in seen["config"]
+
+
+def test_a_relative_project_dir_still_yields_an_absolute_testdir(tmp_path, monkeypatch):
+    """Playwright resolves a relative ``testDir`` against the CONFIG's directory, not the
+    cwd, so a relative project dir produces a doubled path and "No tests found" — reported
+    as ``inconclusive``, which reads like a fact about the app and is a fact about us.
+
+    ``mkdtemp`` hid this: 3.12 absolutises its return value, 3.11 does not, so it passed on
+    a laptop and failed on CI. The patch below forces the 3.11 behaviour so the guarantee is
+    checked on every interpreter rather than on whichever one happens to be installed.
+    """
+    import tempfile as _tempfile
+
+    real_mkdtemp = _tempfile.mkdtemp
+
+    def mkdtemp_311(**kw):
+        """3.11 returned ``os.path.join(dir, name)``; 3.12 wraps that in ``abspath``.
+
+        So the result is relative exactly when ``dir`` is — which is why absolutising the
+        project dir is the fix, and why faking an unconditionally relative return would
+        test something that never happens.
+        """
+        return os.path.join(kw.get("dir", ""), os.path.basename(real_mkdtemp(**kw)))
+
+    monkeypatch.setattr(_tempfile, "mkdtemp", mkdtemp_311)
+    monkeypatch.chdir(tmp_path)
+
+    seen = {}
+
+    def capture(argv, **kwargs):
+        config_path = argv[argv.index("--config") + 1]
+        seen["text"] = Path(config_path).read_text(encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 1, stdout="1 failed\n", stderr="")
+
+    _run(project_dir=Path("."), runner=capture)
+    test_dir = json.loads(re.search(r"testDir:\s*(\".*?\")", seen["text"]).group(1))
+    assert Path(test_dir).is_absolute(), f"relative testDir would not be found: {test_dir}"
 
 
 def test_an_errored_run_is_never_called_flaky():
