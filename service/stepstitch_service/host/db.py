@@ -90,7 +90,14 @@ CREATE TABLE IF NOT EXISTS stepstitch_frozen_repros (
     red_verdict  TEXT,            -- what the pre-fix run observed (runner verdict)
     red_signature TEXT,           -- how it failed, so a DIFFERENT failure is distinguishable
     frozen_at    TIMESTAMPTZ NOT NULL,
-    frozen_by    TEXT
+    frozen_by    TEXT,
+    -- The other half of "same experiment": HOW the red run was configured, pinned beside
+    -- the script it judges. Nullable, and NULL is load-bearing — it marks a row frozen
+    -- before enforcement existed, for which verification degrades (script hash still
+    -- enforced) rather than refusing. The JSON is the full envelope record so a refusal
+    -- can say WHICH field moved; it holds settings, a browser build and env var NAMES.
+    execution_envelope_sha256 TEXT,
+    execution_envelope_json   TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_stepstitch_frozen_sha ON stepstitch_frozen_repros (sha256);
 

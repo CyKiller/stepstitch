@@ -587,16 +587,29 @@ def create_stepstitch_router(
 
         frozen: Dict[str, Any] = {}
         try:
-            frozen_row = await fetchone(
-                "SELECT sha256 FROM stepstitch_frozen_repros WHERE trace_id = ?",
-                (trace_id,))
+            # The envelope digest comes from the FREEZE ROW, not from the latest
+            # diagnostics record. The old latest-diagnostics heuristic served whatever run
+            # wrote last — after a re-freeze or a stray diagnostics run, that is not the
+            # frozen envelope, and the packet's promise to the agent ("verification reruns
+            # these bytes under the same execution envelope") was false exactly when a
+            # mismatch existed to detect.
+            try:
+                frozen_row = await fetchone(
+                    "SELECT sha256, execution_envelope_sha256 "
+                    "FROM stepstitch_frozen_repros WHERE trace_id = ?", (trace_id,))
+            except Exception:
+                # Pre-migration host: four-column table. The packet still works.
+                frozen_row = await fetchone(
+                    "SELECT sha256 FROM stepstitch_frozen_repros WHERE trace_id = ?",
+                    (trace_id,))
             if frozen_row:
                 frozen["script_sha256"] = frozen_row[0]
+                if len(frozen_row) > 1 and frozen_row[1]:
+                    frozen["execution_envelope_sha256"] = frozen_row[1]
         except Exception:
             logger.debug("stepstitch: no frozen-repro store available", exc_info=True)
-        if diagnostics:
-            # The envelope digest lives with the diagnostics record, which is written by
-            # the same run that froze the script.
+        if diagnostics and "execution_envelope_sha256" not in frozen:
+            # Fallback for stores frozen before the envelope lived on the freeze row.
             try:
                 env_row = await fetchone(
                     "SELECT execution_envelope_sha256 FROM stepstitch_diagnostics "

@@ -491,10 +491,15 @@ def build_app(
                           (trace_id,))
             await execute(
                 "INSERT INTO stepstitch_frozen_repros (trace_id, script, sha256, "
-                "red_verdict, red_signature, frozen_at, frozen_by) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "red_verdict, red_signature, frozen_at, frozen_by, "
+                "execution_envelope_sha256, execution_envelope_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (trace_id, script, digest, red.verdict, signature, now,
-                 _actor_name(admin)),
+                 _actor_name(admin),
+                 # HOW the red run was configured, pinned beside the bytes it judges. The
+                 # JSON is the full record so a later refusal can say which field moved.
+                 red.execution_envelope_sha256 or None,
+                 json.dumps(red.execution_envelope) if red.execution_envelope else None),
             )
             await audit("stepstitch.freeze", _actor_name(admin),
                         {"trace_id": trace_id, "sha256": digest,
@@ -519,9 +524,17 @@ def build_app(
             from ..fixcheck import FIXED, UNABLE_TO_VERIFY, derive_fix_verdict
             from ..runner import RunnerError, run_reproduction
 
-            frozen = await fetchone(
-                "SELECT script, sha256, red_verdict, red_signature "
-                "FROM stepstitch_frozen_repros WHERE trace_id = ?", (trace_id,))
+            # The envelope column is selected defensively: a host that has not migrated
+            # yet answers the four-column shape, and verification must not break on it.
+            try:
+                frozen = await fetchone(
+                    "SELECT script, sha256, red_verdict, red_signature, "
+                    "execution_envelope_sha256 "
+                    "FROM stepstitch_frozen_repros WHERE trace_id = ?", (trace_id,))
+            except Exception:
+                frozen = await fetchone(
+                    "SELECT script, sha256, red_verdict, red_signature "
+                    "FROM stepstitch_frozen_repros WHERE trace_id = ?", (trace_id,))
             if not frozen:
                 return {
                     "status": "ok", "verdict": UNABLE_TO_VERIFY,
@@ -530,6 +543,7 @@ def build_app(
                 }
             script, digest, red_verdict, red_signature = (
                 frozen[0], frozen[1], frozen[2], frozen[3] or "")
+            frozen_envelope_sha = frozen[4] if len(frozen) > 4 else None
 
             cfg = await _read_repro_config()
             app_url = cfg.base_url or effective_base_url
@@ -539,6 +553,12 @@ def build_app(
                     session_id=trace_id, script=script, base_url=app_url,
                     # The freeze enforced: these bytes, or nothing.
                     expected_sha256=digest,
+                    # …and the same experiment. NULL (frozen before envelopes were stored)
+                    # degrades to script-only enforcement rather than refusing: a refusal
+                    # would force a re-freeze, and re-freezing after the agent has edited
+                    # the app destroys the red baseline — the one irreplaceable artefact.
+                    # The degradation is REPORTED (envelope_enforced below), never silent.
+                    expected_envelope_sha256=frozen_envelope_sha or None,
                     readiness=readiness(cfg, [], fallback_base_url=effective_base_url),
                     runs=req.runs, timeout_seconds=req.timeout_seconds,
                 )
@@ -546,7 +566,8 @@ def build_app(
                 return {"status": "refused", "detail": str(exc)}
 
             verdict = derive_fix_verdict(red_verdict=red_verdict,
-                                         red_signature=red_signature, after=after)
+                                         red_signature=red_signature, after=after,
+                                         envelope_enforced=bool(frozen_envelope_sha))
 
             # A fix StepStitch watched fail and then pass belongs in the corpus as MEASURED
             # evidence — the whole point of the local runner. Only a real red-to-green is

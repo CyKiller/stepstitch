@@ -256,6 +256,12 @@ class ReproductionResult:
     detail: str = ""
     cancelled: bool = False
     execution_envelope_sha256: str = ""
+    # The full envelope record (ExecutionEnvelope.as_dict), so the freeze can store it and
+    # a later refusal can say WHICH field moved instead of quoting two hex prefixes.
+    # `config_canonical` inside it is a JSON *string*, deliberately: this dict crosses HTTP
+    # verbatim, and a nested spec would put keys like `use.screenshot` in payloads that
+    # key-walking privacy gates (scripts/demo_agent_loop.py) reject by name.
+    execution_envelope: Optional[Dict[str, Any]] = None
     diagnostics: Optional[Dict[str, Any]] = None
 
     @property
@@ -279,6 +285,7 @@ class ReproductionResult:
             "cancelled": self.cancelled,
             "detail": self.detail,
             "execution_envelope_sha256": self.execution_envelope_sha256,
+            "execution_envelope": self.execution_envelope,
             "diagnostics": self.diagnostics,
             "advisories": self.advisories,
             "runs": [
@@ -612,7 +619,8 @@ def run_reproduction(
     result = ReproductionResult(
         verdict=verdict, session_id=session_id, script_sha256=digest,
         runs=attempts, flaky=flaky, readiness=readiness, cancelled=cancelled,
-        execution_envelope_sha256=envelope_sha, diagnostics=diagnostics_record,
+        execution_envelope_sha256=envelope_sha, execution_envelope=envelope.as_dict(),
+        diagnostics=diagnostics_record,
     )
     result.detail = _explain(result)
     return result
