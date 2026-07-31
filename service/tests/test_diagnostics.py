@@ -237,6 +237,10 @@ def test_real_credential_shapes_do_not_survive_the_real_redactor(tmp_path):
     """
     from stepstitch_service.runner import scrub_transcript
 
+    # Each line below exercises one rule in _TRANSCRIPT_PATTERNS: bearer, URL credentials,
+    # key=value, agent token. Keep the values obviously synthetic. A fixture shaped like a
+    # real vendor key (`sk_live_…`) trips GitHub push protection for every contributor and
+    # every fork, and buys nothing: the bearer rule matches on position, not on issuer.
     path = _trace(tmp_path, trace=[
         {"type": "console", "messageType": "error",
          "text": "auth failed Bearer tok_fake_for_testing_only_0123456789"},
