@@ -24,7 +24,7 @@ from pydantic import BaseModel
 
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
 from stepstitch_service.compiler import DEFAULT_BASE_URL
-from stepstitch_service.diagnostics import SOURCE_SYNTHETIC
+from stepstitch_service.diagnostics import SOURCE_SYNTHETIC, EnvelopeMismatch
 from stepstitch_service.profiles import load_profile
 from stepstitch_service.repro_config import ReproConfig, ReproConfigError, readiness
 from stepstitch_service.scrubber import (
@@ -409,7 +409,7 @@ def build_app(
                     session_id=trace_id, script=script, base_url=app_url,
                     readiness=items, runs=req.runs, timeout_seconds=req.timeout_seconds,
                 )
-            except RunnerError as exc:
+            except (RunnerError, EnvelopeMismatch) as exc:
                 # A refusal is an answer, not a server fault: say what and why.
                 return {"status": "refused", "detail": str(exc)}
             payload = result.as_dict()
@@ -473,7 +473,7 @@ def build_app(
                     # run worth inspecting deeply — a green run has nothing to diagnose.
                     diagnostics=True,
                 )
-            except RunnerError as exc:
+            except (RunnerError, EnvelopeMismatch) as exc:
                 return {"status": "refused", "detail": str(exc)}
 
             signature = ""
@@ -542,7 +542,7 @@ def build_app(
                     readiness=readiness(cfg, [], fallback_base_url=effective_base_url),
                     runs=req.runs, timeout_seconds=req.timeout_seconds,
                 )
-            except RunnerError as exc:
+            except (RunnerError, EnvelopeMismatch) as exc:
                 return {"status": "refused", "detail": str(exc)}
 
             verdict = derive_fix_verdict(red_verdict=red_verdict,
