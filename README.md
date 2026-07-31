@@ -105,9 +105,10 @@ own fix**. See [docs/connect-an-agent.md](docs/connect-an-agent.md).
 Speaking MCP is not the same as having been tried. **Which platforms were actually run, on
 what date, and what failed** is a living table in
 [docs/agent-platforms.md](docs/agent-platforms.md) — one row per platform, failures
-included. As of 2026-07-30 one platform has been verified end-to-end, with a real model
-reading the packet and fixing a real bug. Cloud/tenant clients (Copilot Studio, Vertex,
-Bedrock) are a separate setup path — see `copilot/MCP-SETUP.md` and `docs/DEPLOY.md`.
+included. As of 2026-07-31 three platforms have been verified end-to-end, each with a real
+model reading the packet and fixing a real bug. Cloud/tenant clients (Copilot Studio,
+Vertex, Bedrock) are a separate setup path — see `copilot/MCP-SETUP.md` and
+`docs/DEPLOY.md`.
 
 ## Fully open (Apache-2.0)
 
