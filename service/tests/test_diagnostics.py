@@ -12,7 +12,7 @@ from stepstitch_service.diagnostics import (
     MAX_CONSOLE_ERRORS,
     MAX_FIELD_CHARS,
     SCHEMA_VERSION,
-    SOURCE_SYNTHETIC,
+    SOURCE_LOCAL_REPRODUCTION,
     Diagnostics,
     EnvelopeMismatch,
     ExecutionEnvelope,
@@ -39,17 +39,25 @@ def _envelope(**over):
 
 def test_every_record_says_where_it_came_from():
     """A reader must be able to tell reproduction evidence from production evidence
-    without knowing which endpoint produced it."""
+    without knowing which endpoint produced it — and the stamp must claim exactly what
+    the architecture proves. `from_reported_session: false` is provable (the runner
+    replays a generated test). `customer_data_status: not_verified` is the honest
+    account of the rest: the target app is operator-configured and pattern scrubbing
+    cannot prove a name or address absent."""
     stamp = provenance()
-    assert stamp["source"] == SOURCE_SYNTHETIC
-    assert stamp["contains_customer_session_data"] is False
+    assert stamp["source"] == SOURCE_LOCAL_REPRODUCTION
+    assert stamp["from_reported_session"] is False
+    assert stamp["content_scrubbed"] is True
+    assert stamp["environment_assurance"] == "operator_configured"
+    assert stamp["customer_data_status"] == "not_verified"
+    assert "contains_customer_session_data" not in stamp
     assert stamp["schema_version"] == SCHEMA_VERSION
 
 
 def test_a_diagnostics_record_carries_the_stamp():
     out = Diagnostics(console_errors=["boom"]).as_dict()
-    assert out["source"] == SOURCE_SYNTHETIC
-    assert out["contains_customer_session_data"] is False
+    assert out["source"] == SOURCE_LOCAL_REPRODUCTION
+    assert out["customer_data_status"] == "not_verified"
 
 
 def test_provenance_survives_scrubbing():
@@ -57,8 +65,8 @@ def test_provenance_survives_scrubbing():
     where the data came from."""
     record = Diagnostics(console_errors=["token=abc123"]).as_dict()
     cleaned = scrub_diagnostics(record, lambda s: s.replace("abc123", "[redacted]"))
-    assert cleaned["source"] == SOURCE_SYNTHETIC
-    assert cleaned["contains_customer_session_data"] is False
+    assert cleaned["source"] == SOURCE_LOCAL_REPRODUCTION
+    assert cleaned["customer_data_status"] == "not_verified"
     assert "abc123" not in str(cleaned)
 
 
@@ -294,15 +302,15 @@ def test_real_credential_shapes_do_not_survive_the_real_redactor(tmp_path):
     for secret in ("tok_fake_for_testing_only_0123456789", "hunter2",
                    "AKIAIOSFODNN7EXAMPLE", "ssa_ZmFrZXRva2VuZm9ydGVzdGluZw"):
         assert secret not in blob, f"{secret} survived scrubbing"
-    assert record["contains_customer_session_data"] is False
+    assert record["customer_data_status"] == "not_verified"
 
 
 def test_free_text_pii_does_not_survive_the_production_redactor(tmp_path):
     """The gap this closes shipped once: diagnostics were scrubbed with the transcript
     redactor, which is a CREDENTIALS scrubber with zero PII patterns. An application run
     against a staging backend that console.errors a customer's email, phone or card sent
-    that text verbatim to a third-party agent, under a stamp reading
-    `contains_customer_session_data: false`.
+    that text verbatim to a third-party agent, under a stamp that (at the time) claimed
+    customer data was absent outright.
 
     Uses `_diagnostics_redactor` — the exact callable production passes — not a stand-in.
     The previous test covers credential shapes; this one covers what the full scrubber
@@ -326,8 +334,10 @@ def test_free_text_pii_does_not_survive_the_production_redactor(tmp_path):
     for pii in ("jane.doe@example.invalid", "415-555-0199", "4111 1111 1111 1111",
                 "sid=fake123", "bob@example.invalid"):
         assert pii not in blob, f"{pii} survived the production redactor"
-    # The stamp survives scrubbing — and after this, the content actually backs it up.
-    assert record["contains_customer_session_data"] is False
+    # The stamp survives scrubbing — content_scrubbed is a claim about processing, and
+    # customer_data_status stays not_verified because patterns cannot prove absence.
+    assert record["content_scrubbed"] is True
+    assert record["customer_data_status"] == "not_verified"
 
 
 def test_the_redactor_keeps_the_file_and_line_an_agent_needs(tmp_path):
@@ -401,3 +411,34 @@ def test_a_failure_with_no_page_exception_still_reports_the_assertion(tmp_path):
             "stack": [{"file": "/w/tests/repro.spec.ts", "line": 9, "column": 3}]}))
     stack = parse_trace(path).failure_stack
     assert stack and "expected 'Sent'" in stack[0]
+
+
+def test_a_name_and_address_survive_which_is_why_the_record_must_not_promise(tmp_path):
+    """The scrubber removes PATTERNS — emails, cards, SSNs, digit runs. A name and a
+    postal address are not patterns, and no regex reliably makes them one. So the record
+    must not convert "we scrubbed known shapes" into "contains no customer data": the
+    reproduction runs against whatever application the operator configured, and StepStitch
+    cannot verify what that application printed about whom.
+    """
+    from stepstitch_service.runner import _diagnostics_redactor
+
+    path = _trace(tmp_path, trace=[
+        {"type": "console", "messageType": "error",
+         "text": "lookup failed for Customer Jane Doe at 123 Main Street"},
+        {"type": "console", "messageType": "error",
+         "text": "Account holder Alice Johnson, 44 Oak Avenue, Boston MA"},
+    ])
+    record = scrub_diagnostics(parse_trace(path).as_dict(), _diagnostics_redactor)
+    blob = json.dumps(record)
+    # These SURVIVE. That is the point: this test documents the limitation the old
+    # provenance stamp denied, and pins the posture that replaced it.
+    assert "Jane Doe" in blob and "Oak Avenue" in blob
+
+    assert "contains_customer_session_data" not in blob, \
+        "the absolute claim must be gone from every record"
+    assert record["source"] == "local_reproduction"
+    assert record["from_reported_session"] is False, \
+        "the architecture DOES prove this much — say it"
+    assert record["content_scrubbed"] is True
+    assert record["environment_assurance"] == "operator_configured"
+    assert record["customer_data_status"] == "not_verified"

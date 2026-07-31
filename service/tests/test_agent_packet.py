@@ -5,6 +5,8 @@ to say ``never_included: stack traces``. Deep diagnostics make that false — bu
 evidence from the *reproduction*, never from the reported session. Splitting the posture by
 origin is what keeps both halves true instead of softening one into uselessness.
 """
+import json
+
 from stepstitch_service.agent_packet import (
     COLLECTED_FROM_REPRODUCTION,
     NEVER_FROM_PRODUCTION,
@@ -16,8 +18,8 @@ from stepstitch_service.agent_packet import (
 )
 
 DIAGS = {
-    "source": "synthetic_reproduction",
-    "contains_customer_session_data": False,
+    "source": "local_reproduction",
+    "customer_data_status": "not_verified",
     "failure_stack": [
         "Error: must not reproduce",
         "/app/src/payments/transfer.ts:42:9",
@@ -47,8 +49,8 @@ def test_the_two_halves_are_labelled_by_where_they_came_from():
     knowing how StepStitch works internally."""
     posture = _packet(diagnostics=DIAGS)["privacy_posture"]
     assert posture["from_production"]["never_captured"] == NEVER_FROM_PRODUCTION
-    assert posture["from_reproduction"]["source"] == "synthetic_reproduction"
-    assert posture["from_reproduction"]["contains_customer_session_data"] is False
+    assert posture["from_reproduction"]["source"] == "local_reproduction"
+    assert posture["from_reproduction"]["customer_data_status"] == "not_verified"
 
 
 def test_the_production_promise_is_not_weakened_by_deep_diagnostics():
@@ -201,7 +203,7 @@ def test_a_stack_trace_is_present_and_the_packet_is_not_lying_about_it():
     assert packet["diagnostics"]["failure_stack"]
     assert "stack traces" in packet["diagnostic"]["never_included"]
     assert packet["privacy_posture"]["from_reproduction"]["source"] == \
-        "synthetic_reproduction"
+        "local_reproduction"
     assert any("stack" in c
                for c in packet["privacy_posture"]["from_reproduction"]["collected"])
 
@@ -211,3 +213,21 @@ def test_a_malformed_diagnostics_record_does_not_cost_the_packet():
     packet = _packet(diagnostics=["not", "a", "record"])
     assert packet["likely_files"] == []
     assert packet["playwright_code"]
+
+
+def test_the_reproduction_posture_states_what_the_architecture_proves_and_no_more():
+    """`STEPSTITCH_APP_BASE_URL` can point at an operator's staging application, and
+    StepStitch does not enforce that it holds only synthetic records. So "no customer was
+    in it" was never provable. What IS provable: nothing came from the reported session,
+    and every string passed the scrubber. The posture must say exactly that."""
+    packet = _packet(diagnostics={"failure_stack": ["at f (app.js:1:1)"]})
+    posture = packet["privacy_posture"]["from_reproduction"]
+    assert posture["source"] == "local_reproduction"
+    assert posture["from_reported_session"] is False
+    assert posture["content_scrubbed"] is True
+    assert posture["environment_assurance"] == "operator_configured"
+    assert posture["customer_data_status"] == "not_verified"
+    assert "contains_customer_session_data" not in posture
+    blob = json.dumps(packet)
+    assert "No customer was in it" not in blob
+    assert "contains_customer_session_data" not in blob

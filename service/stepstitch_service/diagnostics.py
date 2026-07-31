@@ -2,16 +2,21 @@
 
 This is the inversion the product rests on. Session-replay tools buy debugging depth by
 recording the real user: their screen, their inputs, their page text. StepStitch takes
-almost nothing from production, reproduces the failure in a synthetic run on the
-developer's own machine, and then inspects *that* execution as deeply as it likes.
+almost nothing from production, reproduces the failure in a local run on the developer's
+own machine against the operator-configured application, and then inspects *that*
+execution as deeply as it likes.
 
 > **Minimal evidence from production. Maximum evidence from a controlled reproduction.**
 
-Nothing collected here ever touched a customer. That is a structural fact about where the
-data comes from, not a promise about filtering, which is why every record carries
-``source: synthetic_reproduction`` and ``contains_customer_session_data: false`` — a reader
-should not have to take our word for the distinction, or work out which half of the packet
-they are looking at.
+What the architecture proves, every record states; what it cannot prove, no record claims.
+Provable: nothing here came from the reported session (the runner replays a generated test,
+it never reads the user's trail), and every string passed the scrubber. NOT provable: that
+the application under test holds no customer data — ``STEPSTITCH_APP_BASE_URL`` points
+wherever the operator configured, and a staging backend with real records will print what
+it prints. The scrubber removes known PATTERNS; a name or a postal address is not a
+pattern, and no regex reliably makes it one. An earlier version of this stamp said
+``contains_customer_session_data: false``, which read as a promise about content and was
+only ever a fact about the session actor; the posture below replaced it.
 
 **How it is collected.** Playwright *tracing*, parsed after the run — not a reporter. A
 reporter receives test results and attachments; it never gets the live ``Page``, so it
@@ -36,13 +41,14 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 # Bump when the shape of a stored record changes. Stored beside every record so a reader
-# (or a later migration) can tell what it is looking at without guessing.
-SCHEMA_VERSION = 1
+# (or a later migration) can tell what it is looking at without guessing. 2: the absolute
+# `contains_customer_session_data` claim was replaced by the normalized posture below.
+SCHEMA_VERSION = 2
 
 # The only provenance this module ever emits. Deliberately not a parameter: there is no
 # code path that produces a diagnostics record from production traffic, and offering one
 # would make the guarantee a configuration option rather than a property.
-SOURCE_SYNTHETIC = "synthetic_reproduction"
+SOURCE_LOCAL_REPRODUCTION = "local_reproduction"
 
 # Bounds. A diagnostics record is meant to fit in an agent's context beside the rest of the
 # packet; an unbounded one would defeat the whole size argument the product makes.
@@ -53,10 +59,27 @@ MAX_FIELD_CHARS = 2000
 
 
 def provenance() -> Dict[str, Any]:
-    """The stamp every agent-facing diagnostics field carries or inherits."""
+    """The stamp every agent-facing diagnostics field carries or inherits.
+
+    Each field states one thing the architecture actually delivers, and the one thing it
+    cannot deliver is stated as exactly that:
+
+    - ``from_reported_session: false`` — provable. The runner replays a generated test; no
+      code path feeds the reported trail into a diagnostics record.
+    - ``content_scrubbed: true`` — every string passed the credential and PII scrubbers.
+      A statement about processing, deliberately not about outcome.
+    - ``environment_assurance: operator_configured`` — the application under test is
+      whatever the operator pointed ``STEPSTITCH_APP_BASE_URL`` at. StepStitch does not
+      enforce that it holds only synthetic records.
+    - ``customer_data_status: not_verified`` — the honest consequence of the two above.
+      Scrubbing removes known patterns; it cannot prove a name or an address absent.
+    """
     return {
-        "source": SOURCE_SYNTHETIC,
-        "contains_customer_session_data": False,
+        "source": SOURCE_LOCAL_REPRODUCTION,
+        "from_reported_session": False,
+        "content_scrubbed": True,
+        "environment_assurance": "operator_configured",
+        "customer_data_status": "not_verified",
         "schema_version": SCHEMA_VERSION,
     }
 
@@ -64,8 +87,9 @@ def provenance() -> Dict[str, Any]:
 # Bump when the MEANING of the envelope digest changes, so old digests are refused rather
 # than silently compared against a hash computed a different way. Separate from
 # SCHEMA_VERSION on purpose: that one stamps stored diagnostics records, whose shape is
-# untouched by how the envelope happens to be hashed.
-ENVELOPE_SCHEMA_VERSION = 2
+# untouched by how the envelope happens to be hashed. 3: the diagnostics SCHEMA_VERSION
+# was removed from the hashed payload — record-shape changes must not move run digests.
+ENVELOPE_SCHEMA_VERSION = 3
 
 
 @dataclass(frozen=True)
@@ -96,7 +120,10 @@ class ExecutionEnvelope:
             "retries": self.retries,
             "diagnostics_profile": self.diagnostics_profile,
             "runner_version": self.runner_version,
-            "schema_version": SCHEMA_VERSION,
+            # Only the envelope's OWN version. The diagnostics SCHEMA_VERSION used to sit
+            # here too, inside the hashed payload — coupling that would have moved every
+            # envelope digest each time the record shape changed, refusing verification of
+            # every session frozen before the bump. Found when SCHEMA_VERSION went to 2.
             "envelope_schema_version": ENVELOPE_SCHEMA_VERSION,
             "env_names": sorted(self.env_names),
         }
@@ -161,7 +188,9 @@ def _clip(value: Any, limit: int = MAX_FIELD_CHARS) -> Any:
 
 @dataclass
 class Diagnostics:
-    """What the synthetic run revealed. Bounded, scrubbed, and stamped with its origin."""
+    """What the local reproduction run revealed. Bounded, scrubbed, and stamped with the
+    posture from provenance() — including that the customer-data status of the
+    operator-configured target is not verified."""
 
     failure_stack: List[str] = field(default_factory=list)
     console_errors: List[str] = field(default_factory=list)

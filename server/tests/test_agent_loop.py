@@ -220,7 +220,7 @@ def test_the_packet_serves_the_frozen_envelope_not_the_latest_diagnostics(tmp_pa
         conn.execute(
             "INSERT INTO stepstitch_diagnostics (id, trace_id, run_id, source, "
             "schema_version, script_sha256, execution_envelope_sha256, diagnostics_json, "
-            "created_at) VALUES ('x', ?, 'r', 'synthetic_reproduction', 1, 's', ?, '{}', "
+            "created_at) VALUES ('x', ?, 'r', 'local_reproduction', 1, 's', ?, '{}', "
             "'2099-01-01T00:00:00+00:00')", (trace, "f" * 64))
         body = client.get(f"{_PFX}/session/{trace}/agent-packet",
                           headers=_admin()).json()

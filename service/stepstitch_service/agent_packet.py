@@ -2,7 +2,7 @@
 
 Before this, the packet said things like ``never_included: stack traces, raw console logs``.
 That was true when the only evidence came from the reported session. It stopped being true
-the moment StepStitch began collecting deep diagnostics from the **synthetic reproduction** —
+the moment StepStitch began collecting deep diagnostics from the **local reproduction** —
 and a privacy claim that quietly went stale is worse than one that was never made, because
 people rely on it.
 
@@ -10,9 +10,11 @@ So the posture is split by origin rather than softened:
 
 - ``from_production`` — what is taken from the person who hit the bug. Unchanged, minimal,
   and still free of screenshots, page text, input values and bodies.
-- ``from_reproduction`` — what is collected from a synthetic run on the developer's own
-  machine. Rich, including stack traces and console errors, and containing no customer data
-  because no customer was ever in it.
+- ``from_reproduction`` — what is collected by replaying the generated test on the
+  developer's own machine. Rich, including stack traces and console errors. Provably not
+  from the reported session, and scrubbed — but the application it runs against is
+  operator-configured, so whether that application's own output names customers is
+  ``not_verified``, and the posture says so instead of claiming otherwise.
 
 Both lists are true. Neither is a hedge. An agent reading the packet can tell which half it
 is looking at without knowing how StepStitch works internally.
@@ -47,7 +49,7 @@ NEVER_FROM_REPORTED_SESSION: List[str] = [
     "input values", "screenshots", "full URLs",
 ]
 
-# What a synthetic run may yield. Stated positively: an agent should know what it is
+# What a local reproduction run may yield. Stated positively: an agent should know what it is
 # allowed to expect, and a reader should be able to see that the two lists do not conflict.
 COLLECTED_FROM_REPRODUCTION: List[str] = [
     "source-located failure stack", "console errors (errors only)",
@@ -90,13 +92,24 @@ def privacy_posture(policy_name: str, scrub: Optional[Dict[str, Any]],
                       "before storage",
         },
         "from_reproduction": {
-            "source": "synthetic_reproduction",
-            "contains_customer_session_data": False,
+            # States what the architecture proves and no more. The reproduction is a
+            # generated test replayed locally — provably not the reported session — but it
+            # runs against whatever application the operator configured, and StepStitch
+            # cannot verify what that application printed about whom. An earlier version
+            # said "no customer was in it"; that was a fact about the session actor
+            # presented as a fact about the content, and the scrubber (patterns: emails,
+            # cards, digit runs) cannot make it one — a name or postal address survives.
+            "source": "local_reproduction",
+            "from_reported_session": False,
+            "content_scrubbed": True,
+            "environment_assurance": "operator_configured",
+            "customer_data_status": "not_verified",
             "collected": list(COLLECTED_FROM_REPRODUCTION) if has_diagnostics else [],
             "detail": (
-                "collected from a synthetic run on this machine. No customer was in it, "
-                "which is why deeper technical detail is available here than from "
-                "production."
+                "collected by replaying the generated test on this machine — none of it "
+                "comes from the reported session, and every string passed the scrubber. "
+                "The application under test is operator-configured, so whether its own "
+                "output names customers is not something StepStitch can verify."
                 if has_diagnostics else
                 "no reproduction has been run for this session yet, so there are no "
                 "reproduction diagnostics."
