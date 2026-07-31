@@ -276,10 +276,10 @@ def test_a_corrupt_line_is_skipped_not_fatal(tmp_path):
 def test_real_credential_shapes_do_not_survive_the_real_redactor(tmp_path):
     """Uses the runner's actual redactor, not a stand-in.
 
-    The reproduction is synthetic, so nothing here is a customer's — but a developer's own
-    app will happily print a live key into its console against a staging backend, and the
-    packet goes to a third-party agent. Provenance explains where data came from; it does
-    not excuse shipping a key.
+    The reproduction is StepStitch's own local run, but it targets the operator-configured
+    application — and that app will happily print a live key into its console against a
+    staging backend, while the packet goes to a third-party agent. Provenance explains
+    where data came from; it does not excuse shipping a key.
     """
     from stepstitch_service.runner import scrub_transcript
 

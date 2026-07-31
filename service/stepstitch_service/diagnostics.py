@@ -6,7 +6,8 @@ almost nothing from production, reproduces the failure in a local run on the dev
 own machine against the operator-configured application, and then inspects *that*
 execution as deeply as it likes.
 
-> **Minimal evidence from production. Maximum evidence from a controlled reproduction.**
+> **Minimal evidence from production. Maximum evidence from an operator-configured
+> local reproduction.**
 
 What the architecture proves, every record states; what it cannot prove, no record claims.
 Provable: nothing here came from the reported session (the runner replays a generated test,
@@ -271,11 +272,14 @@ class Diagnostics:
 def scrub_diagnostics(record: Dict[str, Any], redact: Any) -> Dict[str, Any]:
     """Run every string in a diagnostics record through the caller's redactor.
 
-    The reproduction is synthetic, so in principle nothing here is a customer's. In
-    practice a developer's own app will happily print a real bearer token into its console
-    against a staging database — so this is defence in depth, not a contradiction of the
-    provenance stamp. ``redact`` is ``runner.scrub_transcript`` in production use; injected
-    so this module stays free of the runner.
+    The reproduction is StepStitch's own local run against the operator-configured
+    application, and that application will happily print whatever its backend holds — a
+    bearer token, an email, a name — into its console. Scrubbing here is what earns
+    ``content_scrubbed: true`` in the provenance stamp, and nothing stronger: patterns
+    cannot prove customer data absent, which is why the stamp says
+    ``customer_data_status: not_verified``. ``redact`` is ``runner._diagnostics_redactor``
+    in production use (credentials AND PII rules); injected so this module stays free of
+    the runner.
     """
     def walk(value: Any) -> Any:
         if isinstance(value, str):

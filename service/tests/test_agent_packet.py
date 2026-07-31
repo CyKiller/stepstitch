@@ -231,3 +231,46 @@ def test_the_reproduction_posture_states_what_the_architecture_proves_and_no_mor
     blob = json.dumps(packet)
     assert "No customer was in it" not in blob
     assert "contains_customer_session_data" not in blob
+
+
+def test_the_runtime_packet_never_reintroduces_the_retired_claims():
+    """The narrow regression guard, on rendered runtime output — not repository regexes.
+
+    Each retired claim earned its place here by actually shipping: the absolute
+    customer-data key, the "no customer" prose, and — found last — a runtime scope note
+    still classifying the reproduction as "synthetic" while the posture beside it said
+    operator_configured / not_verified. Contradictory runtime output, in one payload.
+
+    Deliberately NOT guarded: the demo dataset's "Synthetic demo" copy, fixture vectors,
+    and historical documentation of old stored values — those are legitimate, and a broad
+    word-ban would break true statements to protect against false ones.
+    """
+    for diags in (DIAGS, None):
+        packet = _packet(diagnostics=diags)
+        blob = json.dumps(packet)
+        assert "contains_customer_session_data" not in blob
+        assert "No customer was in it" not in blob
+        assert "contains no customer data" not in blob
+        assert "synthetic reproduction" not in blob.lower(), \
+            "the reproduction's runtime classification is local_reproduction"
+        assert "operator-configured local" in blob
+
+    posture = _packet(diagnostics=DIAGS)["privacy_posture"]["from_reproduction"]
+    assert {k: posture[k] for k in ("source", "from_reported_session", "content_scrubbed",
+                                    "environment_assurance", "customer_data_status")} == {
+        "source": "local_reproduction",
+        "from_reported_session": False,
+        "content_scrubbed": True,
+        "environment_assurance": "operator_configured",
+        "customer_data_status": "not_verified",
+    }
+
+    # And the envelope half of the guard: the diagnostics profile is an observer, present
+    # in the record, absent from what is hashed and enforced.
+    from stepstitch_service.diagnostics import ExecutionEnvelope
+    envelope = ExecutionEnvelope(
+        config_canonical="{}", browser="chromium 149", base_url="http://127.0.0.1:1",
+        timeout_ms=1000, retries=0, diagnostics_profile="four-signal",
+        runner_version="1", env_names=[])
+    assert "diagnostics_profile" in envelope.as_dict()
+    assert "diagnostics_profile" not in envelope.hashed_payload()

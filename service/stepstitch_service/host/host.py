@@ -417,7 +417,7 @@ def build_app(
             return payload
 
         async def _store_diagnostics(trace_id: str, result: Any) -> None:
-            """Persist what the synthetic run revealed, if anything.
+            """Persist what the local reproduction run revealed, if anything.
 
             The runner deletes its scratch directory when a run ends, so this is the only
             place the record survives. Diagnostics are the extra, never the product: a
