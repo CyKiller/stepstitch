@@ -113,8 +113,51 @@ def _open_when_ready(url: str, health_url: str, timeout_s: float = 20.0) -> None
     threading.Thread(target=_poll, daemon=True).start()
 
 
+def _connect_when_ready(agent: str, port: int, admin: str,
+                        timeout_s: float = 20.0) -> None:
+    """Register a coding agent from a daemon thread once ``/healthz`` answers.
+
+    This is the flag the docs and the connect error message promise: one process starts
+    the host, issues the scoped token, registers the agent, verifies the connection, and
+    keeps serving. It has to wait for readiness because registration is an HTTP call to
+    the very server this process is about to start — and it must be a daemon thread so a
+    hung probe can never keep the host alive after Ctrl+C.
+    """
+
+    def _poll() -> None:
+        import time
+
+        health_url = f"http://127.0.0.1:{port}/healthz"
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            try:
+                with urllib.request.urlopen(health_url, timeout=1):
+                    break
+            except OSError:
+                time.sleep(0.25)
+        else:
+            print(f"\nCould not connect {agent}: the host did not answer /healthz "
+                  f"within {int(timeout_s)}s.", flush=True)
+            return
+        import sys
+
+        from stepstitch_service.cli import connect_agent
+
+        print(f"\nConnecting {agent}…", flush=True)
+        rc = connect_agent(f"http://127.0.0.1:{port}", admin, agent)
+        if rc == 0:
+            print("The host keeps running; the agent is ready to use.", flush=True)
+        # connect_agent's own progress lines do not pass flush=True, and stdout is
+        # block-buffered when it is not a tty — piped or nohup'd, they would otherwise sit
+        # invisible until the server EXITS, which is when they stop being useful. The same
+        # trap the pairing block above already documents for itself.
+        sys.stdout.flush()
+
+    threading.Thread(target=_poll, daemon=True).start()
+
+
 def run_local(*, port: int = DEFAULT_LOCAL_PORT, db: str | None = None,
-              open_browser: bool = True) -> int:
+              open_browser: bool = True, connect: str | None = None) -> int:
     """Run StepStitch Local: build the app, print the pairing block, serve on loopback."""
     try:
         import uvicorn
@@ -150,6 +193,8 @@ def run_local(*, port: int = DEFAULT_LOCAL_PORT, db: str | None = None,
 
     if open_browser:
         _open_when_ready(dashboard_url, f"http://127.0.0.1:{port}/healthz")
+    if connect:
+        _connect_when_ready(connect, port, admin)
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
     return 0

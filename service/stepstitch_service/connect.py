@@ -79,6 +79,17 @@ def _gemini_add(exe: str, env: Dict[str, str]) -> List[str]:
     return argv + ["--"] + list(_launch_command())
 
 
+def _remove_argv(platform_key: str, exe: str) -> List[str]:
+    """The vendor's own `mcp remove`, for the re-run case.
+
+    Claude scopes its removal the way its add was scoped; without `--scope user` the
+    remove hunts through project config first and can miss (or hit) the wrong entry.
+    """
+    if platform_key == "claude":
+        return [exe, "mcp", "remove", SERVER_NAME, "--scope", "user"]
+    return [exe, "mcp", "remove", SERVER_NAME]
+
+
 # Bundled-CLI locations, tried in order and only when PATH has nothing. `~` is expanded at
 # lookup time rather than import time so a test can point HOME somewhere harmless.
 _CODEX_BUNDLED: Sequence[str] = (
@@ -297,6 +308,24 @@ def apply(platform: Platform, base_url: str, token_file: Path,
                 "detail": f"could not run `{argv[0]} mcp add`: {exc}"}
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or "").strip()[:400]
+        # Re-running connect must not be an error. The vendor CLIs refuse to add a name
+        # that exists — so the second `stepstitch start --connect claude` on the same
+        # machine failed with "already exists", which punishes exactly the person who is
+        # re-pairing after a new host, a new port, or a revoked token. Their own `remove`
+        # is the sanctioned way to clear the name; then add once more, and any second
+        # failure is reported as usual.
+        if "already exists" in detail.lower():
+            try:
+                run(_remove_argv(platform.key, resolved),
+                    capture_output=True, text=True, timeout=60)
+                proc = run(argv, capture_output=True, text=True, timeout=60)
+            except (OSError, subprocess.SubprocessError) as exc:
+                return {"ok": False, "platform": platform.key,
+                        "detail": f"could not re-register: {exc}"}
+            if proc.returncode == 0:
+                return {"ok": True, "platform": platform.key, "label": platform.label,
+                        "config": platform.config_hint}
+            detail = (proc.stderr or proc.stdout or "").strip()[:400]
         return {"ok": False, "platform": platform.key,
                 "detail": f"`{' '.join(argv[:3])}` failed: {detail}"}
     return {"ok": True, "platform": platform.key, "label": platform.label,

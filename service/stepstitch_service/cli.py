@@ -157,8 +157,12 @@ def _reproduce_command(args: Any) -> int:
     return 0 if result.verdict in ("reproduced", "not_reproduced") else 1
 
 
-def _connect_command(args: Any) -> int:
-    """Wire an installed coding agent to this StepStitch, with least privilege.
+def connect_agent(host: str, admin: str, agent: Optional[str] = None) -> int:
+    """Register a coding agent against a running host, with least privilege.
+
+    The core of ``stepstitch connect``, separated from how the admin credential arrives so
+    ``stepstitch start --connect`` can call it with the token it already holds — the whole
+    point of that flag is that nobody has to paste anything.
 
     Registration goes through the agent's OWN ``mcp add`` command, which knows its config
     format and preserves anything already configured — hand-writing another vendor's TOML
@@ -171,39 +175,21 @@ def _connect_command(args: Any) -> int:
         detect,
         ensure_codex_tool_approval,
         list_command,
-        plan,
-        render_plan,
         resolve,
-        token_path,
         verify,
         write_token,
     )
 
-    host = args.host.rstrip("/")
-    platforms = detect(args.agent)
+    host = host.rstrip("/")
+    platforms = detect(agent)
     if not platforms:
-        wanted = args.agent or "claude, codex or gemini"
+        wanted = agent or "claude, codex or gemini"
         print(f"No supported coding agent found ({wanted}).\n"
               "Looked on PATH and in the usual desktop-app bundles.\n"
               "Install one, or see docs/connect-an-agent.md to configure it by hand.")
         return 1
 
     base_url = f"{host}/api/stepstitch/v1"
-    if args.dry_run:
-        print("\nWould connect:\n")
-        for platform in platforms:
-            print(render_plan(plan(platform, base_url, token_path("<agent-id>"))))
-        return 0
-
-    # The admin token is needed to REGISTER an agent. `stepstitch start` already owns it,
-    # which is why `start --connect` is the smoother path — nobody has to paste anything.
-    admin = os.environ.get("STEPSTITCH_ADMIN_TOKEN")
-    if not admin:
-        print("STEPSTITCH_ADMIN_TOKEN is not set, so a scoped agent token cannot be "
-              "issued.\nEasiest path: `stepstitch start --connect "
-              f"{args.agent or 'claude'}` — that process already holds the credential.")
-        return 1
-
     status, payload = _http(f"{host}/admin/agents", "POST",
                             {"Authorization": f"Bearer {admin}",
                              "Content-Type": "application/json"},
@@ -263,6 +249,34 @@ def _connect_command(args: Any) -> int:
           "reproduction,\nand cannot record the verdict on its own fix.")
     print(f"Token: {token_file} (owner-only; delete it or revoke in the dashboard)")
     return 0
+
+
+def _connect_command(args: Any) -> int:
+    """``stepstitch connect`` — the standalone form, for a host already running."""
+    from stepstitch_service.connect import detect, plan, render_plan, token_path
+
+    host = args.host.rstrip("/")
+    if args.dry_run:
+        platforms = detect(args.agent)
+        if not platforms:
+            print(f"No supported coding agent found ({args.agent or 'claude, codex or gemini'}).")
+            return 1
+        print("\nWould connect:\n")
+        for platform in platforms:
+            print(render_plan(plan(platform, f"{host}/api/stepstitch/v1",
+                                   token_path("<agent-id>"))))
+        return 0
+
+    # The admin token is needed to REGISTER an agent. `stepstitch start` already owns it,
+    # which is why `start --connect` needs no pasting — same process, same credential.
+    admin = os.environ.get("STEPSTITCH_ADMIN_TOKEN")
+    if not admin:
+        print("STEPSTITCH_ADMIN_TOKEN is not set, so a scoped agent token cannot be "
+              "issued.\nEasiest path: `stepstitch start --connect "
+              f"{args.agent or 'claude'}` — one process starts the host, issues the "
+              "token,\nregisters the agent and keeps serving.")
+        return 1
+    return connect_agent(host, admin, args.agent)
 
 
 def _mcp_command(args: Any) -> int:
@@ -582,7 +596,14 @@ def _render(checks: List[Check]) -> str:
     return "\n".join(lines)
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """The CLI surface, buildable without running anything.
+
+    Separate from ``main`` so a test can assert that every command this tool prints in an
+    error message actually parses — the connect error once recommended
+    ``stepstitch start --connect``, a flag no parser defined, so the only recovery path
+    the software offered was a command it could not read.
+    """
     parser = argparse.ArgumentParser(
         prog="stepstitch",
         description="StepStitch command line tools.",
@@ -658,7 +679,16 @@ def main(argv: Optional[List[str]] = None) -> int:
                        help="path for the local store (default .stepstitch/local.db)")
     start.add_argument("--no-browser", action="store_true",
                        help="do not open the dashboard in a browser")
+    start.add_argument("--connect", metavar="AGENT", default=None,
+                       choices=["claude", "codex", "gemini"],
+                       help="once the host is up, register this coding agent against it "
+                            "with a least-privilege token — no token pasting, because "
+                            "this process already holds the credential")
+    return parser
 
+
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == "connect":
         return _connect_command(args)
@@ -679,6 +709,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             port=args.port or DEFAULT_LOCAL_PORT,
             db=args.db,
             open_browser=not args.no_browser,
+            connect=args.connect,
         )
     if args.command != "doctor":
         parser.print_help()
