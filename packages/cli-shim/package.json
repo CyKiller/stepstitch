@@ -1,6 +1,6 @@
 {
   "name": "stepstitch",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "One-command launcher for StepStitch Local: `npx stepstitch start`. A thin shim over the stepstitch-service PyPI package, run via uv.",
   "license": "Apache-2.0",
   "repository": {
@@ -18,6 +18,6 @@
     "node": ">=18"
   },
   "stepstitch": {
-    "serviceVersion": "0.9.1"
+    "serviceVersion": "0.10.0"
   }
 }
