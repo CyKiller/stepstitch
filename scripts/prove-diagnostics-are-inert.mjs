@@ -28,6 +28,11 @@ import { createServer } from 'node:http'
 
 const ALL = process.argv.includes('--all')
 
+// Same convention as prove-repro-executes.mjs. Hardcoding `.venv/bin/python` works on a
+// developer laptop and fails everywhere else: CI installs the package with setup-python and
+// has no .venv at all, so the gate meant to prove diagnostics are inert died at spawn.
+const PYTHON = process.env.PYTHON || 'python3'
+
 // One shape per failure family the compiler emits, plus depth variation. Each is a real
 // page that really breaks — no mocks, because the point is that the browser behaves the
 // same either way.
@@ -129,7 +134,7 @@ print(json.dumps({"verdict": r.verdict, "sha": r.script_sha256, "sig": sig,
   const file = join(work, 'run.py')
   writeFileSync(file, script)
   const { stdout, stderr } = await new Promise((resolve, reject) => {
-    const child = spawn('.venv/bin/python', [file])
+    const child = spawn(PYTHON, [file])
     let out = '', err = ''
     child.stdout.on('data', (d) => { out += d })
     child.stderr.on('data', (d) => { err += d })
