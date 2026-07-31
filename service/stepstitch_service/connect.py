@@ -46,38 +46,58 @@ class Platform:
     key: str
     label: str
     executable: str
-    # Native `mcp add` argv, built once the values are known. Preferred over writing files
-    # because the vendor's own command preserves whatever else is configured.
-    add_argv: Callable[[Dict[str, str]], List[str]]
+    # Native `mcp add` argv, built once the executable and the values are known. Preferred
+    # over writing files because the vendor's own command preserves what is already there.
+    add_argv: Callable[[str, Dict[str, str]], List[str]]
     config_hint: str
+    # Where the CLI also lives when it is not on PATH. A desktop app can ship a complete,
+    # authenticated CLI inside its bundle and never put it on PATH — the ChatGPT app does
+    # exactly this with Codex — so a PATH-only check reports "not installed" on a machine
+    # where the agent is installed, signed in, and working. Checked only after PATH, so a
+    # standalone install always wins and someone who prefers the plain CLI is unaffected.
+    fallbacks: Sequence[str] = ()
 
 
-def _claude_add(env: Dict[str, str]) -> List[str]:
-    argv = ["claude", "mcp", "add", SERVER_NAME, "--scope", "user"]
+def _claude_add(exe: str, env: Dict[str, str]) -> List[str]:
+    argv = [exe, "mcp", "add", SERVER_NAME, "--scope", "user"]
     for key, value in env.items():
         argv += ["--env", f"{key}={value}"]
     return argv + ["--"] + list(_launch_command())
 
 
-def _codex_add(env: Dict[str, str]) -> List[str]:
-    argv = ["codex", "mcp", "add", SERVER_NAME]
+def _codex_add(exe: str, env: Dict[str, str]) -> List[str]:
+    argv = [exe, "mcp", "add", SERVER_NAME]
     for key, value in env.items():
         argv += ["--env", f"{key}={value}"]
     return argv + ["--"] + list(_launch_command())
 
 
-def _gemini_add(env: Dict[str, str]) -> List[str]:
-    argv = ["gemini", "mcp", "add", SERVER_NAME]
+def _gemini_add(exe: str, env: Dict[str, str]) -> List[str]:
+    argv = [exe, "mcp", "add", SERVER_NAME]
     for key, value in env.items():
         argv += ["-e", f"{key}={value}"]
     return argv + ["--"] + list(_launch_command())
 
 
+# Bundled-CLI locations, tried in order and only when PATH has nothing. `~` is expanded at
+# lookup time rather than import time so a test can point HOME somewhere harmless.
+_CODEX_BUNDLED: Sequence[str] = (
+    "/Applications/ChatGPT.app/Contents/Resources/codex",          # macOS, system-wide
+    "~/Applications/ChatGPT.app/Contents/Resources/codex",         # macOS, per-user
+    "~/AppData/Local/Programs/ChatGPT/resources/codex.exe",        # Windows
+    "/opt/ChatGPT/resources/codex",                                # Linux
+)
+
+_CLAUDE_BUNDLED: Sequence[str] = (
+    "~/.local/bin/claude",
+    "~/.claude/local/claude",
+)
+
 PLATFORMS: Dict[str, Platform] = {
     "claude": Platform("claude", "Claude Code", "claude", _claude_add,
-                       "~/.claude.json or .mcp.json"),
-    "codex": Platform("codex", "Codex (ChatGPT app, CLI, IDE)", "codex", _codex_add,
-                      "~/.codex/config.toml"),
+                       "~/.claude.json or .mcp.json", _CLAUDE_BUNDLED),
+    "codex": Platform("codex", "Codex (CLI, ChatGPT app, IDE)", "codex", _codex_add,
+                      "~/.codex/config.toml", _CODEX_BUNDLED),
     "gemini": Platform("gemini", "Gemini CLI / Antigravity", "gemini", _gemini_add,
                        "~/.gemini/config/mcp_config.json"),
 }
@@ -121,12 +141,87 @@ def _launch_command(version: Optional[str] = None) -> Sequence[str]:
     return ["uvx", "--python", MIN_PYTHON, "--from", spec, "stepstitch", "mcp"]
 
 
-def detect(which: Optional[str] = None,
-           lookup: Optional[Callable[[str], Optional[str]]] = None) -> List[Platform]:
-    """Which agent clients are actually installed. ``lookup`` is injected for testing."""
+# Codex asks a human before every MCP tool call unless the server says otherwise. In an
+# interactive session that is a sensible default; in `codex exec` — the non-interactive mode
+# an automated fix loop actually uses — there is nobody to ask, so every call comes back
+# `user cancelled MCP tool call` while `codex mcp list` cheerfully reports the server as
+# enabled. Registered, listed, and refusing everything.
+#
+# Auto-approving StepStitch's tools is safe *here specifically* because the limit on what
+# the agent may do is the token's scope, enforced server-side, not the client's prompt. A
+# `repros` token cannot record a verdict however many times it is called. Approving reads
+# that were already going to be permitted is not a widening of anything.
+#
+# Written as a single inserted line under the table `connect` itself just created, rather
+# than by re-serialising the file: `~/.codex/config.toml` is hand-maintained and full of
+# other people's servers, comments and formatting, and a round-trip through a TOML writer
+# would quietly rewrite all of it.
+CODEX_APPROVAL_LINE = 'default_tools_approval_mode = "approve"'
+_CODEX_TABLE = f"[mcp_servers.{SERVER_NAME}]"
+
+
+def ensure_codex_tool_approval(config_path: Path) -> str:
+    """Add the approval key to StepStitch's own table. Returns what happened."""
+    try:
+        text = config_path.read_text(encoding="utf-8")
+    except OSError:
+        return "skipped: config not readable"
+    lines = text.splitlines()
+    try:
+        header = next(i for i, line in enumerate(lines) if line.strip() == _CODEX_TABLE)
+    except StopIteration:
+        return "skipped: no stepstitch table"
+    # Only within our own table — the next table header ends it.
+    end = len(lines)
+    for i in range(header + 1, len(lines)):
+        if lines[i].lstrip().startswith("["):
+            end = i
+            break
+    if any(line.strip().startswith("default_tools_approval_mode")
+           for line in lines[header + 1:end]):
+        return "already set"
+    lines.insert(header + 1, CODEX_APPROVAL_LINE)
+    config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return "added"
+
+
+def _runnable(path: str) -> bool:
+    return os.path.isfile(path) and os.access(path, os.X_OK)
+
+
+def resolve(platform: Platform,
+            lookup: Optional[Callable[[str], Optional[str]]] = None,
+            runnable: Optional[Callable[[str], bool]] = None) -> Optional[str]:
+    """The command to actually invoke for this platform, or None if it is not installed.
+
+    PATH first, always: a standalone CLI is what the user chose to install, and a bundled
+    copy inside a desktop app should never shadow it. Only when PATH has nothing do the
+    bundle locations get a look — otherwise ``connect codex`` tells someone Codex is
+    missing while their signed-in Codex sits inside ChatGPT.app.
+    """
     find = lookup or shutil.which
+    on_path = find(platform.executable)
+    if on_path:
+        return on_path
+    can_run = runnable or _runnable
+    for candidate in platform.fallbacks:
+        expanded = os.path.expanduser(candidate)
+        if can_run(expanded):
+            return expanded
+    return None
+
+
+def detect(which: Optional[str] = None,
+           lookup: Optional[Callable[[str], Optional[str]]] = None,
+           runnable: Optional[Callable[[str], bool]] = None) -> List[Platform]:
+    """Which agent clients are actually installed. Injectable lookups for testing."""
     wanted = [PLATFORMS[which]] if which else list(PLATFORMS.values())
-    return [p for p in wanted if find(p.executable)]
+    return [p for p in wanted if resolve(p, lookup, runnable)]
+
+
+def list_command(platform: Platform, exe: Optional[str] = None) -> List[str]:
+    """The platform's own 'is it working?' command, using the resolved executable."""
+    return [exe or resolve(platform) or platform.executable, "mcp", "list"]
 
 
 def token_path(agent_id: str, home: Optional[Path] = None) -> Path:
@@ -163,29 +258,38 @@ def connection_env(base_url: str, token_file: Path) -> Dict[str, str]:
     }
 
 
-def plan(platform: Platform, base_url: str, token_file: Path) -> Dict[str, Any]:
-    """What ``connect`` would do, without doing it. Backs ``--dry-run``."""
+def plan(platform: Platform, base_url: str, token_file: Path,
+         exe: Optional[str] = None) -> Dict[str, Any]:
+    """What ``connect`` would do, without doing it. Backs ``--dry-run``.
+
+    The dry run shows the *resolved* executable — an absolute path when the CLI came from
+    an app bundle. Printing a bare ``codex`` that the reader cannot run themselves would
+    make the preview a worse guide than the thing it previews.
+    """
     env = connection_env(base_url, token_file)
+    resolved = exe or resolve(platform) or platform.executable
     return {
         "platform": platform.key,
         "label": platform.label,
-        "command": platform.add_argv(env),
+        "command": platform.add_argv(resolved, env),
         "config": platform.config_hint,
         "env": env,
         "scope": AGENT_SCOPE,
+        "executable": resolved,
     }
 
 
 def apply(platform: Platform, base_url: str, token_file: Path,
-          runner: Optional[Callable[..., subprocess.CompletedProcess]] = None
-          ) -> Dict[str, Any]:
+          runner: Optional[Callable[..., subprocess.CompletedProcess]] = None,
+          exe: Optional[str] = None) -> Dict[str, Any]:
     """Register the server with the platform's own command.
 
     A non-zero exit is reported, never swallowed: a connect that silently half-worked would
     send someone hunting through config files, which is the exact experience this replaces.
     """
     run = runner or subprocess.run
-    argv = platform.add_argv(connection_env(base_url, token_file))
+    resolved = exe or resolve(platform) or platform.executable
+    argv = platform.add_argv(resolved, connection_env(base_url, token_file))
     try:
         proc = run(argv, capture_output=True, text=True, timeout=60)
     except (OSError, subprocess.SubprocessError) as exc:

@@ -12,12 +12,16 @@ import subprocess
 import pytest
 from stepstitch_service.connect import (
     AGENT_SCOPE,
+    CODEX_APPROVAL_LINE,
     PLATFORMS,
     apply,
+    ensure_codex_tool_approval,
     connection_env,
     detect,
+    list_command,
     plan,
     render_plan,
+    resolve,
     token_path,
     verify,
     write_token,
@@ -77,7 +81,7 @@ def test_the_token_never_appears_in_argv(tmp_path):
     """argv is visible to every process on the machine via `ps`."""
     path = write_token("a1", "ssa_verysecret", home=tmp_path)
     for platform in PLATFORMS.values():
-        argv = platform.add_argv(connection_env(BASE, path))
+        argv = platform.add_argv(platform.executable, connection_env(BASE, path))
         assert "ssa_verysecret" not in " ".join(argv)
 
 
@@ -87,8 +91,12 @@ def test_the_token_never_appears_in_argv(tmp_path):
     ("claude", "claude"), ("codex", "codex"), ("gemini", "gemini")])
 def test_each_platform_is_configured_by_its_own_command(key, expected, tmp_path):
     """Vendor commands know the format and preserve what is already configured. Writing
-    TOML/JSON ourselves risks clobbering an unrelated MCP server."""
-    argv = plan(PLATFORMS[key], BASE, token_path("a1", tmp_path))["command"]
+    TOML/JSON ourselves risks clobbering an unrelated MCP server.
+
+    ``exe`` is pinned rather than resolved so the assertion describes the code and not the
+    machine — on a developer laptop these resolve to absolute paths.
+    """
+    argv = plan(PLATFORMS[key], BASE, token_path("a1", tmp_path), exe=expected)["command"]
     assert argv[0] == expected and argv[1] == "mcp" and argv[2] == "add"
 
 
@@ -135,8 +143,127 @@ def test_a_successful_connect_says_where_it_wrote(tmp_path):
 # --- detection and verification -----------------------------------------------------------
 
 def test_only_installed_platforms_are_offered():
-    found = detect(lookup=lambda exe: "/usr/local/bin/claude" if exe == "claude" else None)
+    found = detect(lookup=lambda exe: "/usr/local/bin/claude" if exe == "claude" else None,
+                   runnable=lambda path: False)
     assert [p.key for p in found] == ["claude"]
+
+
+# --- finding a CLI that a desktop app never put on PATH ------------------------------------
+
+def test_a_cli_bundled_in_a_desktop_app_counts_as_installed():
+    """The ChatGPT app ships a complete, signed-in Codex CLI inside its bundle and puts
+    nothing on PATH. A PATH-only check told the user Codex was not installed while they
+    were actively using it."""
+    bundled = "/Applications/ChatGPT.app/Contents/Resources/codex"
+    exe = resolve(PLATFORMS["codex"],
+                  lookup=lambda _: None,
+                  runnable=lambda path: path == bundled)
+    assert exe == bundled
+
+
+def test_a_standalone_cli_on_path_always_wins():
+    """Someone who installed the plain CLI chose it. A copy inside a desktop app must
+    never shadow that — otherwise `connect` registers a different binary than the one the
+    user runs, and the two can be different versions."""
+    exe = resolve(PLATFORMS["codex"],
+                  lookup=lambda name: "/usr/local/bin/codex" if name == "codex" else None,
+                  runnable=lambda path: True)      # bundle present too, and ignored
+    assert exe == "/usr/local/bin/codex"
+
+
+def test_the_resolved_executable_is_the_one_that_gets_registered(tmp_path):
+    """Registering with the bundle path and then checking a bare `codex` would report a
+    working connection as broken, because the bare name does not exist."""
+    bundled = "/Applications/ChatGPT.app/Contents/Resources/codex"
+    entry = plan(PLATFORMS["codex"], BASE, token_path("a1", tmp_path), exe=bundled)
+    assert entry["command"][0] == bundled
+    assert entry["executable"] == bundled
+    assert list_command(PLATFORMS["codex"], bundled) == [bundled, "mcp", "list"]
+
+
+def test_an_uninstalled_platform_is_still_absent():
+    """The fallbacks must not make everything look installed."""
+    assert resolve(PLATFORMS["codex"],
+                   lookup=lambda _: None, runnable=lambda _: False) is None
+
+
+# --- Codex refuses every tool call in automation unless told not to ------------------------
+
+CODEX_CONFIG = '''\
+model = "gpt-5.6-sol"
+
+[mcp_servers.playwright]
+command = "npx"
+args = ["@playwright/mcp@latest"]
+
+[mcp_servers.stepstitch]
+command = "uvx"
+args = ["stepstitch", "mcp"]
+
+[mcp_servers.stepstitch.env]
+STEPSTITCH_BASE_URL = "http://127.0.0.1:8321/api/stepstitch/v1"
+
+[projects."/some/repo"]
+trust_level = "trusted"
+'''
+
+
+def test_codex_needs_permission_to_call_tools_without_a_human(tmp_path):
+    """`codex exec` denies every MCP call with "user cancelled" while `codex mcp list`
+    reports the server as enabled — connected interactively, refusing in automation."""
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(CODEX_CONFIG)
+    assert ensure_codex_tool_approval(cfg) == "added"
+    assert CODEX_APPROVAL_LINE in cfg.read_text()
+
+
+def test_only_stepstitch_own_table_is_touched(tmp_path):
+    """Someone else's MCP server lives in this file. Granting it blanket tool approval
+    because we happened to be editing nearby would be a real widening of their trust."""
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(CODEX_CONFIG)
+    ensure_codex_tool_approval(cfg)
+    body = cfg.read_text()
+    playwright = body.split("[mcp_servers.playwright]")[1].split("[mcp_servers.stepstitch]")[0]
+    assert "default_tools_approval_mode" not in playwright
+    assert body.count(CODEX_APPROVAL_LINE) == 1
+
+
+def test_everything_else_in_the_file_survives(tmp_path):
+    """The file is hand-maintained. Re-serialising it through a TOML writer would silently
+    reformat comments and ordering that belong to the user."""
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(CODEX_CONFIG)
+    ensure_codex_tool_approval(cfg)
+    body = cfg.read_text()
+    for kept in ('model = "gpt-5.6-sol"', "[mcp_servers.playwright]",
+                 '[projects."/some/repo"]', 'trust_level = "trusted"',
+                 "[mcp_servers.stepstitch.env]"):
+        assert kept in body, kept
+
+
+def test_running_connect_twice_does_not_stack_the_key(tmp_path):
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(CODEX_CONFIG)
+    assert ensure_codex_tool_approval(cfg) == "added"
+    assert ensure_codex_tool_approval(cfg) == "already set"
+    assert cfg.read_text().count("default_tools_approval_mode") == 1
+
+
+def test_a_missing_or_unreadable_config_is_reported_not_crashed(tmp_path):
+    assert ensure_codex_tool_approval(tmp_path / "nope.toml").startswith("skipped")
+    other = tmp_path / "other.toml"
+    other.write_text("[mcp_servers.playwright]\ncommand = \"npx\"\n")
+    assert ensure_codex_tool_approval(other) == "skipped: no stepstitch table"
+    assert "default_tools_approval_mode" not in other.read_text()
+
+
+def test_every_fallback_is_an_absolute_or_home_relative_path():
+    """A bare name here would re-enter PATH lookup by the back door and could pick up
+    whatever happens to be on PATH under that name."""
+    for platform in PLATFORMS.values():
+        for candidate in platform.fallbacks:
+            assert candidate.startswith("/") or candidate.startswith("~"), candidate
 
 
 def test_verification_asks_the_platform_rather_than_assuming():
@@ -151,7 +278,7 @@ def test_verification_asks_the_platform_rather_than_assuming():
 
 def test_a_dry_run_shows_the_command_and_never_a_secret(tmp_path):
     path = write_token("a1", "ssa_topsecret", home=tmp_path)
-    rendered = render_plan(plan(PLATFORMS["gemini"], BASE, path))
+    rendered = render_plan(plan(PLATFORMS["gemini"], BASE, path, exe="gemini"))
     assert "gemini mcp add" in rendered
     assert "ssa_topsecret" not in rendered
     assert str(path) in rendered

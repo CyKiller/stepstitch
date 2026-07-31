@@ -21,6 +21,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 __all__ = ["main", "run_doctor", "Check", "mask"]
@@ -161,10 +162,14 @@ def _connect_command(args: Any) -> int:
     """
     from stepstitch_service.connect import (
         AGENT_SCOPE,
+        CODEX_APPROVAL_LINE,
         apply,
         detect,
+        ensure_codex_tool_approval,
+        list_command,
         plan,
         render_plan,
+        resolve,
         token_path,
         verify,
         write_token,
@@ -174,7 +179,8 @@ def _connect_command(args: Any) -> int:
     platforms = detect(args.agent)
     if not platforms:
         wanted = args.agent or "claude, codex or gemini"
-        print(f"No supported coding agent found on PATH ({wanted}).\n"
+        print(f"No supported coding agent found ({wanted}).\n"
+              "Looked on PATH and in the usual desktop-app bundles.\n"
               "Install one, or see docs/connect-an-agent.md to configure it by hand.")
         return 1
 
@@ -213,7 +219,10 @@ def _connect_command(args: Any) -> int:
 
     failures = 0
     for platform in platforms:
-        result = apply(platform, base_url, token_file)
+        # Resolve once and reuse: registering with the bundled CLI and then checking a
+        # PATH name that does not exist would report a working connection as broken.
+        exe = resolve(platform) or platform.executable
+        result = apply(platform, base_url, token_file, exe=exe)
         if not result["ok"]:
             print(f"  could not connect {platform.label}: {result['detail']}")
             failures += 1
@@ -221,14 +230,26 @@ def _connect_command(args: Any) -> int:
         # Registered is not the same as working. The vendor command can write a perfect
         # config that launches an engine which cannot start — which is exactly what
         # happens when the pinned version predates `stepstitch mcp`.
-        if verify([platform.executable, "mcp", "list"]):
+        if verify(list_command(platform, exe)):
             print(f"  {platform.label}: connected ({result['config']})")
+            # Codex denies every MCP call in `codex exec` unless its own table says
+            # otherwise — and reports the server as enabled the whole time. Without this
+            # the connection works interactively and silently refuses in automation.
+            if platform.key == "codex":
+                outcome = ensure_codex_tool_approval(
+                    Path(os.path.expanduser("~/.codex/config.toml")))
+                if outcome == "added":
+                    print("    non-interactive use enabled "
+                          "(default_tools_approval_mode). Scope still limits the agent.")
+                elif outcome.startswith("skipped"):
+                    print(f"    note: could not enable non-interactive tool calls "
+                          f"({outcome}). `codex exec` will refuse them; add\n"
+                          f"    `{CODEX_APPROVAL_LINE}` under [mcp_servers.stepstitch].")
         else:
             failures += 1
             print(f"  {platform.label}: registered in {result['config']}, but it does "
                   f"not start.\n"
-                  f"    Check with `{platform.executable} mcp list`. The usual cause is "
-                  f"an engine\n"
+                  f"    Check with `{exe} mcp list`. The usual cause is an engine\n"
                   f"    without the `stepstitch mcp` entry point — it needs a version "
                   f"that ships it.")
 
