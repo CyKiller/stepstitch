@@ -297,6 +297,60 @@ def test_real_credential_shapes_do_not_survive_the_real_redactor(tmp_path):
     assert record["contains_customer_session_data"] is False
 
 
+def test_free_text_pii_does_not_survive_the_production_redactor(tmp_path):
+    """The gap this closes shipped once: diagnostics were scrubbed with the transcript
+    redactor, which is a CREDENTIALS scrubber with zero PII patterns. An application run
+    against a staging backend that console.errors a customer's email, phone or card sent
+    that text verbatim to a third-party agent, under a stamp reading
+    `contains_customer_session_data: false`.
+
+    Uses `_diagnostics_redactor` — the exact callable production passes — not a stand-in.
+    The previous test covers credential shapes; this one covers what the full scrubber
+    adds, so between them a regression in either half fails by name. Vectors are obviously
+    synthetic (.invalid TLD, 555 numbers): realistic ones would trip push protection.
+    """
+    from stepstitch_service.runner import _diagnostics_redactor
+
+    path = _trace(tmp_path, trace=[
+        {"type": "console", "messageType": "error",
+         "text": "cannot read user jane.doe@example.invalid"},
+        {"type": "console", "messageType": "error",
+         "text": "checkout failed for 415-555-0199"},
+        {"type": "console", "messageType": "error",
+         "text": "card 4111 1111 1111 1111 declined"},
+        {"type": "console", "messageType": "error",
+         "text": "GET https://staging.example.invalid/api/pay?email=bob@example.invalid&sid=fake123 500"},
+    ])
+    record = scrub_diagnostics(parse_trace(path).as_dict(), _diagnostics_redactor)
+    blob = json.dumps(record)
+    for pii in ("jane.doe@example.invalid", "415-555-0199", "4111 1111 1111 1111",
+                "sid=fake123", "bob@example.invalid"):
+        assert pii not in blob, f"{pii} survived the production redactor"
+    # The stamp survives scrubbing — and after this, the content actually backs it up.
+    assert record["contains_customer_session_data"] is False
+
+
+def test_the_redactor_keeps_the_file_and_line_an_agent_needs(tmp_path):
+    """The one deliberate divergence from the ingest scrubber, pinned.
+
+    Its `url` rule deletes whole URLs — which in a stack frame is the file and line, the
+    exact detail that let a real agent name the broken file without searching. A URL's PII
+    is its query string, so the query is stripped and the location kept. If this test
+    fails because someone "upgraded" to the full url rule, the packet stops naming files.
+    """
+    from stepstitch_service.runner import _diagnostics_redactor
+
+    frame = ("TypeError: form.amount.toFixed is not a function\n"
+             "    at submitTransfer (http://127.0.0.1:4711/transfer.js:9:27)")
+    out = _diagnostics_redactor(frame)
+    assert "transfer.js:9:27" in out, "the location is the evidence"
+
+    leaky = "GET http://127.0.0.1:4711/api/pay?session=fake999&user=jo@example.invalid 500"
+    out = _diagnostics_redactor(leaky)
+    assert "session=fake999" not in out and "jo@example.invalid" not in out
+    assert "/api/pay" in out, "the path survives; only the query is the leak"
+
+
 def test_an_id_in_a_path_never_reaches_an_agent(tmp_path):
     """Templating is not cosmetic: /api/accounts/8675309/pay names a real account."""
     path = _trace(tmp_path, network=[
