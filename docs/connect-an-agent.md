@@ -1,13 +1,21 @@
 # Connect a coding agent
 
 ```bash
-npx stepstitch start          # in one terminal
-stepstitch connect claude     # or codex, gemini
+npx stepstitch start --connect claude    # or codex, gemini
 ```
 
-That is the whole thing. `connect` finds the agent you have installed, registers StepStitch
-through **that agent's own `mcp add` command**, issues a least-privilege token, and checks
-that the server actually starts.
+That is the whole thing — one process, one terminal. It starts the host, issues a
+least-privilege token, registers StepStitch through **that agent's own `mcp add` command**,
+checks that the server actually starts, and keeps serving.
+
+One command on purpose. The two-terminal version this doc used to show
+(`npx stepstitch start`, then `stepstitch connect claude`) failed twice on a fresh machine:
+`npx` does not leave a persistent `stepstitch` on PATH for the second terminal, and
+`connect` needs the admin token, which only the `start` process holds. `--connect` runs
+where the credential already lives, so nobody pastes anything.
+
+If the host is *already* running and you exported `STEPSTITCH_ADMIN_TOKEN` yourself,
+`stepstitch connect claude` still works as a standalone command.
 
 Everything below is for the cases `connect` does not cover — a platform it does not know, a
 locked-down machine, or curiosity about what it wrote.

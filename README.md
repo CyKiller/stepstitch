@@ -97,10 +97,10 @@ the autonomy stays in the customer's stack. A no-destructive guard runs at impor
 tool set is drift-guarded against the OpenAPI pack and the live routes
 (`service/tests/test_mcp_surface.py`).
 
-Connect one in two commands — `stepstitch connect claude` (or `codex`, `gemini`) registers
-StepStitch through that agent's own `mcp add` and issues a least-privilege token that can
-read evidence but **cannot record a verdict on its own fix**. See
-[docs/connect-an-agent.md](docs/connect-an-agent.md).
+Connect one in one command — `npx stepstitch start --connect claude` (or `codex`,
+`gemini`) starts the host, registers StepStitch through that agent's own `mcp add`, and
+issues a least-privilege token that can read evidence but **cannot record a verdict on its
+own fix**. See [docs/connect-an-agent.md](docs/connect-an-agent.md).
 
 Speaking MCP is not the same as having been tried. **Which platforms were actually run, on
 what date, and what failed** is a living table in

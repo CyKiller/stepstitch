@@ -314,3 +314,90 @@ def test_the_launch_command_pins_the_engine_version(tmp_path):
     installed = engine_version()
     if installed:
         assert spec == f"stepstitch-service[mcp]=={installed}"
+
+
+# --- the command the error message recommends must exist --------------------------------
+
+def test_the_connect_remedy_actually_parses():
+    """The trap this closes: the no-token error's only remedy was `stepstitch start
+    --connect claude` — a flag no parser defined, so the one recovery path the software
+    offered was a command it could not read. Exit 1, remedy, exit 2, dead end."""
+    from stepstitch_service.cli import build_parser
+
+    args = build_parser().parse_args(["start", "--connect", "claude"])
+    assert args.connect == "claude"
+    for agent in ("codex", "gemini"):
+        assert build_parser().parse_args(["start", "--connect", agent]).connect == agent
+
+
+def test_connect_without_a_token_recommends_a_command_that_parses(monkeypatch, capsys):
+    """Stronger than checking the flag exists once: extract the backticked command from
+    the actual error output and feed it to the actual parser, so the message and the
+    parser cannot drift apart again without this failing."""
+    import re as _re
+
+    from stepstitch_service.cli import build_parser, main
+
+    monkeypatch.delenv("STEPSTITCH_ADMIN_TOKEN", raising=False)
+    rc = main(["connect", "claude", "--host", "http://127.0.0.1:9"])
+    assert rc == 1
+    out = capsys.readouterr().out
+    recommended = _re.search(r"`stepstitch ([^`]+)`", out)
+    assert recommended, f"the error must offer a remedy: {out!r}"
+    args = build_parser().parse_args(recommended.group(1).split())
+    assert args.command == "start" and args.connect == "claude"
+
+
+def test_connect_agent_registers_with_the_admin_token_it_was_handed(monkeypatch, tmp_path):
+    """The seam start --connect uses: the credential arrives as an argument, not from the
+    environment — one process starts the host, issues the token, registers the agent."""
+    import stepstitch_service.cli as cli_mod
+    from stepstitch_service.connect import Platform
+
+    seen = {}
+
+    def fake_http(url, method, headers, body):
+        seen["url"], seen["auth"] = url, headers.get("Authorization")
+        return 200, {"id": "agent-1", "token": "ssa_fake_token_for_testing"}
+
+    platform = Platform(key="claude", label="Claude Code", executable="claude",
+                        add_argv=lambda exe, env: [exe, "mcp", "add"],
+                        config_hint="~/.claude.json")
+    monkeypatch.setattr(cli_mod, "_http", fake_http)
+    monkeypatch.setattr("stepstitch_service.connect.detect", lambda which=None: [platform])
+    monkeypatch.setattr("stepstitch_service.connect.resolve", lambda p, **kw: "/bin/claude")
+    monkeypatch.setattr("stepstitch_service.connect.write_token",
+                        lambda agent_id, token, home=None: tmp_path / f"{agent_id}.token")
+    monkeypatch.setattr("stepstitch_service.connect.apply",
+                        lambda *a, **kw: {"ok": True, "config": "~/.claude.json"})
+    monkeypatch.setattr("stepstitch_service.connect.verify", lambda *a, **kw: True)
+
+    rc = cli_mod.connect_agent("http://127.0.0.1:8321", "the-admin-token", "claude")
+    assert rc == 0
+    assert seen["auth"] == "Bearer the-admin-token"
+    assert seen["url"].endswith("/admin/agents")
+
+
+def test_reconnecting_replaces_the_existing_registration(tmp_path):
+    """Re-running connect must not be an error. The vendor CLIs refuse to add a name that
+    exists, so the second `start --connect` on the same machine failed with "already
+    exists" — punishing exactly the person re-pairing after a new port or a revoked token.
+    Found live: the first journey run passed, the second failed."""
+    from stepstitch_service.connect import SERVER_NAME, apply
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(argv)
+        if argv[1:3] == ["mcp", "add"] and len(calls) == 1:
+            return subprocess.CompletedProcess(
+                argv, 1, stdout="",
+                stderr=f"MCP server {SERVER_NAME} already exists in user config")
+        return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
+
+    platform = PLATFORMS["claude"]
+    result = apply(platform, "http://127.0.0.1:8321/api/stepstitch/v1",
+                   tmp_path / "t.token", runner=fake_run, exe="/bin/claude")
+    assert result["ok"] is True, result
+    assert calls[1][1:4] == ["mcp", "remove", SERVER_NAME], \
+        "cleared through the vendor's own remove, never by editing its config"
+    assert calls[2][1:3] == ["mcp", "add"], "then registered again"
