@@ -427,6 +427,13 @@ def build_app(
             if not record:
                 return
             try:
+                # Replace, never append — the same discipline the freeze row four lines
+                # below already had. Only the newest record is ever read (the packet's
+                # ORDER BY … LIMIT 1), so every appended row was unreachable dead weight
+                # in the one table that also had no retention clock: unbounded growth of
+                # exactly the data with the strongest reason to be bounded.
+                await execute("DELETE FROM stepstitch_diagnostics WHERE trace_id = ?",
+                              (trace_id,))
                 await execute(
                     "INSERT INTO stepstitch_diagnostics (id, trace_id, run_id, source, "
                     "schema_version, script_sha256, execution_envelope_sha256, "

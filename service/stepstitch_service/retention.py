@@ -27,6 +27,14 @@ _COUNT_SQL = (
     "SELECT COUNT(*) FROM stepstitch_traces "
     "WHERE retention_expires_at IS NOT NULL AND retention_expires_at < ?"
 )
+# Diagnostics first, while the expiring trace rows still exist to resolve the join —
+# there is no foreign key doing this for us, and a diagnostics row that outlives its
+# trace is unreachable by every read path yet still holds the richest data in the store.
+_DELETE_DIAGNOSTICS_SQL = (
+    "DELETE FROM stepstitch_diagnostics WHERE trace_id IN ("
+    "SELECT id FROM stepstitch_traces "
+    "WHERE retention_expires_at IS NOT NULL AND retention_expires_at < ?)"
+)
 _DELETE_SQL = (
     "DELETE FROM stepstitch_traces "
     "WHERE retention_expires_at IS NOT NULL AND retention_expires_at < ?"
@@ -57,6 +65,11 @@ async def purge_expired_traces(
             except (TypeError, ValueError, IndexError):
                 count = -1
 
+    try:
+        await execute(_DELETE_DIAGNOSTICS_SQL, (cutoff,))
+    except Exception:
+        # A pre-0008 store has no diagnostics table. The body purge must not fail with it.
+        logger.debug("stepstitch: no diagnostics table to purge", exc_info=True)
     await execute(_DELETE_SQL, (cutoff,))
     logger.info(
         "stepstitch retention purge cutoff=%s deleted=%s", cutoff.isoformat(), count

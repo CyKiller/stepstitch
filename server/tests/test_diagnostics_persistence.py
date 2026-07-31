@@ -87,3 +87,45 @@ def test_a_storage_failure_never_costs_us_the_verdict(tmp_path):
         assert body["ready_for_agent"] is True
     finally:
         conn.close()
+
+def test_refreezing_replaces_the_record_instead_of_stacking_another(tmp_path):
+    """Only the newest record is ever read, so every appended row was unreachable dead
+    weight — in the one table that also had no retention clock. Same discipline as the
+    freeze row four lines below it: replace, never append."""
+    client, conn, trace = _client(tmp_path)
+    try:
+        for text in ("first run", "second run"):
+            diag = dict(DIAG, console_errors=[text])
+            with patch("stepstitch_service.runner.run_reproduction",
+                       return_value=_result(diag)):
+                client.post(f"/admin/session/{trace}/freeze", json={},
+                            headers={"Authorization": f"Bearer {ADMIN}"})
+        rows = conn.execute("SELECT diagnostics_json FROM stepstitch_diagnostics "
+                            "WHERE trace_id = ?", (trace,)).fetchall()
+        assert len(rows) == 1, "re-freezing must replace, not accumulate"
+        assert "second run" in rows[0][0]
+    finally:
+        conn.close()
+
+
+def test_diagnostics_are_deleted_when_the_user_exercises_right_to_delete(tmp_path):
+    """The sharpest finding of the review this fixes: the right-to-delete endpoint
+    audit-logged a deletion, returned ok, and left the richest per-trace record in the
+    store — orphaned, unreachable by any read path, and holding exactly the console/stack
+    text with the strongest claim to deletion. Not deleted, only lost."""
+    client, conn, trace = _client(tmp_path)
+    try:
+        with patch("stepstitch_service.runner.run_reproduction",
+                   return_value=_result(DIAG)):
+            client.post(f"/admin/session/{trace}/freeze", json={},
+                        headers={"Authorization": f"Bearer {ADMIN}"})
+        user = conn.execute("SELECT user_id FROM stepstitch_traces WHERE id = ?",
+                            (trace,)).fetchone()[0]
+        body = client.delete(f"{_PFX}/session/by-user/{user}",
+                             headers={"Authorization": f"Bearer {ADMIN}"}).json()
+        assert body["status"] == "ok"
+        left = conn.execute("SELECT count(*) FROM stepstitch_diagnostics "
+                            "WHERE trace_id = ?", (trace,)).fetchone()
+        assert left == (0,), "deleted means deleted, diagnostics included"
+    finally:
+        conn.close()
