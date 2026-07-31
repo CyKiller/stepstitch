@@ -103,6 +103,7 @@ def _reproduce_command(args: Any) -> int:
     inconclusive, refused). "Reproduced" is not a failure of this command.
     """
     # Imported here so `doctor` stays stdlib-only and importable in a broken environment.
+    from stepstitch_service.diagnostics import EnvelopeMismatch
     from stepstitch_service.runner import RunnerError, run_reproduction, script_digest
 
     base = args.host.rstrip("/")
@@ -136,7 +137,10 @@ def _reproduce_command(args: Any) -> int:
             session_id=args.session, script=script, base_url=app_url,
             readiness=readiness, runs=args.runs, timeout_seconds=args.timeout,
         )
-    except RunnerError as exc:
+    except (RunnerError, EnvelopeMismatch) as exc:
+        # Both are refusals. EnvelopeMismatch cannot subclass RunnerError — diagnostics.py
+        # is deliberately runner-free — so it has to be named alongside it everywhere a
+        # refusal is caught, or it escapes as a crash instead of an answer.
         print(f"Refused: {exc}")
         return 1
 

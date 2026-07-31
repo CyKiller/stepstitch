@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from stepstitch_service.diagnostics import EnvelopeMismatch
 from stepstitch_service.runner import ReproductionResult, RunAttempt, RunnerError
 
 from server.audit import make_db_audit
@@ -139,6 +140,33 @@ def test_a_tampered_script_is_refused_at_verification(tmp_path):
                                headers=_admin()).json()
         assert body["status"] == "refused"
         assert "frozen" in body["detail"]
+    finally:
+        conn.close()
+
+
+def test_an_envelope_mismatch_is_refused_not_a_server_error(tmp_path):
+    """A refusal is an answer. Presented as a 500 it reads as "StepStitch is broken".
+
+    `EnvelopeMismatch` is not a `RunnerError` and cannot become one — diagnostics.py is
+    deliberately runner-free — so every place that catches a refusal has to name it. Until
+    it did, the first genuine mismatch would have escaped as an unhandled exception on the
+    product's central path, and the bug would only appear once envelope enforcement was
+    switched on: a trap laid for the commit that fixes something else.
+    """
+    client, conn, trace = _client(tmp_path)
+    try:
+        with patch("stepstitch_service.runner.run_reproduction",
+                   return_value=_result("reproduced", transcript=RED_TRANSCRIPT)):
+            client.post(f"/admin/session/{trace}/freeze", json={}, headers=_admin())
+        with patch("stepstitch_service.runner.run_reproduction",
+                   side_effect=EnvelopeMismatch(
+                       "this run is not the experiment that was frozen")):
+            response = client.post(f"/admin/session/{trace}/verify-fix", json={},
+                                   headers=_admin())
+        assert response.status_code == 200, "a refusal is not a server fault"
+        body = response.json()
+        assert body["status"] == "refused"
+        assert "experiment" in body["detail"]
     finally:
         conn.close()
 
