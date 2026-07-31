@@ -564,6 +564,8 @@ def test_a_run_with_diagnostics_on_matches_the_envelope_frozen_with_them_off(
     red = _run(work_root=_root(tmp_path, "red"), diagnostics=True, runner=fake_runner([1]))
     green = _run(work_root=_root(tmp_path, "green"), diagnostics=False, runner=fake_runner([0]))
     assert red.execution_envelope_sha256 == green.execution_envelope_sha256
+    # And the frozen SCRIPT hash: tracing must not move either digest.
+    assert red.script_sha256 == green.script_sha256
 
 
 @pytest.mark.parametrize("change", [
