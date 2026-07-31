@@ -4,6 +4,43 @@ All notable changes to StepStitch are recorded here. Versions are repo-wide tags
 SDK (`@stepstitch/tracker`) and the backend (`stepstitch_service`) are versioned in
 lockstep per `RELEASE.md`.
 
+## [0.10.0](https://github.com/CyKiller/stepstitch/compare/v0.9.1...v0.10.0) (2026-07-31)
+
+
+### Features
+
+* **cli:** stepstitch start --connect — the command the error message promised ([b35d823](https://github.com/CyKiller/stepstitch/commit/b35d82383107f050f60c34cc54183124bc459cd7))
+* **connect:** find the CLI, then let it actually call the tools ([ee9a57e](https://github.com/CyKiller/stepstitch/commit/ee9a57e89917947d2af4d38ba7ab2ed90b198c46))
+* **connect:** least-privilege agent connection that actually connects ([5322904](https://github.com/CyKiller/stepstitch/commit/5322904097f4aa38e1a286184e270f6f5b50aa8e))
+* **diagnostics:** depth from the reproduction, not from the reporter ([4acaddb](https://github.com/CyKiller/stepstitch/commit/4acaddb5ee613869c05838418009fecf85b698aa))
+* **diagnostics:** four signals from the trace, and a proof that measures something ([765b8eb](https://github.com/CyKiller/stepstitch/commit/765b8ebfc1736d9093429dc929f183dcd6ee79db))
+* **host:** the envelope is stored with the freeze and enforced at verification ([3068d38](https://github.com/CyKiller/stepstitch/commit/3068d38ba1b3f56d6bad54b450b562b19b9c397b))
+* **packet:** one handoff, and a privacy claim that stops being wrong ([2879fe7](https://github.com/CyKiller/stepstitch/commit/2879fe70783eb486540aff92ff2c351e946697df))
+* **runner:** a missing browser is refused before anything is launched ([68e4d3f](https://github.com/CyKiller/stepstitch/commit/68e4d3f5dd375dfdfcb898b850ac61599ec5daaa))
+
+
+### Bug Fixes
+
+* **claims:** the packet stops contradicting its own posture, and the replay ([ed8ee53](https://github.com/CyKiller/stepstitch/commit/ed8ee5370ad39fedd950f00f8883ed1302280728))
+* **connect:** stop shipping the anti-pattern the scope fix just removed ([34a29cc](https://github.com/CyKiller/stepstitch/commit/34a29cc6c8aa27204c7fe5367084afc30e4b75d0))
+* **diagnostics:** claim what the architecture proves, and nothing more ([7257a7c](https://github.com/CyKiller/stepstitch/commit/7257a7c2a256367b8672612816a345c25042c286))
+* **diagnostics:** hold reproduction evidence to the bar production evidence gets ([2244217](https://github.com/CyKiller/stepstitch/commit/224421754acd28d349614aaa7704fe3f712818ea))
+* **diagnostics:** ship the application's exception, not the test's assertion ([b173fee](https://github.com/CyKiller/stepstitch/commit/b173feed650d6dc75ff449c6fdf95b301ebfa9e3))
+* **diagnostics:** the execution envelope was a run id wearing a fingerprint's name ([c420952](https://github.com/CyKiller/stepstitch/commit/c4209528d41ee1e3798e6aca6df9272a756b3aaa))
+* **diagnostics:** the snapshot carried the raw URL it promised not to ([4e6351c](https://github.com/CyKiller/stepstitch/commit/4e6351cd7606d3b3fc3b5685e930e567a7043786))
+* **diagnostics:** the stored envelope record now explains a trusted mismatch ([bdd7873](https://github.com/CyKiller/stepstitch/commit/bdd7873f77ec01846c4f5c399b04adabc71c2325))
+* **host:** an envelope mismatch is a refusal, not a server fault ([772e0dc](https://github.com/CyKiller/stepstitch/commit/772e0dccd5de288b29db5c504a7c75bb3254c3c0))
+* **host:** deleted means deleted, diagnostics included ([e30df53](https://github.com/CyKiller/stepstitch/commit/e30df53371fe92ec0a5854f2238dad1b7a38a6fd))
+* **migrations:** 0009 must survive being replayed over a bootstrapped schema ([6e1dff4](https://github.com/CyKiller/stepstitch/commit/6e1dff4501764e6a773339448410265dacceb848))
+* **release:** make the stranger check reliable, and write down the procedure ([1abe6c5](https://github.com/CyKiller/stepstitch/commit/1abe6c54eb4cc83b723eecdb8158cf49c5bcc2a2))
+* **runner:** a missing browser is a fact about the machine, not the app ([d07b127](https://github.com/CyKiller/stepstitch/commit/d07b127e63e49f54d31915d61a78bc895d04e778))
+* **runner:** a relative project dir silently found no tests on Python 3.11 ([b8739a5](https://github.com/CyKiller/stepstitch/commit/b8739a5cb847b328129780fde9cf94641a41b873))
+* **runner:** record the browser that runs, not the package that ships it ([cb82d85](https://github.com/CyKiller/stepstitch/commit/cb82d85b99ad8deca427213617bb8ed31ddd2402))
+* **scripts:** make the inert gate say why, not just that it failed ([0706632](https://github.com/CyKiller/stepstitch/commit/0706632fd8ea18f5986e6b6b30b5abedc5e544ea))
+* **scripts:** the inert gate never ran, because it hardcoded a laptop's venv ([58ebf96](https://github.com/CyKiller/stepstitch/commit/58ebf96e607591a5e098e988e378f0f637bf6e0e))
+* **service:** an unexecutable footstep can no longer wear a grade A ([2541835](https://github.com/CyKiller/stepstitch/commit/2541835525426919613235c9faaf0598789d192b))
+* **tests:** satisfy mypy on the replay-script loader ([1e5695e](https://github.com/CyKiller/stepstitch/commit/1e5695e91bc007cf42df7fa0f9eb581b30a29ca6))
+
 ## [0.9.1](https://github.com/CyKiller/stepstitch/compare/v0.9.0...v0.9.1) (2026-07-30)
 
 

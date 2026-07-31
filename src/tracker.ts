@@ -21,7 +21,7 @@ import type {
   UserFootstep,
 } from "./types.js"
 
-export const SDK_VERSION = "0.9.1" // x-release-please-version
+export const SDK_VERSION = "0.10.0" // x-release-please-version
 
 const DEFAULT_MAX_FOOTSTEPS = 50
 const DEFAULT_UNMASK_ATTR = "data-stepstitch-unmask"
