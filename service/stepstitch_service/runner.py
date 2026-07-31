@@ -267,6 +267,15 @@ def derive_verdict(attempts: Sequence[RunAttempt]) -> tuple[str, bool]:
 # Markers that mean the test never ran. Playwright exits 1 both when a test fails and
 # when the config or its imports blow up, so the exit code alone cannot tell the two
 # apart — and treating the second as "the bug reproduced" would be a lie.
+#
+# The second group is the browser itself. It was missing for a long time, and the omission
+# was expensive: a purged or never-installed Chromium prints its launch error AND a "1
+# failed" summary, so the summary regex below matched, `errored` stayed False, and a broken
+# toolchain was reported as a reproduced application bug. Worse on the freeze path, where it
+# would record a red baseline whose signature is `Error: browserType.launch: …` — a referee
+# that never refereed. `fixcheck` has always reserved `unable_to_verify` for "a broken
+# toolchain"; until these markers existed, that branch was unreachable for the single most
+# common toolchain break there is.
 _NEVER_RAN_MARKERS = (
     "Cannot find module",
     "Error: No tests found",
@@ -276,6 +285,15 @@ _NEVER_RAN_MARKERS = (
     "Cannot find package",
     "Requiring the config",
     "Error: Cannot find",
+    # The browser. `browserType.launch:` is deliberately broad — it also covers missing
+    # system libraries and a corrupt profile, all of which mean the test never ran. Matching
+    # is a substring over the whole transcript, so a test whose NAME contained one of these
+    # would trip it; that is the accepted cost of not calling a dead toolchain a bug.
+    "Executable doesn't exist at",
+    "browserType.launch:",
+    "Looks like Playwright Test or Playwright was just installed or updated",
+    "npx playwright install",
+    "Host system is missing dependencies",
 )
 
 

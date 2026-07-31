@@ -291,6 +291,37 @@ def test_a_genuinely_failing_test_still_reads_as_reproduced():
     assert result.runs[0].errored is False
 
 
+def test_a_missing_browser_is_not_a_reproduced_bug():
+    """A purged Chromium is a fact about this machine, never about the application.
+
+    This is the transcript Playwright actually emits, and the reason it was misread for so
+    long is the last line: a missing browser prints a **run summary** as well as its launch
+    error. The summary regex matched, `errored` stayed False, and the verdict came back
+    `reproduced` — StepStitch telling a developer their app was broken when what was broken
+    was the browser. On the verify path that surfaced as `different_failure` (the two error
+    strings differ), which reads like the four-verdict system working and is not.
+    """
+    def no_browser(argv, **kwargs):
+        return subprocess.CompletedProcess(
+            argv, 1,
+            stdout="  1) repro.spec.ts:24:1 › StepStitch reproduction\n\n  1 failed\n",
+            stderr="Error: browserType.launch: Executable doesn't exist at "
+                   "/Users/x/Library/Caches/ms-playwright/chromium_headless_shell-1228/"
+                   "chrome-headless-shell-mac-arm64/chrome-headless-shell\n"
+                   "╔════════════════════════════════════════╗\n"
+                   "║ Looks like Playwright Test or Playwright was just installed "
+                   "or updated. ║\n"
+                   "║ Please run the following command to download new browsers:  ║\n"
+                   "║                                                             ║\n"
+                   "║     npx playwright install                                  ║\n"
+                   "╚════════════════════════════════════════╝\n")
+
+    result = _run(runner=no_browser)
+    assert result.verdict == INCONCLUSIVE, "a dead toolchain is not a reproduced bug"
+    assert result.runs[0].errored is True
+    assert "never ran" in result.detail
+
+
 def test_classify_run_separates_the_three_outcomes():
     from stepstitch_service.runner import classify_run
 
