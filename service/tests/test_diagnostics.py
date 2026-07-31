@@ -209,6 +209,24 @@ def test_the_snapshot_reports_the_last_real_interaction(tmp_path):
     assert snapshot["target"] == "[data-testid=submit]"
 
 
+def test_the_snapshot_templates_its_location_and_never_names_it_url(tmp_path):
+    """The snapshot gets the same treatment as a failed request, for the same reason.
+
+    A raw location carries the account number in the path and the session token in the
+    query string. It also puts a key named `url` in a packet whose privacy posture says it
+    captures none — and the agent-loop gate checks keys, so this shipped once already.
+    """
+    path = _trace(tmp_path, trace=[
+        {"type": "before", "method": "click",
+         "params": {"selector": "[data-testid=pay]",
+                    "url": "https://app.test/accounts/8675309/pay?session=abc123"}},
+    ])
+    snapshot = parse_trace(path).failure_snapshot
+    assert "url" not in snapshot, "a key named `url` contradicts the privacy posture"
+    assert snapshot["path"] == "/accounts/:id/pay"
+    assert "8675309" not in str(snapshot) and "abc123" not in str(snapshot)
+
+
 def test_a_trace_missing_sections_does_not_explode(tmp_path):
     """Playwright writes what it has. A partial trace is a normal outcome of a timeout,
     and losing all diagnostics because one section is absent would be worse than useless."""
