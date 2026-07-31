@@ -599,3 +599,37 @@ def test_the_scratch_directory_is_not_left_behind_when_the_envelope_is_refused(t
     with pytest.raises(EnvelopeMismatch):
         _run(expected_envelope_sha256="0" * 64, work_root=tmp_path)
     assert set(tmp_path.iterdir()) == before, "a refused run created a directory"
+
+
+def test_a_missing_browser_is_refused_before_anything_is_launched(monkeypatch):
+    """Pre-flight, not post-mortem. The condition is knowable before running, so the
+    answer is NEEDS_SETUP with the exact fix — and the proof of "pre" is that the fake
+    runner was never called."""
+    from stepstitch_service.runner import BrowserIdentity
+
+    monkeypatch.setattr("stepstitch_service.runner._browser_identity",
+                        lambda headless=True: BrowserIdentity(
+                            build="chromium 149.0.7827.55 (playwright build 1228)",
+                            install_location="/cache/chromium_headless_shell-1228",
+                            present=False))
+    calls = []
+    result = _run(runner=fake_runner([1], calls))
+    assert result.verdict == NEEDS_SETUP
+    assert calls == [], "nothing may be spawned on a machine that cannot spawn it"
+    blocker = next(b for b in result.blockers if b["id"] == "browser")
+    assert "npx playwright install chromium" in blocker["detail"]
+    assert result.execution_envelope_sha256 == "", \
+        "a digest for a run that never happened is noise"
+
+
+def test_an_unreadable_browser_probe_does_not_refuse_the_run(monkeypatch):
+    """`None` is "could not ask", and it must never harden into "absent" — refusing runs
+    on unusual but working layouts is a worse failure than the one being guarded."""
+    from stepstitch_service.runner import BrowserIdentity
+
+    monkeypatch.setattr("stepstitch_service.runner._browser_identity",
+                        lambda headless=True: BrowserIdentity())
+    calls = []
+    result = _run(runner=fake_runner([1], calls))
+    assert result.verdict == REPRODUCED
+    assert len(calls) == 1, "the run must proceed"

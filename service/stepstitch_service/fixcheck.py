@@ -20,7 +20,13 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from .runner import INCONCLUSIVE, NOT_REPRODUCED, REPRODUCED, ReproductionResult
+from .runner import (
+    INCONCLUSIVE,
+    NEEDS_SETUP,
+    NOT_REPRODUCED,
+    REPRODUCED,
+    ReproductionResult,
+)
 
 FIXED = "fixed"
 STILL_FAILING = "still_failing"
@@ -143,6 +149,19 @@ def derive_fix_verdict(
             return base
         base.verdict = STILL_FAILING
         base.detail = "the same failure is still there, in the same way."
+        return base
+
+    if after.verdict == NEEDS_SETUP:
+        # A broken toolchain, named as such — the docstring above reserves
+        # unable_to_verify for exactly this, and "no reliable answer" would send the
+        # developer hunting through their application for a problem on their machine.
+        base.detail = (
+            "this machine cannot run the reproduction, so nothing was learned about "
+            f"the change: {after.detail}"
+            if after.detail else
+            "this machine cannot run the reproduction, so nothing was learned about "
+            "the change."
+        )
         return base
 
     if after.verdict == INCONCLUSIVE:
