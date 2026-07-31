@@ -40,6 +40,11 @@ skills-lock.json
 # exception is how a local file with real paths or tokens gets committed by accident.
 .claude/
 
+# Git hooks are per-clone local tooling, like .claude/ above. A hook that ships in the
+# repository runs other people's code on their machine on every push, and `core.hooksPath`
+# is a local setting anyway — so keep hooks in your own global config, not here.
+.githooks/
+
 # Superpowers brainstorm scratch (visual companion mockups)
 .superpowers/
 

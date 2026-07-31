@@ -57,7 +57,6 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json && node scripts/finalize-dist.mjs",
     "prepare": "npm run build",
-    "hooks:install": "git config core.hooksPath .githooks",
     "prepublishOnly": "npm run build && npm run type-check && npm test",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
