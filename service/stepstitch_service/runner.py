@@ -398,7 +398,14 @@ def run_reproduction(
     # `@playwright/test` by walking up from the config's location — a system temp dir has
     # no node_modules above it, and the resulting module error would otherwise be read as
     # a failing test.
-    project = Path(project_dir or Path.cwd())
+    # `.absolute()`, because the config records testDir as text and Playwright resolves a
+    # relative testDir against the CONFIG's directory, not the cwd — so a relative project
+    # dir yields a doubled path and "No tests found", which the runner then correctly but
+    # unhelpfully reports as `inconclusive`. Python 3.12's tempfile.mkdtemp absolutises its
+    # return value and 3.11's does not, so this failed only on the older interpreter: CI.
+    # Left as `.absolute()` rather than `.resolve()` deliberately — resolving symlinks would
+    # rewrite /tmp to /private/tmp on macOS and move the envelope hash for existing callers.
+    project = Path(project_dir or Path.cwd()).absolute()
     default_root = project / ".stepstitch"
     default_root.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="repro-",
