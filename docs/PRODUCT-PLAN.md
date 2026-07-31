@@ -124,7 +124,9 @@ code-derived, profile-aware **regulatory crosswalk** + **MRM evidence** section:
 ### P5 — Eval harness  ✅ **SHIPPED**  *(quality bar every adapter inherits)*
 `test_repro_eval.py` is a quality oracle over the compiler + scorer that fails on a bad
 reproduction: strong trace ⇒ runnable, well-graded (A/B) Playwright; **missing terminal
-action ⇒ `no_terminal_action` warning + never grade A**; empty ⇒ F; templated route flags
+action ⇒ `no_terminal_action` warning + never grade A**; **unexecutable step type ⇒
+`unknown_step_type` warning + never grade A** (found live: a typo'd `navigate` scored 1.00/A
+over a script with no `page.goto`); empty ⇒ F; templated route flags
 id substitution; no compiled repro/summary carries credentials or a forbidden field;
 strong > weak (monotonicity). Wired as the `release-gate:evidence` npm script.
 - **Acceptance (green):** `release-gate:evidence` runs `test_repro_eval` + `test_compliance` + `test_golden_path`.

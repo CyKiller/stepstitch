@@ -28,6 +28,13 @@ __all__ = ["score_trace", "selector_stability", "GRADE_THRESHOLDS"]
 # Letter grade thresholds (inclusive lower bounds), best first.
 GRADE_THRESHOLDS = (("A", 0.85), ("B", 0.70), ("C", 0.55), ("D", 0.40))
 
+# The canonical executable set — every type the compiler can turn into a Playwright
+# action or assertion. Declared here rather than in compiler.py because the compiler
+# imports this module for its header (score + warnings), so the dependency only points one
+# way. The ingest schema's Literal and the SDK's TypeScript union must match this tuple;
+# test_the_five_supported_types_agree_everywhere is the guard.
+SUPPORTED_STEP_TYPES = ("navigation", "click", "input", "api_error", "exception")
+
 _INTERACTIVE = {"click", "input"}
 _TERMINAL = {"click", "api_error", "exception"}
 
@@ -72,9 +79,28 @@ def score_trace(footsteps: List[Dict[str, Any]]) -> Dict[str, Any]:
     interactive = 0
     stable_selectors = 0
 
+    unknown_types = 0
     for i, step in enumerate(footsteps):
         step_type = str(step.get("type", "")).lower()
         route = str(step.get("route", "/"))
+
+        if step_type not in SUPPORTED_STEP_TYPES:
+            # The scorer's whole job is to say how faithfully this trace replays, and a
+            # step the compiler cannot execute does not replay AT ALL — it is silently
+            # skipped downstream. Found live: a typo'd `navigate` compiled to a script
+            # with no page.goto that hung to timeout, graded 1.00/A, because nothing
+            # here ever asked whether a type was executable. The ingest Literal now
+            # refuses new ones; this branch is for legacy rows and direct callers.
+            unknown_types += 1
+            score -= 0.20
+            warnings.append({
+                "code": "unknown_step_type",
+                "step_index": i,
+                "detail": f"step {i} has type '{step_type}', which the compiler cannot "
+                          "execute — the step is not replayed, so this reproduction may "
+                          "not do what it claims",
+            })
+            continue
 
         if step_type in _INTERACTIVE:
             interactive += 1
@@ -129,6 +155,12 @@ def score_trace(footsteps: List[Dict[str, Any]]) -> Dict[str, Any]:
                       "the failing path.",
         })
 
+    if unknown_types:
+        # A cap, not only a penalty: an otherwise-perfect trace could absorb -0.20 and
+        # still land in B. A reproduction that silently skips one of its own steps is at
+        # best a C — the grade bands are a promise about faithfulness, and this one is
+        # provably unfaithful.
+        score = min(score, 0.60)
     score = max(0.0, min(1.0, round(score, 4)))
     return {
         "score": score,

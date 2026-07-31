@@ -90,3 +90,33 @@ def test_compiler_emits_replayability_header():
     )
     assert "Replayability:" in code
     assert "unstable_selector" in code
+
+
+def test_an_unknown_step_type_is_flagged_and_cannot_grade_well():
+    """The second defensive layer, for legacy rows and direct Python callers that the
+    ingest Literal cannot protect. The trace below is the live incident, verbatim in
+    shape: a typo'd `navigate` followed by clean testid steps scored 1.00 grade A while
+    the compiled script did nothing but hang — the scorer never asked whether a type was
+    one the compiler can execute.
+    """
+    r = score_trace([
+        _step("navigate", route="/index.html"),
+        _step("input", target="[data-testid=amount]"),
+        _step("click", target="[data-testid=submit]"),
+        _step("exception"),
+    ])
+    assert any(w["code"] == "unknown_step_type" for w in r["warnings"])
+    detail = next(w["detail"] for w in r["warnings"] if w["code"] == "unknown_step_type")
+    assert "navigate" in detail, "the warning names the offending type"
+    assert r["grade"] not in {"A", "B"}, (
+        f"a reproduction with a silently unexecutable step graded {r['grade']}"
+    )
+
+
+def test_canonical_traces_gain_no_unknown_type_warning():
+    r = score_trace([
+        _step("navigation", route="/a"),
+        _step("click", target="[data-testid=go]"),
+        _step("api_error", metadata={"endpoint": "/api/x", "status": 500}),
+    ])
+    assert not any(w["code"] == "unknown_step_type" for w in r["warnings"])

@@ -179,3 +179,46 @@ def test_purge_expired_endpoint_admin_audited():
     assert r.json()["deleted"] == 1
     assert db.rows == {}
     assert any(a[0] == "stepstitch.retention_purge" for a in db.audits)
+
+
+def test_an_unknown_footstep_type_is_refused_at_the_door():
+    """The bug this pins was found live: a hand-rolled client typo'd `navigate` for
+    `navigation`, the compiler silently dropped the step, the test hung on about:blank,
+    and the reproduction still graded A. The schema is the first of three layers: a type
+    the compiler cannot execute never enters the store at all, and the 422 names the
+    values that would have worked.
+    """
+    app, db = _build()
+    client = TestClient(app)
+    payload = {
+        "app_id": "demo-app",
+        "footsteps": [
+            {"timestamp": "2026-07-31T00:00:00Z", "type": "navigate",
+             "route": "/index.html", "label": "[masked]"}
+        ],
+        "metadata": {},
+    }
+    r = client.post("/api/stepstitch/v1/session", json=payload)
+    assert r.status_code == 422
+    body = json.dumps(r.json())
+    assert "navigation" in body, "the refusal must name the allowed values"
+    assert db.rows == {}, "nothing may be stored"
+
+
+def test_every_supported_footstep_type_still_ingests():
+    app, _ = _build()
+    client = TestClient(app)
+    payload = {
+        "app_id": "demo-app",
+        "footsteps": [
+            {"timestamp": "t0", "type": "navigation", "route": "/"},
+            {"timestamp": "t1", "type": "input", "route": "/", "target": "[data-testid=a]"},
+            {"timestamp": "t2", "type": "click", "route": "/", "target": "[data-testid=b]"},
+            {"timestamp": "t3", "type": "api_error", "route": "/",
+             "metadata": {"endpoint": "/api/pay", "status": 500}},
+            {"timestamp": "t4", "type": "exception", "route": "/",
+             "metadata": {"error_type": "TypeError"}},
+        ],
+        "metadata": {},
+    }
+    assert client.post("/api/stepstitch/v1/session", json=payload).status_code == 200
