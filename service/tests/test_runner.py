@@ -451,3 +451,76 @@ def test_a_run_under_a_different_envelope_is_refused(tmp_path):
 def test_a_session_frozen_before_envelopes_existed_still_verifies(tmp_path):
     # No recorded envelope means there is nothing to enforce — not a refusal.
     assert _run(expected_envelope_sha256=None, work_root=tmp_path).verdict
+
+
+# --- browser identity -------------------------------------------------------------------
+
+_DRY_RUN = """\
+Chrome for Testing 149.0.7827.55 (playwright chromium v1228)
+  Install location:    /cache/ms-playwright/chromium-1228
+  Download url:        https://example.invalid/chrome.zip
+
+FFmpeg (playwright ffmpeg v1011)
+  Install location:    /cache/ms-playwright/ffmpeg-1011
+
+Chrome Headless Shell 149.0.7827.55 (playwright chromium-headless-shell v1228)
+  Install location:    /cache/ms-playwright/chromium_headless_shell-1228
+"""
+
+
+def _fake_probe(monkeypatch, stdout=_DRY_RUN, returncode=0, raises=None):
+    def fake_run(argv, **kwargs):
+        if raises:
+            raise raises
+        return subprocess.CompletedProcess(argv, returncode, stdout=stdout, stderr="")
+
+    monkeypatch.setattr("stepstitch_service.runner.subprocess.run", fake_run)
+
+
+def test_the_browser_identity_is_the_chromium_build_not_the_package_version(monkeypatch):
+    """It used to report `playwright --version` — the npm package, not the browser.
+
+    That made the field wrong in both directions: installing a new Chromium left the string
+    unchanged, and the string stayed healthy with the browser deleted entirely.
+    """
+    from stepstitch_service.runner import _browser_identity
+
+    _fake_probe(monkeypatch)
+    monkeypatch.setattr("stepstitch_service.runner.Path.exists", lambda self: True)
+    identity = _browser_identity(headless=True)
+    assert identity.build == "chromium 149.0.7827.55 (playwright build 1228)"
+    assert "Version 1." not in identity.build, "that is the npm package, not the browser"
+
+
+def test_the_probe_believes_the_headless_shell_because_that_is_what_launches(monkeypatch):
+    """The trap that would turn this fix into a worse bug.
+
+    With `headless: true` Playwright launches the headless SHELL, a separate download from
+    full Chromium. A machine can legitimately have the shell for the pinned revision and not
+    the full browser — that is the machine this was written on. Checking the full-Chromium
+    path would declare a working install broken and refuse every run.
+    """
+    from stepstitch_service.runner import _browser_identity
+
+    _fake_probe(monkeypatch)
+    # Exactly the real cache state: the shell is there for v1228, full chromium is not.
+    monkeypatch.setattr("stepstitch_service.runner.Path.exists",
+                        lambda self: "headless_shell" in str(self))
+    assert _browser_identity(headless=True).present is True
+    assert _browser_identity(headless=False).present is False
+
+
+def test_an_unreadable_browser_probe_reports_unknown_rather_than_absent(monkeypatch):
+    """Tri-state on purpose. "Could not ask" is not "it is missing".
+
+    Collapsing them would refuse runs on unusual but working layouts (pnpm, Yarn PnP), which
+    is a worse failure than the one this guards.
+    """
+    from stepstitch_service.runner import _browser_identity
+
+    _fake_probe(monkeypatch, raises=OSError("npx not found"))
+    absent = _browser_identity()
+    assert absent.present is None and absent.build == "unknown"
+
+    _fake_probe(monkeypatch, stdout="something unparseable")
+    assert _browser_identity().present is None

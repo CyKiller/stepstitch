@@ -88,22 +88,74 @@ class RunnerError(Exception):
     """A refusal: the run must not proceed as asked."""
 
 
-def _browser_build() -> str:
-    """The browser identity that goes in the envelope.
+@dataclass(frozen=True)
+class BrowserIdentity:
+    """What browser this machine would actually launch, and whether it is there.
 
-    Asked of the installed Playwright rather than assumed, because a browser upgrade
-    genuinely can change an outcome — that is precisely why it is pinned. A failure to
-    answer is recorded as "unknown" instead of raising: refusing to run because we could
-    not read a version string would be worse than the risk it guards.
+    ``present`` is a TRI-STATE on purpose. ``None`` means "could not ask" — an unusual
+    layout (pnpm, Yarn PnP), no Node, a probe that would not parse. Collapsing that into
+    ``False`` would refuse runs on machines that work fine, which is a worse failure than
+    the one this guards.
+    """
+    build: str = "unknown"
+    install_location: str = ""
+    present: Optional[bool] = None
+
+
+# "Chrome Headless Shell 149.0.7827.55 (playwright chromium-headless-shell v1228)"
+_BROWSER_ENTRY = re.compile(
+    r"^(?P<title>.+?)\s+(?P<version>\d[\d.]*)\s+"
+    r"\(playwright\s+(?P<name>chromium(?:-headless-shell)?)\s+v(?P<rev>\d+)\)\s*$")
+
+
+def _browser_identity(headless: bool = True) -> BrowserIdentity:
+    """The browser identity that goes in the envelope, asked of Playwright itself.
+
+    This used to run ``playwright --version``, which reports the **npm package** version
+    ("Version 1.61.0") — not the browser. That made the envelope's browser field a lie in
+    both directions: ``npx playwright install chromium`` pulling a new Chromium left the
+    string unchanged, and the string stayed healthy when the browser was absent entirely.
+    ``install --dry-run`` costs the same (~0.8s, no network) and answers honestly.
+
+    ``headless`` picks WHICH entry to believe, and it matters more than it looks. With
+    ``headless: true`` Playwright ≥1.49 launches the **headless shell**, a separate download
+    from full Chromium. A machine can legitimately have the shell for the pinned revision
+    and not the full browser — that is the state of the machine this was written on — so
+    checking the full-Chromium path would declare a working install broken and refuse every
+    run. Keyed off the config spec rather than a constant, so it follows if that changes.
+
+    Never raises. A failure to answer is "unknown" with ``present=None``: refusing to run
+    because a version string would not parse is worse than the risk it guards.
     """
     try:
-        proc = subprocess.run(["npx", "--no-install", "playwright", "--version"],
-                              capture_output=True, text=True, timeout=30)
+        proc = subprocess.run(
+            ["npx", "--no-install", "playwright", "install", "chromium", "--dry-run"],
+            capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError):
-        return "unknown"
+        return BrowserIdentity()
     if proc.returncode != 0:
-        return "unknown"
-    return (proc.stdout or "").strip()[:60] or "unknown"
+        return BrowserIdentity()
+
+    wanted = "chromium-headless-shell" if headless else "chromium"
+    entry: Optional[re.Match[str]] = None
+    location = ""
+    for line in (proc.stdout or "").splitlines():
+        matched = _BROWSER_ENTRY.match(line.strip())
+        if matched:
+            entry = matched if matched.group("name") == wanted else None
+            continue
+        if entry and line.strip().startswith("Install location:"):
+            location = line.split(":", 1)[1].strip()
+            break
+    if entry is None or not location:
+        return BrowserIdentity()
+
+    build = f"chromium {entry.group('version')} (playwright build {entry.group('rev')})"
+    try:
+        present = Path(location).exists()
+    except OSError:
+        present = None
+    return BrowserIdentity(build=build[:60], install_location=location, present=present)
 
 
 def _collect_diagnostics(artifacts_dir: Path) -> Optional["Diagnostics"]:
@@ -443,7 +495,8 @@ def run_reproduction(
     # than reported — see diagnostics.check_envelope.
     envelope = ExecutionEnvelope(
         config=config_text,
-        browser=_browser_build(),
+        # Headless is what _playwright_config writes, so it is what will actually launch.
+        browser=_browser_identity(headless=True).build,
         base_url=base_url,
         timeout_ms=timeout * 1000,
         retries=0,

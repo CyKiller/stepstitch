@@ -295,12 +295,41 @@ def test_missing_node_warns_because_capture_still_works(monkeypatch):
     assert "playwright" not in statuses(checks)
 
 
+def _stub_browsers(monkeypatch, status=PASS, detail="chromium 149.0 (build 1228)", fix=""):
+    """Stub the browser probe. Without this the doctor tests shell out for real and
+    answer differently on every machine — the exact machine-dependence they avoid
+    elsewhere by stubbing `_tool_version`."""
+    from stepstitch_service.cli import Check
+    monkeypatch.setattr("stepstitch_service.cli._browsers_check",
+                        lambda: Check("playwright browsers", status, detail, fix))
+
+
 def test_node_and_playwright_pass_when_present(monkeypatch):
     monkeypatch.setattr("stepstitch_service.cli._tool_version",
                         lambda argv: "v22.0.0" if argv[0] == "node" else "Version 1.61.0")
+    _stub_browsers(monkeypatch)
     st = statuses(run_doctor(env=dict(GOOD_ENV), transport=fake_transport()))
     assert st["node"] == PASS
     assert st["playwright"] == PASS
+
+
+def test_doctor_reports_a_missing_browser_even_when_the_package_is_present(monkeypatch):
+    """The package answering says nothing about the browser.
+
+    `playwright --version` passes with every browser deleted, which is how a machine that
+    could not run a single reproduction used to look healthy here. The two fail separately,
+    so they are reported separately.
+    """
+    monkeypatch.setattr("stepstitch_service.cli._tool_version",
+                        lambda argv: "v22.0.0" if argv[0] == "node" else "Version 1.61.0")
+    _stub_browsers(monkeypatch, status=WARN, detail="chromium 149.0 is not installed",
+                   fix="Reproductions cannot run until it is: npx playwright install chromium")
+    checks = run_doctor(env=dict(GOOD_ENV), transport=fake_transport())
+    st = statuses(checks)
+    assert st["playwright"] == PASS, "the package is fine; only the browser is missing"
+    assert st["playwright browsers"] == WARN
+    browsers = next(c for c in checks if c.name == "playwright browsers")
+    assert "npx playwright install chromium" in browsers.fix
 
 
 def test_missing_playwright_names_the_install_command(monkeypatch):
