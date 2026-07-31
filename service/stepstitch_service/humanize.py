@@ -187,6 +187,9 @@ _WARNING_TEXT: Dict[str, str] = {
         "the report is long, so the test covers a lot of ground and may be slow or brittle",
     "empty_trace":
         "nothing was captured for this report, so there is nothing to rebuild",
+    "unknown_step_type":
+        "one of the recorded steps is a kind this system cannot replay, so the rebuilt "
+        "test skips it — treat its results with care",
 }
 
 

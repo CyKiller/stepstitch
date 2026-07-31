@@ -216,3 +216,51 @@ def test_the_helper_is_omitted_when_a_trace_has_no_inputs():
     code = generate_playwright_test("t_1", trace)
     assert "setField" not in code
     assert "type Locator" not in code
+
+
+def test_an_unsupported_step_is_marked_never_silently_dropped():
+    """Layer three. An unknown type used to leave only its header comment — the script
+    read as complete, replayed nothing for that step, and hung on about:blank when the
+    dropped step was the navigation. The compiler must say so in the artifact itself."""
+    trace = [
+        {"timestamp": "t0", "type": "navigate", "route": "/index.html",
+         "label": "[masked]"},
+        {"timestamp": "t1", "type": "click", "route": "/index.html",
+         "target": "[data-testid=submit]", "label": "[masked]"},
+        {"timestamp": "t2", "type": "exception", "route": "/index.html",
+         "metadata": {"error_type": "TypeError"}},
+    ]
+    code = generate_playwright_test("t_unsup", trace)
+    assert "UNSUPPORTED-STEP" in code
+    assert "'navigate'" in code, "the marker names the type it refused to fake"
+    assert "page.goto" not in code, (
+        "nothing may quietly stand in for the dropped navigation"
+    )
+    # And the header can no longer advertise perfection above a dropped step.
+    assert "Replayability: 1.00" not in code
+
+
+def test_supported_traces_carry_no_unsupported_marker():
+    assert "UNSUPPORTED-STEP" not in generate_playwright_test("t_1", TRACE)
+
+
+def test_the_five_supported_types_agree_everywhere():
+    """One set, three declarations: the compiler's tuple (the definition of executable),
+    the ingest Literal (mypy needs it spelled out), and the SDK's TypeScript union. The
+    Literal cannot be built from the tuple at type-check time, so this guard is what
+    prevents three-way drift."""
+    import re
+    from pathlib import Path
+    from typing import get_args
+
+    from stepstitch_service.compiler import SUPPORTED_STEP_TYPES
+    from stepstitch_service.router import FootstepSchema
+
+    literal = set(get_args(FootstepSchema.model_fields["type"].annotation))
+    assert literal == set(SUPPORTED_STEP_TYPES)
+
+    types_ts = (Path(__file__).resolve().parents[2] / "src" / "types.ts").read_text()
+    union = re.search(r"export type FootstepType =\s*((?:\s*\|\s*\"\w+\")+)", types_ts)
+    assert union, "src/types.ts FootstepType union moved"
+    sdk = set(re.findall(r'"(\w+)"', union.group(1)))
+    assert sdk == set(SUPPORTED_STEP_TYPES), "the SDK union drifted from the service"

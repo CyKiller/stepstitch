@@ -99,3 +99,13 @@ def test_evidence_summary_never_carries_forbidden_keys_or_selectors():
 def test_grade_monotonicity_strong_beats_weak():
     # A regression that inverted the score would flip this — the core quality invariant.
     assert score_trace(STRONG)["score"] > score_trace(WEAK)["score"]
+
+
+def test_a_trace_with_an_unexecutable_step_never_grades_a():
+    """The oracle-level statement of the FootstepType fix: a reproduction that silently
+    cannot replay one of its steps is not an A reproduction, whatever else it does well.
+    Found live as a 1.00/A script with no page.goto that hung until timeout."""
+    tainted = [dict(STRONG[0], type="navigate")] + [dict(s) for s in STRONG[1:]]
+    verdict = score_trace(tainted)
+    assert verdict["grade"] != "A", f"unexecutable step graded {verdict['grade']}"
+    assert any(w["code"] == "unknown_step_type" for w in verdict["warnings"])

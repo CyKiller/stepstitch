@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from .replayability import score_trace
+from .replayability import SUPPORTED_STEP_TYPES, score_trace
 from .repro_config import ReproConfig, endpoint_match_regex, readiness, synthetic_value
 
 __all__ = ["generate_playwright_test"]
@@ -308,6 +308,19 @@ def generate_playwright_test(
                 f"'the reported {_comment(name)} must not reproduce').toBe(false);"
             )
             asserted = True
+
+        elif step_type not in SUPPORTED_STEP_TYPES:
+            # Say so IN the artifact. This branch used to not exist: an unknown type left
+            # only its header comment, the script read as complete, and when the dropped
+            # step was the navigation it hung on about:blank to timeout — while the header
+            # above stamped grade A. Marking beats refusing for legacy rows (the rest of
+            # the trace still replays), and the scorer's unknown_step_type warning lands
+            # in the same header, so the two statements can never disagree.
+            lines.append(
+                f"  // UNSUPPORTED-STEP: type '{_comment(step_type)}' is not executable "
+                "by this compiler — NOT replayed. A green run of this script says "
+                "nothing about this step."
+            )
 
         lines.append("")
         i += 1

@@ -15,7 +15,7 @@ import logging
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -71,7 +71,13 @@ CaptureEnabledFn = Callable[[], Any]
 
 class FootstepSchema(BaseModel):
     timestamp: str
-    type: str
+    # Spelled out rather than built from replayability.SUPPORTED_STEP_TYPES because mypy
+    # needs Literal args at type-check time; the parity test in test_compiler.py is what
+    # keeps this, the tuple, and the SDK's TypeScript union from drifting apart. A type
+    # outside this set is refused with 422 at the door — the compiler would silently skip
+    # it, the scorer would once have graded the wreckage A, and a hand-typed `navigate`
+    # did exactly that live.
+    type: Literal["navigation", "click", "input", "api_error", "exception"]
     route: str
     target: Optional[str] = None
     label: str = "[masked]"
