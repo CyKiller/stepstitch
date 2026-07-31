@@ -91,13 +91,23 @@ for the reviewer packet.
 StepStitch is a capability **provider**, not an agent orchestrator — it perceives, scores,
 compiles a Playwright repro, and **drafts**, but never plans or acts autonomously. Its
 universal connector is an **MCP server** (`service/stepstitch_service/mcp_server.py`, run
-via `mcp_cli.py`): the same thirteen read-only/draft operations — including the composed
-**Safe Agent Packet** (`get_agent_packet`, one call instead of five) — consumable by **any**
-MCP client — Microsoft Copilot Studio, OpenAI, Google Vertex, LangGraph, AWS Bedrock, Claude.
-One server, every agent network; the autonomy stays in the customer's stack. A
-no-destructive guard runs at import, and the tool set is drift-guarded against the OpenAPI
-pack and the live routes (`service/tests/test_mcp_surface.py`). See `copilot/MCP-SETUP.md`
-and `docs/DEPLOY.md`.
+via `stepstitch mcp`): the same thirteen read-only/draft operations — including the composed
+**Safe Agent Packet** (`get_agent_packet`, one call instead of five) — over standard MCP, so
+the autonomy stays in the customer's stack. A no-destructive guard runs at import, and the
+tool set is drift-guarded against the OpenAPI pack and the live routes
+(`service/tests/test_mcp_surface.py`).
+
+Connect one in two commands — `stepstitch connect claude` (or `codex`, `gemini`) registers
+StepStitch through that agent's own `mcp add` and issues a least-privilege token that can
+read evidence but **cannot record a verdict on its own fix**. See
+[docs/connect-an-agent.md](docs/connect-an-agent.md).
+
+Speaking MCP is not the same as having been tried. **Which platforms were actually run, on
+what date, and what failed** is a living table in
+[docs/agent-platforms.md](docs/agent-platforms.md) — one row per platform, failures
+included. As of 2026-07-30 one platform has been verified end-to-end, with a real model
+reading the packet and fixing a real bug. Cloud/tenant clients (Copilot Studio, Vertex,
+Bedrock) are a separate setup path — see `copilot/MCP-SETUP.md` and `docs/DEPLOY.md`.
 
 ## Fully open (Apache-2.0)
 

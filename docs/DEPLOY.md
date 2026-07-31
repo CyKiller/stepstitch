@@ -181,8 +181,13 @@ weaken it. Pick per vertical (drift-guarded by `test_profiles.py`):
 pip install 'stepstitch-service[mcp]'
 export STEPSTITCH_BASE_URL="https://stepstitch.internal/api/stepstitch/v1"
 export STEPSTITCH_TOKEN="<operator-bearer-token>"   # admin; reads are audited
-python -m stepstitch_service.mcp_cli
+stepstitch mcp
 ```
+
+This is the **operator** path, and the token is an admin credential. A coding agent must
+never be given one — it could then record a verdict on its own fix. Connect those with
+`stepstitch connect <agent>`, which issues a scoped token instead
+([connect-an-agent.md](connect-an-agent.md)).
 
 Or containerized (`service/Dockerfile.mcp`):
 

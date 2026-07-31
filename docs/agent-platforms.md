@@ -51,13 +51,22 @@ is proven separately and deterministically: with the bug restored and an on-disk
 replaced by `test('...', async () => {})`, verification still returned **`still_failing`**,
 because it reruns the frozen bytes rather than the working tree.
 
-## A usability finding
+## A usability finding — and the fix it produced
 
 Before finishing, the model ran `which stepstitch` — it wanted to verify its own work — and
 found nothing. The packet's `reproduction.command` suggests `stepstitch reproduce <id>`,
 which an agent generally cannot run: the CLI may not be installed, and by design the agent
-holds no credential that can record a verdict. The command reads as an instruction to the
-agent when it is really a note for the human. Worth rewording.
+holds no credential that can record a verdict. The command read as an instruction when it
+was really a note for the human.
+
+**Fixed.** Both command-bearing blocks in the packet — `reproduction` and `verification` —
+now carry a `run_by` field stating plainly that the command is run by the developer or by
+StepStitch, never by the agent, and is shown as context rather than as a step. A test
+asserts the pairing holds for *every* block carrying a `command`, so a future field cannot
+reintroduce the same misreading.
+
+This is the only change the trials produced. Nothing else was demonstrated missing, and no
+new diagnostic probe was built on the strength of a guess.
 
 ## What "not yet" means for Claude Code
 
@@ -92,8 +101,20 @@ written to disk (`test('...', async () => {})`, assertion deleted), verification
 **`still_failing`** — still judged by the frozen bytes, because verification reruns the
 recorded script rather than whatever is in the working tree.
 
-## Not covered
+## Untested
 
-Microsoft Copilot Studio, Google Vertex and AWS Bedrock are tenant/cloud configurations
-against a reachable endpoint, not a local stdio launch. They are a separate setup path and
-have not been tested; see [connect-an-agent.md](connect-an-agent.md).
+Named here because other documents used to list them inline as though they worked. Each is
+a reasonable design expectation — they are standard MCP clients and StepStitch is a standard
+MCP server — but **none has been run against a real StepStitch**, and an expectation is not
+a result.
+
+| Platform | Why untested |
+|---|---|
+| Microsoft Copilot Studio | tenant/cloud config against a reachable HTTP endpoint, not a local stdio launch |
+| Google Vertex | same — remote transport, separate setup path |
+| AWS Bedrock | same — remote transport, separate setup path |
+| OpenAI Agents SDK | local stdio is plausible; simply not exercised yet |
+| LangGraph | local stdio is plausible; simply not exercised yet |
+
+Cloud/tenant setup lives in [../copilot/MCP-SETUP.md](../copilot/MCP-SETUP.md); local coding
+agents are covered by `stepstitch connect` in [connect-an-agent.md](connect-an-agent.md).
