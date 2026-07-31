@@ -189,6 +189,44 @@ def scrub_transcript(text: str) -> str:
     return text
 
 
+# A URL's PII is its query string; its path is the evidence. The full scrubber's `url`
+# rule deletes the whole thing, which in a stack frame is the file and line — the exact
+# detail that lets an agent open the right file without searching. Strip the query, keep
+# the location.
+_QUERY_STRING = re.compile(r"(\b[a-z][a-z0-9+.-]*://[^\s?#]+)\?\S*", re.I)
+
+
+def _diagnostics_redactor(text: str) -> str:
+    """The redactor a diagnostics record actually deserves: credentials AND free-text PII.
+
+    ``scrub_transcript`` alone was the whole story here for one release, and it is a
+    credentials scrubber — bearer tokens, secret-shaped assignments, URL userinfo, agent
+    tokens. Zero PII patterns. But ``console_errors`` and ``failure_stack`` carry whatever
+    the application printed, and an app run against a staging backend will happily
+    ``console.error`` a real email, phone number or card. That text then travelled to a
+    third-party agent under a stamp reading ``contains_customer_session_data: false``.
+
+    The stamp is about the SESSION (no customer's browser was recorded — structurally
+    true), but the field's plain reading is about content, so the content must hold it up:
+    every string gets the server-side scrubber's PII rules — email, ssn, card, phone,
+    dates, long digit runs — the same bar the ingest path holds production traffic to.
+
+    One deliberate difference from the ingest scrubber: its ``url`` rule is replaced by a
+    query-string strip. Deleting whole URLs from a stack frame deletes the file and line —
+    ``transfer.js:9`` is precisely what an agent needs and is not PII — while the query
+    string (``?session=…``, ``?email=…``) is where a URL actually leaks and is removed.
+    """
+    from .scrubber import _PII_PATTERNS
+
+    text = scrub_transcript(text)
+    text = _QUERY_STRING.sub(r"\1?[redacted:query]", text)
+    for label, pattern in _PII_PATTERNS:
+        if label == "url":
+            continue
+        text = pattern.sub(f"[redacted:{label}]", text)
+    return text
+
+
 def child_env(base: Optional[Dict[str, str]] = None,
               extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
     """Build the child environment from the allowlist, plus explicit extras.
@@ -624,7 +662,7 @@ def run_reproduction(
                 collected.browser = envelope.browser
                 collected.stepstitch_version = RUNNER_VERSION
                 diagnostics_record = scrub_diagnostics(collected.as_dict(),
-                                                       scrub_transcript)
+                                                       _diagnostics_redactor)
     finally:
         if not screenshots:
             shutil.rmtree(work, ignore_errors=True)
