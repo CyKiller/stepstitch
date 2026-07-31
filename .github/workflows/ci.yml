@@ -135,6 +135,14 @@ jobs:
         env:
           DATABASE_URL: postgresql://stepstitch:stepstitch@localhost:5432/stepstitch_ci
         run: alembic upgrade head
+      # …and prove the OTHER order: SCHEMA_SQL bootstrap first, THEN alembic replays
+      # history on top. That is the fresh-deployment path, it is the order that broke
+      # (0009's ADD COLUMN hit DuplicateColumn three jobs wide), and the step above cannot
+      # catch it — it proves alembic-onto-empty. Runs on its own disposable database.
+      - name: Migrations replay over a SCHEMA_SQL-bootstrapped database
+        env:
+          DATABASE_URL: postgresql://stepstitch:stepstitch@localhost:5432/stepstitch_ci
+        run: python3 scripts/prove_migrations_replay.py
       # Runs the full server/tests suite (auth gating, dashboard XSS regression,
       # observability) AND the real-Postgres round-trip, which is active because the
       # DATABASE_URL below is set (it self-skips elsewhere).
