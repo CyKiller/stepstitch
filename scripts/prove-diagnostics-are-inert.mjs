@@ -128,7 +128,13 @@ for a in r.runs:
         sig = failure_signature(a.transcript)
         if sig: break
 print(json.dumps({"verdict": r.verdict, "sha": r.script_sha256, "sig": sig,
-                  "has_diagnostics": bool(r.diagnostics)}))
+                  "has_diagnostics": bool(r.diagnostics),
+                  # Why, not just what. An inconclusive verdict with no reason attached
+                  # costs a CI round-trip per guess; the runner scrubbed both of these.
+                  "detail": (r.detail or "")[:400],
+                  "blockers": [b.get("title", "") for b in r.blockers],
+                  "transcript": (getattr(r.runs[0], "transcript", "") or "")[:400]
+                                if r.runs else ""}))
 `
   const work = mkdtempSync(join(tmpdir(), 'inert-'))
   const file = join(work, 'run.py')
@@ -171,6 +177,10 @@ for (const shape of SHAPES) {
   if (off.verdict !== expected || on.verdict !== expected) {
     console.log(`  FAIL ${shape.id.padEnd(26)} expected ${expected}, got ` +
                 `off=${off.verdict} on=${on.verdict} — nothing was measured`)
+    const blocked = (off.blockers || []).concat(on.blockers || [])
+    if (blocked.length) console.log(`       blocked by: ${[...new Set(blocked)].join(', ')}`)
+    const why = off.detail || off.transcript || on.detail || on.transcript
+    if (why) console.log(`       why: ${why.replace(/\n/g, '\n            ')}`)
     failures++
     continue
   }
