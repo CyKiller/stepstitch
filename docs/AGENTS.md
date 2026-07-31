@@ -10,7 +10,7 @@ privacy posture, diagnostic, repro) composed into one call instead of five round
 
 | Consumer | Surface | How |
 |---|---|---|
-| Claude Code, Copilot Studio, LangGraph, Bedrock, Vertex | **MCP** | `build_tool_definitions()` / `serve_stdio()` — run `python -m stepstitch_service.mcp_cli` (see `copilot/MCP-SETUP.md`) |
+| Any MCP client — see [agent-platforms.md](agent-platforms.md) for which were actually run | **MCP** | `build_tool_definitions()` / `serve_stdio()` — `stepstitch mcp`. Local coding agents: `stepstitch connect <agent>` ([connect-an-agent.md](connect-an-agent.md)). Remote/tenant: `copilot/MCP-SETUP.md` |
 | Hermes, OpenAI tools API, Gemini function calling | **Function specs** | `build_function_tool_specs()` — OpenAI/JSON-Schema `{"type":"function", ...}` |
 | Power Platform / native connectors | **OpenAPI** | `copilot/openapi-v2.json` |
 

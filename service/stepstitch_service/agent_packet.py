@@ -56,6 +56,19 @@ COLLECTED_FROM_REPRODUCTION: List[str] = [
     "browser build and StepStitch version",
 ]
 
+# Both commands in this packet are shown so an agent can see the experiment it is being
+# measured by. Neither is a step for it to carry out, and neither will work if it tries:
+# running a reproduction is a local action rather than a read, and recording a verdict
+# needs the admin credential that a connected agent is deliberately never given.
+#
+# This wording exists because a real model went looking for the binary. Given a field
+# called ``command``, a capable agent reasonably reads it as a thing to run — a packet that
+# lists commands without saying who runs them is asking to be misread.
+NOT_AN_AGENT_INSTRUCTION = (
+    "Run by the developer or by StepStitch itself, never by this agent. Shown so you can "
+    "see how your fix will be exercised — it is context, not a step to carry out."
+)
+
 
 def privacy_posture(policy_name: str, scrub: Optional[Dict[str, Any]],
                     has_diagnostics: bool) -> Dict[str, Any]:
@@ -170,6 +183,7 @@ def build_packet(
         "playwright_code": playwright_code,
         "reproduction": {
             "command": f"stepstitch reproduce {trace_id}",
+            "run_by": NOT_AN_AGENT_INSTRUCTION,
             "script_sha256": frozen.get("script_sha256"),
             "execution_envelope_sha256": frozen.get("execution_envelope_sha256"),
             "frozen": bool(frozen.get("script_sha256")),
@@ -192,6 +206,7 @@ def build_packet(
         ),
         "verification": {
             "command": verification_command(trace_id, host),
+            "run_by": NOT_AN_AGENT_INSTRUCTION,
             "verdicts": ["fixed", "still_failing", "different_failure", "unable_to_verify"],
             "detail": "StepStitch reruns the frozen reproduction and decides. This agent "
                       "cannot record a verdict on its own fix.",

@@ -1,11 +1,17 @@
 # StepStitch MCP server — universal agentic connector setup
 
 This is the **"for all" path**: StepStitch exposes its Copilot-safe operations as a Model
-Context Protocol (MCP) server, so any MCP client — Microsoft Copilot Studio, OpenAI,
-Google Vertex/Gemini, LangGraph, AWS Bedrock, Claude — consumes the *same* audited,
+Context Protocol (MCP) server, so an MCP client consumes the *same* audited,
 read-only/draft surface with no bespoke adapter. The server is
-`service/stepstitch_service/mcp_server.py`; run it with `mcp_cli.py`. See
+`service/stepstitch_service/mcp_server.py`; run it with `stepstitch mcp`. See
 [docs/PRODUCT-PLAN.md](../docs/PRODUCT-PLAN.md) (P1/P2).
+
+**Which clients have actually been run against a real StepStitch — and which have not — is
+recorded in [docs/agent-platforms.md](../docs/agent-platforms.md)**, with dates and
+failures. Nothing is listed as working here on the strength of speaking MCP in principle.
+For local coding agents the supported path is `stepstitch connect <agent>`
+([docs/connect-an-agent.md](../docs/connect-an-agent.md)); this document covers the
+remote/tenant clients, which `connect` deliberately does not handle.
 
 > StepStitch is a capability **provider**, not an agent orchestrator. The MCP server only
 > perceives, scores, compiles a repro, and **drafts** — it never files, deletes, purges,
@@ -51,17 +57,21 @@ kill-switch, retention, raw `GET /session/{id}`) are blocked at import by
 pip install 'stepstitch-service[mcp]'
 export STEPSTITCH_BASE_URL="https://stepstitch.internal/api/stepstitch/v1"
 export STEPSTITCH_TOKEN="<operator-bearer-token>"   # admin; every read is audited
-python -m stepstitch_service.mcp_cli                  # serves over stdio
+stepstitch mcp                                        # serves over stdio
 ```
 
-`mcp_cli` builds an authenticated `call_route` against your deployed service and serves
-the tools. The token is an **operator/admin** credential — the same SSO the StepStitch
-admin API already uses — because these are operator tools and each read writes an audit
-event server-side.
+It builds an authenticated `call_route` against your deployed service and serves the tools.
+The token above is an **operator/admin** credential, appropriate for an operator console
+where each read writes an audit event server-side.
+
+> **Do not give this credential to a coding agent.** An admin token can record a verdict on
+> a fix, which is the one thing an agent must never be able to do about its own work. Local
+> agents get a scoped token from `stepstitch connect <agent>` instead, written to a
+> 0600 file and referenced by path — see
+> [docs/connect-an-agent.md](../docs/connect-an-agent.md).
 
 ### Transports
-- **stdio** (shipped, via `mcp_cli`): for local/embedded MCP clients — Claude, the OpenAI
-  Agents SDK, a LangGraph process, Cursor, etc.
+- **stdio** (shipped, via `stepstitch mcp`): for local/embedded MCP clients.
 - **Streamable-HTTP / SSE** (for remote/cloud clients incl. **Copilot Studio**): run the
   same `COPILOT_SAFE_OPERATIONS` registry behind an HTTP MCP transport. The tool registry
   and `dispatch_tool` are transport-agnostic; only the serving shell differs. Until the
@@ -75,12 +85,17 @@ the StepStitch MCP server endpoint (remote HTTP transport) with the bearer crede
 Then apply [action-policy.md](action-policy.md) and the DLP/approval governance in
 [SETUP.md](SETUP.md) §3. *(Or use the OpenAPI custom connector path today — see SETUP.md.)*
 
-**Claude / Claude Code** — add to the MCP server list, command
-`python -m stepstitch_service.mcp_cli` with `STEPSTITCH_BASE_URL` / `STEPSTITCH_TOKEN` in env.
+**Claude Code, Codex, Gemini CLI, Antigravity** — do not hand-edit config for these. Run
+`stepstitch connect <agent>`, which registers through the agent's own `mcp add` and issues a
+scoped token rather than an admin one
+([docs/connect-an-agent.md](../docs/connect-an-agent.md)).
 
-**OpenAI Agents SDK / LangGraph / Vertex / Bedrock** — register the StepStitch MCP server
-as a tool source; each treats the thirteen tools as standard MCP tools. No StepStitch-specific
-code required.
+**OpenAI Agents SDK / LangGraph / Vertex / Bedrock** — *untested.* In principle each
+registers the StepStitch MCP server as a tool source and treats the thirteen tools as
+standard MCP tools, with no StepStitch-specific code. None of them has been run against a
+real StepStitch, so this is a design expectation and not a verified result — it is recorded
+as untested in [docs/agent-platforms.md](../docs/agent-platforms.md), and that table is the
+one to trust.
 
 ## Public registry listing (prepared, not yet submitted)
 

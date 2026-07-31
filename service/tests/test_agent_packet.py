@@ -8,6 +8,7 @@ origin is what keeps both halves true instead of softening one into uselessness.
 from stepstitch_service.agent_packet import (
     COLLECTED_FROM_REPRODUCTION,
     NEVER_FROM_PRODUCTION,
+    NOT_AN_AGENT_INSTRUCTION,
     build_packet,
     likely_files,
     privacy_posture,
@@ -137,6 +138,27 @@ def test_the_agent_is_told_exactly_how_it_will_be_marked():
 
 def test_the_verification_command_names_the_session():
     assert "t-1" in verification_command("t-1")
+
+
+def test_every_command_says_who_runs_it():
+    """Found by a real trial, not by review: given a field called ``command``, a capable
+    model went looking for the binary. Neither command is runnable by the agent — one is a
+    local action rather than a read, the other needs the admin credential it is deliberately
+    never given — so each must say so where it is read."""
+    packet = _packet(frozen={"script_sha256": "a" * 64})
+    for block in ("reproduction", "verification"):
+        assert packet[block]["run_by"] == NOT_AN_AGENT_INSTRUCTION, block
+        assert "never by this agent" in packet[block]["run_by"], block
+
+
+def test_a_command_is_never_published_without_its_run_by():
+    """The pairing is the point. A future field carrying a command and no ``run_by`` would
+    reintroduce exactly the misreading this fixes."""
+    packet = _packet(diagnostics=DIAGS, frozen={"script_sha256": "a" * 64})
+    carries_a_command = [k for k, v in packet.items()
+                         if isinstance(v, dict) and "command" in v]
+    assert carries_a_command == ["reproduction", "verification"]
+    assert all(packet[k].get("run_by") for k in carries_a_command)
 
 
 # --- composition --------------------------------------------------------------------------
