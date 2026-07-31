@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
+from stepstitch_service.replayability import SUPPORTED_STEP_TYPES
 
 
 class FakeDB:
@@ -201,7 +202,14 @@ def test_an_unknown_footstep_type_is_refused_at_the_door():
     r = client.post("/api/stepstitch/v1/session", json=payload)
     assert r.status_code == 422
     body = json.dumps(r.json())
-    assert "navigation" in body, "the refusal must name the allowed values"
+    # Every allowed value, not just one: a client that guessed wrong should be able to
+    # read the whole vocabulary off the refusal instead of guessing again. Sourced from
+    # the canonical tuple so a sixth type cannot be added without this test seeing it.
+    for allowed in SUPPORTED_STEP_TYPES:
+        assert allowed in body, (
+            f"the refusal names {SUPPORTED_STEP_TYPES!r} minus {allowed!r} — the caller "
+            "cannot see the value they should have sent"
+        )
     assert db.rows == {}, "nothing may be stored"
 
 
