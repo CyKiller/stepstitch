@@ -71,6 +71,11 @@ class FixVerdict:
     red_signature: str = ""
     green_signature: str = ""
     flaky: bool = False
+    # False for sessions frozen before the envelope was stored with the freeze. The script
+    # hash is still enforced for those — the referee holds — but "same experiment" is
+    # reduced to "same bytes", and a `measured` grade obtained that way is weaker than one
+    # with the envelope pinned. Saying so beats silently equating them.
+    envelope_enforced: bool = False
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -82,6 +87,7 @@ class FixVerdict:
             "red_signature": self.red_signature,
             "green_signature": self.green_signature,
             "flaky": self.flaky,
+            "envelope_enforced": self.envelope_enforced,
         }
 
 
@@ -90,6 +96,7 @@ def derive_fix_verdict(
     red_verdict: Optional[str],
     red_signature: str,
     after: ReproductionResult,
+    envelope_enforced: bool = False,
 ) -> FixVerdict:
     """Compare the recorded red run against the run made after the change.
 
@@ -107,7 +114,7 @@ def derive_fix_verdict(
         verdict=UNABLE_TO_VERIFY, detail="", script_sha256=after.script_sha256,
         red_verdict=red_verdict or "", green_verdict=after.verdict,
         red_signature=red_signature, green_signature=green_signature,
-        flaky=after.flaky,
+        flaky=after.flaky, envelope_enforced=envelope_enforced,
     )
 
     if red_verdict != REPRODUCED:

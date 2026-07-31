@@ -4,6 +4,7 @@ The verdict logic is covered in service/tests/test_fixcheck.py. These tests cove
 host stores and refuses — above all, that the frozen script is what verification reruns,
 so a fixing agent can never grade its own homework.
 """
+import json
 from unittest.mock import patch
 
 from fastapi import FastAPI
@@ -53,7 +54,7 @@ def _admin():
     return {"Authorization": f"Bearer {ADMIN}"}
 
 
-def _result(verdict, *, transcript="", passed=None, sha="a" * 64):
+def _result(verdict, *, transcript="", passed=None, sha="a" * 64, envelope_sha="e" * 64):
     if passed is None:
         passed = verdict == "not_reproduced"
     return ReproductionResult(
@@ -61,6 +62,9 @@ def _result(verdict, *, transcript="", passed=None, sha="a" * 64):
         runs=[RunAttempt(index=0, exit_code=0 if passed else 1, passed=passed,
                          timed_out=False, duration_seconds=1.0, transcript=transcript)],
         detail=f"runner said {verdict}",
+        execution_envelope_sha256=envelope_sha,
+        execution_envelope={"browser": "chromium 149.0 (build 1228)",
+                            "base_url": "http://127.0.0.1:4321"},
     )
 
 
@@ -140,6 +144,89 @@ def test_a_tampered_script_is_refused_at_verification(tmp_path):
                                headers=_admin()).json()
         assert body["status"] == "refused"
         assert "frozen" in body["detail"]
+    finally:
+        conn.close()
+
+
+def test_the_freeze_records_the_envelope_it_measured_under(tmp_path):
+    """The digest lives on the freeze row, 1:1 with the script it pins — not found back by
+    a latest-diagnostics heuristic that a re-freeze or stray run makes wrong."""
+    client, conn, trace = _client(tmp_path)
+    try:
+        with patch("stepstitch_service.runner.run_reproduction",
+                   return_value=_result("reproduced", transcript=RED_TRANSCRIPT)):
+            client.post(f"/admin/session/{trace}/freeze", json={}, headers=_admin())
+        row = conn.execute(
+            "SELECT execution_envelope_sha256, execution_envelope_json "
+            "FROM stepstitch_frozen_repros WHERE trace_id = ?", (trace,)).fetchone()
+        assert row[0] == "e" * 64
+        assert "chromium" in row[1], "the record, so a refusal can say which field moved"
+    finally:
+        conn.close()
+
+
+def test_verify_fix_passes_the_frozen_envelope_to_the_runner(tmp_path):
+    """Repo-wide, `expected_envelope_sha256` used to appear only in the runner's own unit
+    tests. Nothing exercised the production call path, which is how the packet came to
+    promise enforcement that never happened."""
+    client, conn, trace = _client(tmp_path)
+    try:
+        with patch("stepstitch_service.runner.run_reproduction",
+                   return_value=_result("reproduced", transcript=RED_TRANSCRIPT)):
+            client.post(f"/admin/session/{trace}/freeze", json={}, headers=_admin())
+        with patch("stepstitch_service.runner.run_reproduction",
+                   return_value=_result("not_reproduced")) as run:
+            body = client.post(f"/admin/session/{trace}/verify-fix", json={},
+                               headers=_admin()).json()
+        assert run.call_args.kwargs["expected_envelope_sha256"] == "e" * 64
+        assert body["verdict"] == "fixed"
+        assert body["envelope_enforced"] is True
+    finally:
+        conn.close()
+
+
+def test_a_session_frozen_before_the_envelope_column_still_verifies(tmp_path):
+    """Legacy rows degrade, they do not refuse. A refusal would force a re-freeze, and
+    re-freezing after the agent has edited the app destroys the red baseline — the one
+    artefact that cannot be recreated. The reduction is REPORTED, not silent."""
+    client, conn, trace = _client(tmp_path)
+    try:
+        with patch("stepstitch_service.runner.run_reproduction",
+                   return_value=_result("reproduced", transcript=RED_TRANSCRIPT)):
+            client.post(f"/admin/session/{trace}/freeze", json={}, headers=_admin())
+        conn.execute("UPDATE stepstitch_frozen_repros SET execution_envelope_sha256 = NULL, "
+                     "execution_envelope_json = NULL WHERE trace_id = ?", (trace,))
+        with patch("stepstitch_service.runner.run_reproduction",
+                   return_value=_result("not_reproduced")) as run:
+            body = client.post(f"/admin/session/{trace}/verify-fix", json={},
+                               headers=_admin()).json()
+        assert run.call_args.kwargs["expected_envelope_sha256"] is None
+        assert body["verdict"] == "fixed"
+        assert body["envelope_enforced"] is False, "weaker evidence, said out loud"
+    finally:
+        conn.close()
+
+
+def test_the_packet_serves_the_frozen_envelope_not_the_latest_diagnostics(tmp_path):
+    """The old source was `stepstitch_diagnostics ORDER BY created_at DESC LIMIT 1` — the
+    latest row, which is not the frozen one after any subsequent run. The packet's sentence
+    to the agent is about the FROZEN envelope, so it must come from the freeze row."""
+    client, conn, trace = _client(tmp_path)
+    try:
+        with patch("stepstitch_service.runner.run_reproduction",
+                   return_value=_result("reproduced", transcript=RED_TRANSCRIPT)):
+            client.post(f"/admin/session/{trace}/freeze", json={}, headers=_admin())
+        # A later diagnostics row with a DIFFERENT envelope — the heuristic would serve it.
+        conn.execute(
+            "INSERT INTO stepstitch_diagnostics (id, trace_id, run_id, source, "
+            "schema_version, script_sha256, execution_envelope_sha256, diagnostics_json, "
+            "created_at) VALUES ('x', ?, 'r', 'synthetic_reproduction', 1, 's', ?, '{}', "
+            "'2099-01-01T00:00:00+00:00')", (trace, "f" * 64))
+        body = client.get(f"{_PFX}/session/{trace}/agent-packet",
+                          headers=_admin()).json()
+        packet = json.dumps(body)
+        assert ("e" * 64) in packet, "the frozen envelope"
+        assert ("f" * 64) not in packet, "the stray later run must not displace it"
     finally:
         conn.close()
 
