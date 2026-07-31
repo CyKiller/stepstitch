@@ -442,3 +442,132 @@ def test_a_name_and_address_survive_which_is_why_the_record_must_not_promise(tmp
     assert record["content_scrubbed"] is True
     assert record["environment_assurance"] == "operator_configured"
     assert record["customer_data_status"] == "not_verified"
+
+
+# --- a trusted record explains a mismatch; the digest alone decides -----------------------
+
+def _frozen(**over):
+    """A frozen envelope's stored artefacts: (sha, record) exactly as the freeze writes
+    them — sha over hashed_payload, record from as_dict."""
+    env = _envelope(**over)
+    return env.sha256(), env.as_dict()
+
+
+@pytest.mark.parametrize("field,value,expect_named", [
+    ("base_url", "http://127.0.0.1:9999", ["base_url"]),
+    ("browser", "chromium 999.0.0.0 (playwright build 9999)", ["browser"]),
+])
+def test_a_trusted_mismatch_names_the_field_that_moved(field, value, expect_named):
+    """The freeze stores the full envelope record precisely so a refusal can say WHICH
+    field moved — a comment that was true about intent and false about implementation
+    until this test. Two hex prefixes are undiagnosable; a field name is a diagnosis."""
+    sha, record = _frozen()
+    with pytest.raises(EnvelopeMismatch) as exc:
+        check_envelope(sha, _envelope(**{field: value}), expected_record=record)
+    message = str(exc.value)
+    for name in expect_named:
+        assert name in message, f"the refusal must name {name}"
+    assert value not in message, "field NAMES only — never values"
+
+
+def test_a_timeout_change_names_both_fields_it_lives_in():
+    """timeout appears in timeout_ms AND inside config_canonical — naming both is the
+    honest answer, not a bug."""
+    sha, record = _frozen()
+    changed = _envelope(timeout_ms=5000,
+                        config_canonical='{"retries":0,"timeout":5000,"use":{"headless":true}}')
+    with pytest.raises(EnvelopeMismatch) as exc:
+        check_envelope(sha, changed, expected_record=record)
+    assert "timeout_ms" in str(exc.value)
+    assert "config_canonical" in str(exc.value)
+
+
+def test_the_refusal_never_names_diagnostics_profile():
+    """The profile is excluded from the hash (prove-diagnostics-are-inert.mjs is the
+    empirical basis), so a profile-only difference can never cause a refusal — and no
+    refusal may claim it did. The old message named it as a possible cause."""
+    sha, record = _frozen(diagnostics_profile="four-signal")
+    # profile-only difference: digests are EQUAL, so this must not raise at all
+    check_envelope(sha, _envelope(diagnostics_profile="off"), expected_record=record)
+    # and a real mismatch must not mention the profile
+    with pytest.raises(EnvelopeMismatch) as exc:
+        check_envelope(sha, _envelope(base_url="http://127.0.0.1:9999"),
+                       expected_record=record)
+    assert "diagnostics" not in str(exc.value).lower()
+
+
+def test_a_record_that_fails_its_own_digest_gets_no_say():
+    """The rule this whole feature hangs on: the digest decides whether the run is
+    accepted; the JSON only explains a TRUSTED mismatch. A record whose values do not
+    re-hash to the stored digest is corrupt or tampered, and naming fields from it would
+    be a fabricated diagnosis."""
+    sha, record = _frozen()
+    record["browser"] = "chromium 000.tampered"          # values no longer match the sha
+    with pytest.raises(EnvelopeMismatch) as exc:
+        check_envelope(sha, _envelope(base_url="http://127.0.0.1:9999"),
+                       expected_record=record)
+    message = str(exc.value)
+    assert "tampered" not in message
+    assert "differs from the frozen one on:" not in message, \
+        "an untrusted record may not produce the field-naming refusal"
+    assert sha[:12] in message, "digest enforcement stands; the generic refusal remains"
+
+
+def test_a_record_missing_hashed_keys_gets_no_say():
+    sha, record = _frozen()
+    del record["env_names"]
+    with pytest.raises(EnvelopeMismatch) as exc:
+        check_envelope(sha, _envelope(base_url="http://127.0.0.1:9999"),
+                       expected_record=record)
+    assert "env_names" not in str(exc.value)
+    assert sha[:12] in str(exc.value)
+
+
+def test_a_record_from_another_schema_version_gets_no_say():
+    """An older writer hashed by different rules; diffing across that boundary would
+    produce confident nonsense."""
+    sha, record = _frozen()
+    record["envelope_schema_version"] = 2
+    with pytest.raises(EnvelopeMismatch) as exc:
+        check_envelope(sha, _envelope(base_url="http://127.0.0.1:9999"),
+                       expected_record=record)
+    assert "base_url" not in str(exc.value)
+
+
+def test_extra_unrecognized_keys_do_not_confuse_the_diff():
+    """Extraction takes only the current hashed keys, so junk keys neither break the
+    digest validation nor get named."""
+    sha, record = _frozen()
+    record["operator_note"] = "junk that must be ignored"
+    with pytest.raises(EnvelopeMismatch) as exc:
+        check_envelope(sha, _envelope(base_url="http://127.0.0.1:9999"),
+                       expected_record=record)
+    message = str(exc.value)
+    assert "base_url" in message, "the valid part of the record still explains"
+    assert "operator_note" not in message and "junk" not in message
+
+
+def test_a_secret_in_the_frozen_base_url_never_reaches_the_refusal():
+    """A stored base_url can carry userinfo. The refusal names fields, never values —
+    a diagnostic that leaks a credential is worse than an opaque one."""
+    sha, record = _frozen(base_url="http://ops:fakehunter2pw@127.0.0.1:4321")
+    with pytest.raises(EnvelopeMismatch) as exc:
+        check_envelope(sha, _envelope(base_url="http://127.0.0.1:9999"),
+                       expected_record=record)
+    message = str(exc.value)
+    assert "base_url" in message
+    assert "fakehunter2pw" not in message and "ops:" not in message
+
+
+def test_a_malformed_record_does_not_crash_or_disable_enforcement():
+    sha, _ = _frozen()
+    for garbage in ("not a dict", 42, ["list"], {"half": "a record"}):
+        with pytest.raises(EnvelopeMismatch):
+            check_envelope(sha, _envelope(base_url="http://127.0.0.1:9999"),
+                           expected_record=garbage)
+
+
+def test_a_matching_digest_asks_no_questions_of_the_record():
+    # Acceptance is the digest's decision alone — a garbage record must not matter.
+    env = _envelope()
+    check_envelope(env.sha256(), env, expected_record={"nonsense": True})

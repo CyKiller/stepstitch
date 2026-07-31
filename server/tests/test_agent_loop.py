@@ -63,8 +63,20 @@ def _result(verdict, *, transcript="", passed=None, sha="a" * 64, envelope_sha="
                          timed_out=False, duration_seconds=1.0, transcript=transcript)],
         detail=f"runner said {verdict}",
         execution_envelope_sha256=envelope_sha,
-        execution_envelope={"browser": "chromium 149.0 (build 1228)",
-                            "base_url": "http://127.0.0.1:4321"},
+        # A realistic full as_dict() shape, not a two-key stub: the stored record is now
+        # genuinely read back at verification, so what these tests store must look like
+        # what the freeze actually writes.
+        execution_envelope={
+            "config_canonical": '{"retries":0,"timeout":120000,"use":{"headless":true}}',
+            "browser": "chromium 149.0 (build 1228)",
+            "base_url": "http://127.0.0.1:4321",
+            "timeout_ms": 120000,
+            "retries": 0,
+            "diagnostics_profile": "four-signal",
+            "runner_version": "1",
+            "envelope_schema_version": 3,
+            "env_names": ["HOME", "PATH"],
+        },
     )
 
 
@@ -179,6 +191,12 @@ def test_verify_fix_passes_the_frozen_envelope_to_the_runner(tmp_path):
             body = client.post(f"/admin/session/{trace}/verify-fix", json={},
                                headers=_admin()).json()
         assert run.call_args.kwargs["expected_envelope_sha256"] == "e" * 64
+        # The stored JSON is genuinely READ, parsed, and handed to the runner — the
+        # column was write-only for one commit while a comment claimed otherwise.
+        record = run.call_args.kwargs["expected_envelope_record"]
+        assert record is not None
+        assert record["browser"] == "chromium 149.0 (build 1228)"
+        assert record["envelope_schema_version"] == 3
         assert body["verdict"] == "fixed"
         assert body["envelope_enforced"] is True
     finally:
@@ -253,6 +271,29 @@ def test_a_reproduction_that_could_not_launch_is_not_frozen(tmp_path):
         row = conn.execute("SELECT count(*) FROM stepstitch_frozen_repros "
                            "WHERE trace_id = ?", (trace,)).fetchone()
         assert row == (0,), "nothing ran, so nothing may be frozen"
+    finally:
+        conn.close()
+
+
+def test_a_corrupt_stored_envelope_record_does_not_crash_or_disable_enforcement(tmp_path):
+    """The record is stored text and can rot. Rot must cost only the field-naming nicety:
+    the digest is still passed and still decides, the endpoint answers, nothing 500s."""
+    client, conn, trace = _client(tmp_path)
+    try:
+        with patch("stepstitch_service.runner.run_reproduction",
+                   return_value=_result("reproduced", transcript=RED_TRANSCRIPT)):
+            client.post(f"/admin/session/{trace}/freeze", json={}, headers=_admin())
+        conn.execute("UPDATE stepstitch_frozen_repros SET execution_envelope_json = "
+                     "'{not json at all' WHERE trace_id = ?", (trace,))
+        with patch("stepstitch_service.runner.run_reproduction",
+                   return_value=_result("not_reproduced")) as run:
+            response = client.post(f"/admin/session/{trace}/verify-fix", json={},
+                                   headers=_admin())
+        assert response.status_code == 200
+        assert run.call_args.kwargs["expected_envelope_sha256"] == "e" * 64, \
+            "digest enforcement must survive a rotten record"
+        assert run.call_args.kwargs["expected_envelope_record"] is None
+        assert response.json()["verdict"] == "fixed"
     finally:
         conn.close()
 

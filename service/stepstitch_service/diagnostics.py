@@ -24,10 +24,12 @@ cannot see the DOM, the network, or the console. The trace can, and it is produc
 byte-identical frozen script without that script knowing anything about it.
 
 **The execution envelope.** Freezing the test alone is not enough to make two runs
-comparable: *how* the test ran matters too. A different browser build, timeout, base URL or
-diagnostics profile can turn the same bytes into a different outcome, and a referee that
-only pins the script would be quietly comparing two different experiments. So the envelope
-is hashed as well, and a verification run must match on both.
+comparable: *how* the test ran matters too. A different browser build, timeout or base URL
+can turn the same bytes into a different outcome, and a referee that only pins the script
+would be quietly comparing two different experiments. So the envelope is hashed as well,
+and a verification run must match on both. (The diagnostics profile is deliberately NOT in
+that hash — ``prove-diagnostics-are-inert.mjs`` is the standing proof that tracing changes
+no outcome — so a profile difference is never a mismatch and no refusal may claim it is.)
 """
 from __future__ import annotations
 
@@ -161,23 +163,76 @@ class EnvelopeMismatch(Exception):
     """The run would not be comparable to the frozen one. A refusal, not a warning."""
 
 
-def check_envelope(expected_sha256: Optional[str], actual: ExecutionEnvelope) -> None:
+def _record_may_explain(expected_sha256: str, expected_record: Any,
+                        hashed_keys: List[str]) -> Optional[Dict[str, Any]]:
+    """Decide whether the stored envelope record has earned the right to name fields.
+
+    The rule the whole feature hangs on: **the digest decides whether the run is accepted;
+    the JSON only explains a trusted mismatch.** The record is stored text — it can be
+    corrupted, hand-edited, or written by an older schema whose hashing rules differed —
+    and a diagnosis built from an untrusted record is a fabricated diagnosis. So before it
+    may explain anything: extract exactly the current hashed keys, re-hash them with the
+    same canonicalization ``sha256()`` uses, and require the result to equal the digest the
+    freeze stored. A record that fails any step gets no say; digest enforcement and the
+    generic refusal stand unchanged.
+    """
+    if not isinstance(expected_record, dict):
+        return None
+    if expected_record.get("envelope_schema_version") != ENVELOPE_SCHEMA_VERSION:
+        # An older writer hashed by different rules; a diff across that boundary would
+        # produce confident nonsense.
+        return None
+    if any(key not in expected_record for key in hashed_keys):
+        return None
+    extracted = {key: expected_record[key] for key in hashed_keys}
+    digest = hashlib.sha256(json.dumps(extracted, sort_keys=True,
+                                       separators=(",", ":")).encode("utf-8")).hexdigest()
+    return extracted if digest == expected_sha256 else None
+
+
+def check_envelope(expected_sha256: Optional[str], actual: ExecutionEnvelope,
+                   expected_record: Any = None) -> None:
     """Refuse a verification whose execution envelope differs from the frozen one.
 
     Mirrors the script-hash refusal deliberately: a fix "proven" under a different browser,
     timeout or base URL was not proven against the same experiment, and saying so after the
     fact is worth much less than refusing up front.
+
+    ``expected_record`` is the frozen row's stored envelope JSON, already parsed. When it
+    validates against the stored digest (see ``_record_may_explain``), the refusal names
+    the FIELDS that moved — names only, never values, because a stored ``base_url`` can
+    carry userinfo and ``env_names`` exists precisely because values must not be recorded.
+    When it does not validate, the refusal falls back to the digest prefixes.
     """
     if not expected_sha256:
         return
     actual_sha = actual.sha256()
-    if actual_sha != expected_sha256:
-        raise EnvelopeMismatch(
-            f"this run's execution envelope ({actual_sha[:12]}…) differs from the frozen "
-            f"one ({expected_sha256[:12]}…). The same script under a different browser, "
-            "timeout, base URL or diagnostics profile is a different experiment, so the "
-            "result would not be comparable."
-        )
+    if actual_sha == expected_sha256:
+        return
+
+    actual_payload = actual.hashed_payload()
+    trusted = _record_may_explain(expected_sha256, expected_record,
+                                  sorted(actual_payload))
+    if trusted is not None:
+        moved = sorted(key for key in actual_payload
+                       if trusted.get(key) != actual_payload.get(key))
+        if moved:
+            raise EnvelopeMismatch(
+                "this run's execution envelope differs from the frozen one on: "
+                f"{', '.join(moved)} (this run {actual_sha[:12]}…, frozen "
+                f"{expected_sha256[:12]}…). A run under a different configuration is a "
+                "different experiment, so the result would not be comparable."
+            )
+    # The generic refusal. Deliberately does NOT name the diagnostics profile: it is
+    # excluded from the hashed payload (see hashed_payload), so a profile difference can
+    # never be the cause of this refusal, and a message naming impossible causes sends
+    # the developer hunting in the wrong place.
+    raise EnvelopeMismatch(
+        f"this run's execution envelope ({actual_sha[:12]}…) differs from the frozen "
+        f"one ({expected_sha256[:12]}…). The same script under a different browser, "
+        "timeout or base URL is a different experiment, so the result would not be "
+        "comparable."
+    )
 
 
 def _clip(value: Any, limit: int = MAX_FIELD_CHARS) -> Any:

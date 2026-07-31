@@ -496,6 +496,10 @@ def run_reproduction(
     screenshots: bool = False,
     diagnostics: bool = False,
     expected_envelope_sha256: Optional[str] = None,
+    # The frozen row's stored envelope record, parsed. Purely explanatory: check_envelope
+    # validates it against the digest before letting it name fields, and the digest alone
+    # decides acceptance. None (legacy row, malformed JSON) degrades to the prefix message.
+    expected_envelope_record: Optional[Dict[str, Any]] = None,
     work_root: Optional[Path] = None,
     project_dir: Optional[Path] = None,
     should_cancel: Optional[Callable[[], bool]] = None,
@@ -547,7 +551,8 @@ def run_reproduction(
         runner_version=RUNNER_VERSION,
         env_names=sorted(_ENV_ALLOWLIST),
     )
-    check_envelope(expected_envelope_sha256, envelope)
+    check_envelope(expected_envelope_sha256, envelope,
+                   expected_record=expected_envelope_record)
 
     # An absent browser is a prerequisite, and it is knowable BEFORE running — so it is
     # NEEDS_SETUP with the exact fix, not an INCONCLUSIVE the developer has to decode after

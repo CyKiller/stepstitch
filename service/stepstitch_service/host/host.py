@@ -548,7 +548,7 @@ def build_app(
             try:
                 frozen = await fetchone(
                     "SELECT script, sha256, red_verdict, red_signature, "
-                    "execution_envelope_sha256 "
+                    "execution_envelope_sha256, execution_envelope_json "
                     "FROM stepstitch_frozen_repros WHERE trace_id = ?", (trace_id,))
             except Exception:
                 frozen = await fetchone(
@@ -563,6 +563,17 @@ def build_app(
             script, digest, red_verdict, red_signature = (
                 frozen[0], frozen[1], frozen[2], frozen[3] or "")
             frozen_envelope_sha = frozen[4] if len(frozen) > 4 else None
+            # The stored record is EXPLANATORY only: check_envelope validates it against
+            # the digest before letting it name fields, so parse failures degrade to the
+            # prefix-only refusal rather than blocking anything. The digest still decides.
+            frozen_envelope_record = None
+            if len(frozen) > 5 and frozen[5]:
+                try:
+                    frozen_envelope_record = json.loads(frozen[5])
+                except (ValueError, TypeError):
+                    logger.warning("stepstitch: stored envelope record for %s is not "
+                                   "valid JSON; refusals fall back to digest prefixes",
+                                   trace_id)
 
             cfg = await _read_repro_config()
             app_url = cfg.base_url or effective_base_url
@@ -578,6 +589,7 @@ def build_app(
                     # the app destroys the red baseline — the one irreplaceable artefact.
                     # The degradation is REPORTED (envelope_enforced below), never silent.
                     expected_envelope_sha256=frozen_envelope_sha or None,
+                    expected_envelope_record=frozen_envelope_record,
                     readiness=readiness(cfg, [], fallback_base_url=effective_base_url),
                     runs=req.runs, timeout_seconds=req.timeout_seconds,
                 )
