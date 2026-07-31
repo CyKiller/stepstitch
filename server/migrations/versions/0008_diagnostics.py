@@ -25,7 +25,9 @@ traces stay on local disk, are short-lived, and are never exposed over MCP.
 
 Both digests are stored because a verdict is only comparable when the script *and* the way
 it ran are the same experiment: ``script_sha256`` pins the bytes,
-``execution_envelope_sha256`` pins the browser, timeouts, base URL and diagnostics profile.
+``execution_envelope_sha256`` pins the browser, timeouts and base URL. (The diagnostics
+profile is deliberately NOT part of that hash — observers must not move the digest — even
+though this table records which profile ran.)
 """
 from __future__ import annotations
 

@@ -446,7 +446,9 @@ def _config_spec(base_url: str, timeout_ms: int, screenshots: bool,
     """
     use: Dict[str, Any] = {"headless": True, "baseURL": base_url}
     if screenshots:
-        # Only ever the synthetic run, stored locally beside the run record.
+        # Only ever StepStitch's own local reproduction run — never the reported
+        # session — stored locally beside the run record, and off by default. What the
+        # screenshot shows is the operator-configured application's own rendering.
         use["screenshot"] = "only-on-failure"
     if diagnostics:
         # Retained on failure only: a passing run has nothing to diagnose, and traces are

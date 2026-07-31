@@ -518,8 +518,8 @@ def create_stepstitch_router(
                 # drift between two places that both assert it.
                 "never_included": list(NEVER_FROM_REPORTED_SESSION),
                 "never_included_scope": (
-                    "from the reported session. Evidence collected from a synthetic "
-                    "reproduction is listed separately in the agent packet under "
+                    "from the reported session. Evidence from the operator-configured "
+                    "local reproduction is listed separately in the agent packet under "
                     "privacy_posture.from_reproduction."
                 ),
             },
@@ -567,7 +567,7 @@ def create_stepstitch_router(
         summary = build_trace_summary(trace_id, footsteps, project_id=row[1])
         meta = _loads(row[2]) or {}
         scrub = meta.get("_scrub") if isinstance(meta, dict) else None
-        # What the SYNTHETIC reproduction revealed, if one has been run. Read from the
+        # What the LOCAL reproduction revealed, if one has been run. Read from the
         # store rather than recomputed: the runner deletes its scratch dir, so this is the
         # only copy, and it was scrubbed on the way in.
         diagnostics = None

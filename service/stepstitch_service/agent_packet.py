@@ -188,8 +188,9 @@ def build_packet(
             # cannot drift into disagreeing about a privacy claim.
             "never_included": list(NEVER_FROM_REPORTED_SESSION),
             "never_included_scope": (
-                "from the reported session. Evidence from the synthetic reproduction is "
-                "listed separately under privacy_posture.from_reproduction."
+                "from the reported session. Evidence from the operator-configured local "
+                "reproduction is listed separately under "
+                "privacy_posture.from_reproduction."
             ),
         },
         # --- how to reproduce it ------------------------------------------------------
