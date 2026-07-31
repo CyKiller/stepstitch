@@ -44,19 +44,20 @@ cd server && alembic upgrade head && cd ..
 uvicorn server.app:app --reload
 ```
 
-### Optional git hook
+### Checks before you push
 
-There is one hook, it is opt-in, and it only runs the checks CI already runs:
+This repository ships no git hooks — hooks are per-clone local tooling, and one that
+arrives with a checkout runs someone else's code on your machine on every push. Nothing
+here configures `core.hooksPath`, and `npm install` does not touch your git configuration.
+
+If you want the same checks locally that CI runs on your PR, run them directly:
 
 ```bash
-npm run hooks:install   # git config core.hooksPath .githooks
+npm run type-check                            # root
+cd web && npm run lint && npx tsc --noEmit    # web/ (there is no type-check script)
 ```
 
-`pre-push` then runs the root type-check, plus `web/` lint and type-check when `web/`
-changed — so a red build is caught before it reaches a PR. Skip it once with
-`git push --no-verify`, or turn it off for good with `git config --unset core.hooksPath`.
-`npm install` does not install it and does not touch your git configuration. See
-[.githooks/README.md](.githooks/README.md).
+Wire those into your own global hooks if you like — that is your configuration to make.
 
 Commit under whatever name and email you normally use. This repository does not check
 authorship or commit trailers.
