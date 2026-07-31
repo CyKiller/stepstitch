@@ -38,7 +38,7 @@ def _result(diagnostics):
         detail="d")
 
 
-DIAG = {"source": "synthetic_reproduction", "contains_customer_session_data": False,
+DIAG = {"source": "local_reproduction", "customer_data_status": "not_verified",
         "schema_version": 1, "console_errors": ["pay failed"],
         "failed_requests": [{"method": "POST", "path": "/api/pay", "status": 500}]}
 
@@ -55,7 +55,7 @@ def test_diagnostics_survive_the_runners_cleanup(tmp_path):
             "diagnostics_json FROM stepstitch_diagnostics WHERE trace_id = ?",
             (trace,)).fetchone()
         assert row is not None, "the record did not survive"
-        assert row[0] == "synthetic_reproduction"
+        assert row[0] == "local_reproduction"
         assert row[3] == "b" * 64, "the envelope digest must be stored with the record"
         assert "pay failed" in row[4]
     finally:
@@ -79,7 +79,7 @@ def test_a_storage_failure_never_costs_us_the_verdict(tmp_path):
     client, conn, trace = _client(tmp_path)
     try:
         with patch("stepstitch_service.runner.run_reproduction",
-                   return_value=_result({"source": "synthetic_reproduction",
+                   return_value=_result({"source": "local_reproduction",
                                           "schema_version": "not-an-int"})):
             body = client.post(f"/admin/session/{trace}/freeze", json={},
                                headers={"Authorization": f"Bearer {ADMIN}"}).json()

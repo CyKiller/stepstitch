@@ -203,13 +203,14 @@ def _diagnostics_redactor(text: str) -> str:
     credentials scrubber — bearer tokens, secret-shaped assignments, URL userinfo, agent
     tokens. Zero PII patterns. But ``console_errors`` and ``failure_stack`` carry whatever
     the application printed, and an app run against a staging backend will happily
-    ``console.error`` a real email, phone number or card. That text then travelled to a
-    third-party agent under a stamp reading ``contains_customer_session_data: false``.
+    ``console.error`` a real email, phone number or card. So every string gets the
+    server-side scrubber's PII rules too — email, ssn, card, phone, dates, long digit
+    runs — the same bar the ingest path holds production traffic to.
 
-    The stamp is about the SESSION (no customer's browser was recorded — structurally
-    true), but the field's plain reading is about content, so the content must hold it up:
-    every string gets the server-side scrubber's PII rules — email, ssn, card, phone,
-    dates, long digit runs — the same bar the ingest path holds production traffic to.
+    What this buys is ``content_scrubbed: true`` in the provenance stamp, and nothing
+    stronger. Patterns cannot prove a name or a postal address absent, which is why the
+    stamp says ``customer_data_status: not_verified`` instead of the absolute claim an
+    earlier version made. Scrubbing here is defence in depth, not a guarantee.
 
     One deliberate difference from the ingest scrubber: its ``url`` rule is replaced by a
     query-string strip. Deleting whole URLs from a stack frame deletes the file and line —

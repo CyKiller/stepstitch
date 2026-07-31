@@ -24,7 +24,7 @@ from pydantic import BaseModel
 
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
 from stepstitch_service.compiler import DEFAULT_BASE_URL
-from stepstitch_service.diagnostics import SOURCE_SYNTHETIC, EnvelopeMismatch
+from stepstitch_service.diagnostics import SOURCE_LOCAL_REPRODUCTION, EnvelopeMismatch
 from stepstitch_service.profiles import load_profile
 from stepstitch_service.repro_config import ReproConfig, ReproConfigError, readiness
 from stepstitch_service.scrubber import (
@@ -439,7 +439,7 @@ def build_app(
                     "schema_version, script_sha256, execution_envelope_sha256, "
                     "diagnostics_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (str(uuid.uuid4()), trace_id, str(uuid.uuid4()),
-                     record.get("source", SOURCE_SYNTHETIC),
+                     record.get("source", SOURCE_LOCAL_REPRODUCTION),
                      int(record.get("schema_version", 1)),
                      result.script_sha256, result.execution_envelope_sha256,
                      json.dumps(record), datetime.now(timezone.utc)),

@@ -288,8 +288,10 @@ them, not the reverse. Each MUST maps to a test in the release that ships the ru
 
 **Evidence hygiene**
 - Run transcripts pass through the same secret-redaction rules as ingest before storage.
-- Screenshots, when enabled, are taken only of the synthetic reproduction run — never a
-  customer session — and are stored locally next to the run record, not uploaded.
+- Screenshots, when enabled, are taken only of StepStitch's own local reproduction run —
+  never a customer session — and are stored locally next to the run record, not uploaded.
+  The run targets the operator-configured application, so what appears on screen is only
+  as customer-free as that application's data; the customer-data status is not verified.
 
 **Reproduction freezing (the referee property)**
 - Before a capsule is handed to any fixing agent, the compiled reproduction script is

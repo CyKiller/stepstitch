@@ -1,4 +1,4 @@
-"""deep diagnostics from the synthetic reproduction
+"""deep diagnostics from the local reproduction
 
 Revision ID: 0008
 Revises: 0007
@@ -7,11 +7,17 @@ Create Date: 2026-07-30
 Stores what a local reproduction revealed about a failure — the stack, the console errors,
 the failed requests, the snapshot at the moment it broke.
 
-This is the one place StepStitch keeps rich technical detail, and it is safe precisely
-because of where it comes from: a synthetic run on a developer's machine, driven by a
-generated test, with no customer in it. The user's own failure trail stays as small and
-scrubbed as it has always been. Depth from the reproduction, not from surveillance — hence
-the explicit ``source`` column, which is always ``synthetic_reproduction``.
+This is the one place StepStitch keeps rich technical detail, and what makes that
+defensible is where it comes from: StepStitch's own run on a developer's machine, driven
+by a generated test — provably not the reported session — with every string scrubbed
+before storage. What it does NOT establish is that the content is customer-free: the run
+targets whatever application the operator configured, and a staging backend with real
+records prints what it prints, so the customer-data status of a record is not verified.
+(An earlier revision of this docstring claimed "no customer in it"; that was a fact about
+the session actor presented as a fact about the content.) The user's own failure trail
+stays as small and scrubbed as it has always been. Depth from the reproduction, not from
+surveillance — hence the explicit ``source`` column: ``local_reproduction`` for records
+written at diagnostics schema 2 or later, ``synthetic_reproduction`` in older rows.
 
 The runner deletes its scratch directory after each run, so a file beside the run would not
 survive to populate an agent packet; the scrubbed record lives here instead. Raw Playwright

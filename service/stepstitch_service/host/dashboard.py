@@ -1935,10 +1935,11 @@ DASHBOARD_HTML = r"""<!doctype html>
     var packetNote = teach("agent_packet",
       "The agent packet is exactly what an AI assistant receives: structure, scores, the " +
       "generated test, and — once a reproduction has run — the deep diagnostics from that " +
-      "synthetic run (failure stack, console errors, failed requests). Those come from " +
-      "StepStitch's own run on this machine, never from the person who reported the bug. " +
-      "From the report itself: no page text, no values, no raw URLs — nothing that could " +
-      "carry customer data.");
+      "local run (failure stack, console errors, failed requests). Those come from " +
+      "StepStitch's own run on this machine, never from the person who reported the bug, " +
+      "and every string is scrubbed — but the run targets the application YOU configured, " +
+      "so what that app prints is only as customer-free as its data. From the report " +
+      "itself: no page text, no values, no raw URLs.");
     if (packetNote) root.appendChild(packetNote);
 
     // Sections

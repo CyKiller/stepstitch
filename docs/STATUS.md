@@ -12,7 +12,7 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **595** | `PYTHONPATH=service pytest service/tests/` |
+| Service (compiler, router, privacy, connectors) | **597** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **202** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **31** | `npx vitest run` |
 | Web (marketing site + copy claims) | **59** | `cd web && npx vitest run` |
@@ -66,7 +66,7 @@ the browser sent).
 | Evidence grade — asserted (a caller said so) / measured (StepStitch ran it) / signed; derived, never claimable | `stepstitch_service/evidence.py` | `test_evidence.py`, `test_evidence_endpoints.py` |
 | Attestation tamper rejection (altered bundle refused, not flagged) | `stepstitch_service/evidence.py` `verify_bundle` | `test_evidence.py`, `POST /attestation/verify` tests |
 | Fix Memory advises from measured evidence only | `router.py` similar-fixes | `test_similar_fixes.py` |
-| Deep diagnostics come from the SYNTHETIC reproduction, never the reported session (provenance stamped, bounded, scrubbed) | `stepstitch_service/diagnostics.py` | `test_diagnostics.py` |
+| Deep diagnostics come from the LOCAL reproduction, never the reported session — scrubbed, bounded, and stamped `customer_data_status: not_verified` because the target app is operator-configured | `stepstitch_service/diagnostics.py` | `test_diagnostics.py` |
 | Execution envelope frozen with the script and **enforced at verification** — stored on the freeze row, passed by verify-fix, a run under a different browser/timeout/base URL refused, legacy rows degrade with `envelope_enforced: false` | `diagnostics.py` `check_envelope`, `runner.py`, `host.py` freeze + verify-fix, migration 0009 | `test_diagnostics.py`, `test_runner.py` (same-digest across runs), `test_agent_loop.py` (the production freeze→verify path) |
 | Diagnostics do not change what they measure (same verdict, hash and failure fingerprint on/off) | `runner.py` config-side tracing | `test_runner.py`, `scripts/prove-diagnostics-are-inert.mjs` (real Chromium, CI) |
 | Four signals parsed from the Playwright trace (failure stack, console errors only, failed requests with templated paths, failure snapshot) | `diagnostics.py` `parse_trace` | `test_diagnostics.py` |
@@ -75,7 +75,7 @@ the browser sent).
 | Every MCP tool is reachable by a scoped token, or an explicit documented exclusion | `host/agents.py` `_RULES` | `test_agent_scope_parity.py` |
 | A coding agent reads the failure and the reproduction, and can never record a verdict | `host/agents.py`, `connect.py` `AGENT_SCOPE` | `test_agent_scope_parity.py`, `test_connect.py` |
 | `stepstitch connect` registers via each vendor's own `mcp add`; token in an owner-only file, never in a config or argv | `connect.py`, `cli.py` | `test_connect.py` (verified live with Claude Code) |
-| Agent packet splits privacy by origin: `from_production` (unchanged, minimal) vs `from_reproduction` (rich, synthetic) — both true, neither hedged | `agent_packet.py` | `test_agent_packet.py` |
+| Agent packet splits privacy by origin: `from_production` (unchanged, minimal) vs `from_reproduction` (rich, scrubbed, qualified — provably not the reported session; customer-data status of the operator-configured target stated as not verified) — both precise | `agent_packet.py` | `test_agent_packet.py` |
 | Packet carries both digests, the exact verification command, and file suggestions labelled as suggestions | `agent_packet.py` | `test_agent_packet.py` |
 | End-to-end golden path | (all of the above) | `test_golden_path.py` |
 
