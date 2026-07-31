@@ -68,11 +68,25 @@ token, and only the separate `verify` scope can write a verdict.
 
 ## Two things this run cost, and what they proved
 
-**The environment broke mid-trial and the fourth verdict earned its place.** With the disk
-full, macOS purged the Playwright browser between the fix and the verification. StepStitch
-returned neither `fixed` nor `still_failing` but **`different_failure`**, naming the new
-signature (`browserType.launch: Executable doesn't exist`). A two-verdict system would have
-reported a real fix as a failure. Re-run with the browser restored: `fixed`.
+**The environment broke mid-trial, and this document initially presented that as the
+system working. It was not.** With the disk full, macOS purged the Playwright browser
+between the fix and the verification, and StepStitch returned `different_failure` naming
+the launch error as the "new signature". An earlier revision of this section called that
+the fourth verdict earning its place. External review showed otherwise, and the record
+should say so plainly: the classifier never noticed the browser was gone. A browserless
+run prints `1 failed` alongside its launch error, so it was classified as the application
+failing — a broken toolchain reported as a reproduced bug — and `different_failure` fell
+out of an unrelated signature comparison that happened to differ. Had the browser been
+missing during the *freeze* instead, a fabricated red baseline would have been recorded
+and the session marked ready for an agent. The honest verdict for that run was
+`unable_to_verify`, which the code has always reserved for a broken toolchain and never
+reached for the most common toolchain break there is.
+
+Fixed since, in three layers, each with a measured red-to-green test: the classifier
+recognises Playwright's missing-browser output (`runner.py` `_NEVER_RAN_MARKERS`), the
+runner refuses pre-flight with `needs_setup` naming `npx playwright install chromium`
+before anything is spawned, and the freeze declines to record a run that never ran.
+Re-run with the browser restored, the verdict was `fixed` — that part stands.
 
 **A rig that leaks is not a trial.** The first Codex attempt ran in a directory that also
 held the previous agent's transcript, the host log, and the admin token. Codex read them,

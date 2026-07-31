@@ -12,7 +12,7 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **594** | `PYTHONPATH=service pytest service/tests/` |
+| Service (compiler, router, privacy, connectors) | **595** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **202** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **31** | `npx vitest run` |
 | Web (marketing site + copy claims) | **59** | `cd web && npx vitest run` |
@@ -67,7 +67,7 @@ the browser sent).
 | Attestation tamper rejection (altered bundle refused, not flagged) | `stepstitch_service/evidence.py` `verify_bundle` | `test_evidence.py`, `POST /attestation/verify` tests |
 | Fix Memory advises from measured evidence only | `router.py` similar-fixes | `test_similar_fixes.py` |
 | Deep diagnostics come from the SYNTHETIC reproduction, never the reported session (provenance stamped, bounded, scrubbed) | `stepstitch_service/diagnostics.py` | `test_diagnostics.py` |
-| Execution envelope frozen with the script — a run under a different browser/timeout/base URL is refused | `diagnostics.py` `check_envelope`, `runner.py` | `test_diagnostics.py`, `test_runner.py` |
+| Execution envelope frozen with the script and **enforced at verification** — stored on the freeze row, passed by verify-fix, a run under a different browser/timeout/base URL refused, legacy rows degrade with `envelope_enforced: false` | `diagnostics.py` `check_envelope`, `runner.py`, `host.py` freeze + verify-fix, migration 0009 | `test_diagnostics.py`, `test_runner.py` (same-digest across runs), `test_agent_loop.py` (the production freeze→verify path) |
 | Diagnostics do not change what they measure (same verdict, hash and failure fingerprint on/off) | `runner.py` config-side tracing | `test_runner.py`, `scripts/prove-diagnostics-are-inert.mjs` (real Chromium, CI) |
 | Four signals parsed from the Playwright trace (failure stack, console errors only, failed requests with templated paths, failure snapshot) | `diagnostics.py` `parse_trace` | `test_diagnostics.py` |
 | Planted credentials and raw ids never reach a diagnostics record | `diagnostics.py` `scrub_diagnostics` + compiler templating | `test_diagnostics.py` (uses the real redactor) |
