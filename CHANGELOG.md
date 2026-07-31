@@ -21,7 +21,7 @@ lockstep per `RELEASE.md`.
 
 ### Bug Fixes
 
-* **claims:** the packet stops contradicting its own posture, and the replay ([ed8ee53](https://github.com/CyKiller/stepstitch/commit/ed8ee5370ad39fedd950f00f8883ed1302280728))
+* **claims:** the packet stops contradicting its own posture, and the replay script stops being dangerous to run ([ed8ee53](https://github.com/CyKiller/stepstitch/commit/ed8ee5370ad39fedd950f00f8883ed1302280728))
 * **connect:** stop shipping the anti-pattern the scope fix just removed ([34a29cc](https://github.com/CyKiller/stepstitch/commit/34a29cc6c8aa27204c7fe5367084afc30e4b75d0))
 * **diagnostics:** claim what the architecture proves, and nothing more ([7257a7c](https://github.com/CyKiller/stepstitch/commit/7257a7c2a256367b8672612816a345c25042c286))
 * **diagnostics:** hold reproduction evidence to the bar production evidence gets ([2244217](https://github.com/CyKiller/stepstitch/commit/224421754acd28d349614aaa7704fe3f712818ea))
