@@ -95,13 +95,21 @@ def _actor_name(admin: Any) -> str:
     return str(admin)
 
 
-def _browser_present() -> Optional[bool]:
+# The browser probe shells out (~1s). The dashboard polls /admin/status, and a blocking
+# second inside an async handler stalls the entire event loop — every concurrent request
+# queues behind it. So: run it off the loop, and cache it. A browser is installed once,
+# not per request; the TTL keeps "install it, then refresh" working without making a
+# status poll pay for a subprocess.
+_BROWSER_TTL_SECONDS = 60.0
+_browser_cache: tuple[float, Optional[bool]] = (0.0, None)
+
+
+def _browser_present_blocking() -> Optional[bool]:
     """Is the browser a reproduction would launch installed here? ``None`` = unknown.
 
-    Never raises and never shells out for long: a dashboard GET must not be able to
-    hang or 500 because a probe misbehaved. Unknown stays unknown — reporting "no
-    browser" when we simply could not tell would send an operator installing
-    something they already have.
+    Never raises: a dashboard GET must not 500 because a probe misbehaved. Unknown
+    stays unknown — reporting "no browser" when we simply could not tell would send
+    an operator installing something they already have.
     """
     try:
         from ..runner import _browser_identity
@@ -109,6 +117,17 @@ def _browser_present() -> Optional[bool]:
         return _browser_identity(headless=True).present
     except Exception:
         return None
+
+
+async def _browser_present() -> Optional[bool]:
+    global _browser_cache
+    checked_at, cached = _browser_cache
+    now = time.monotonic()
+    if cached is not None and (now - checked_at) < _BROWSER_TTL_SECONDS:
+        return cached
+    present = await asyncio.to_thread(_browser_present_blocking)
+    _browser_cache = (now, present)
+    return present
 
 
 def _iso(value: Any) -> Optional[str]:
@@ -312,7 +331,7 @@ def build_app(
             # A generated test cannot run without a browser, and that is invisible from
             # the API until something fails. Checked here (cheap, no subprocess) so the
             # setup panel can name it like any other missing prerequisite.
-            "browser_available": _browser_present(),
+            "browser_available": await _browser_present(),
             # Deny-by-default profiles refuse EVERY semantic selector and route until an
             # operator names static values. That is correct, and silently catastrophic if
             # nobody told the operator — so the strip says it outright.
