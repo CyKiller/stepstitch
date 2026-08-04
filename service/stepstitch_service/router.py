@@ -19,7 +19,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .agent_packet import (
     NEVER_FROM_PRODUCTION,
@@ -70,6 +70,12 @@ CaptureEnabledFn = Callable[[], Any]
 
 
 class FootstepSchema(BaseModel):
+    # extra="forbid": an unknown key on a footstep (screenshot, value, html, ...) is
+    # refused with 422 at the door. Without this, pydantic silently discards unknown
+    # keys — they never reach the scrubber, so they could never be rejected or even
+    # counted, and a hostile client's probe would look like a clean ingest.
+    model_config = ConfigDict(extra="forbid")
+
     timestamp: str
     # Spelled out rather than built from replayability.SUPPORTED_STEP_TYPES because mypy
     # needs Literal args at type-check time; the parity test in test_compiler.py is what
@@ -85,6 +91,10 @@ class FootstepSchema(BaseModel):
 
 
 class IngestTracePayload(BaseModel):
+    # Same boundary as FootstepSchema: a hostile top-level key ({"cookies": ...})
+    # must 422, not vanish before the scrubber can see it.
+    model_config = ConfigDict(extra="forbid")
+
     # Neutral default for hand-rolled clients that omit it; the SDK always sets its own.
     app_id: str = "unknown"
     project_id: Optional[str] = None
