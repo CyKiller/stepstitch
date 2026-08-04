@@ -21,7 +21,7 @@ const studies: Study[] = [
     icon: ShieldCheck,
     lede: "StepStitch is a required subsystem — Marvox refuses to boot in production if the vendored evidence service cannot mount. It is load-bearing, not a plugin.",
     points: [
-      "Server-side scrub boundary on every ingest — no screens, values, or PII reach storage",
+      "Server-side scrub boundary on every ingest — screens, input values and page text never reach storage, and free text is scrubbed",
       "Pinned and vendored, gated by ~20 tests covering drift, the privacy boundary, and a production boot check",
       "Bug reports compile into privacy-safe Playwright regressions — proposal-only, never run against production",
       "An operator-triggered fix loop confirms the repro is red, then opt-in opens a human-review PR that adds it as a skip-marked test — it never edits product code or auto-merges",

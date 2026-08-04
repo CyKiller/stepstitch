@@ -345,3 +345,65 @@ def test_tool_version_survives_a_missing_binary():
     from stepstitch_service.cli import _tool_version
 
     assert _tool_version(["stepstitch-no-such-binary-xyz", "--version"]) is None
+
+
+def test_strict_allowlists_warn_until_BOTH_lists_are_populated():
+    """The strict profile gates selectors AND routes. Approving testids alone still
+    422s every ingest on the route check, so doctor must not call that configured —
+    it did, and the check was never entered by any test transport at all."""
+    def scrub_cfg(**over):
+        base = {"status": "ok", "base_profile": "financial-services-strict",
+                "strict_schema": True, "approved_testids": [], "route_templates": []}
+        base.update(over)
+        return base
+
+    def by_name(overrides):
+        checks = run_doctor(env=dict(GOOD_ENV),
+                            transport=fake_transport({"/admin/config/scrub": (200, overrides)}))
+        return {c.name: c for c in checks}
+
+    # neither list
+    c = by_name(scrub_cfg())["strict allowlists"]
+    assert c.status == WARN and "no approved data-testid values" in c.detail
+
+    # testids only — the half-configured trap
+    c = by_name(scrub_cfg(approved_testids=["pay"]))["strict allowlists"]
+    assert c.status == WARN, "testids alone must not read as configured"
+    assert "no declared route templates" in c.detail
+
+    # routes only
+    c = by_name(scrub_cfg(route_templates=["/x"]))["strict allowlists"]
+    assert c.status == WARN and "no approved data-testid values" in c.detail
+
+    # both — genuinely usable
+    c = by_name(scrub_cfg(approved_testids=["pay"], route_templates=["/x"]))["strict allowlists"]
+    assert c.status == PASS
+    assert "1 approved testid(s), 1 route template(s)" in c.detail
+
+
+def test_strict_allowlists_check_is_absent_on_a_permissive_profile():
+    checks = run_doctor(env=dict(GOOD_ENV), transport=fake_transport())
+    assert "strict allowlists" not in {c.name for c in checks}
+
+
+def test_application_under_test_reports_both_reachable_and_not():
+    """The documented STATUS gap: an unreachable app turns every red run into
+    needs_setup — a verdict about the environment that reads as one about the bug."""
+    app_url = GOOD_ENV["STEPSTITCH_APP_BASE_URL"]
+
+    checks = run_doctor(env=dict(GOOD_ENV), transport=fake_transport())
+    c = {x.name: x for x in checks}["application under test"]
+    assert c.status == PASS and "responded" in c.detail
+
+    # transport 0 == could not connect at all
+    checks = run_doctor(env=dict(GOOD_ENV),
+                        transport=fake_transport({app_url: (0, "connection refused")}))
+    c = {x.name: x for x in checks}["application under test"]
+    assert c.status == WARN
+    assert "did not respond" in c.detail and "needs setup" in c.fix
+
+
+def test_application_under_test_is_skipped_when_no_app_url_is_set():
+    env = dict(GOOD_ENV); del env["STEPSTITCH_APP_BASE_URL"]
+    checks = run_doctor(env=env, transport=fake_transport())
+    assert "application under test" not in {c.name for c in checks}

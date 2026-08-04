@@ -12,10 +12,10 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **686** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **220** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
-| SDK (type-check + redaction proof) | **31** | `npx vitest run` |
-| Web (marketing site + copy claims) | **95** | `cd web && npx vitest run` |
+| Service (compiler, router, privacy, connectors) | **690** | `PYTHONPATH=service pytest service/tests/` |
+| Host (auth, dashboard, real Postgres) | **223** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| SDK (type-check + redaction proof) | **38** | `npx vitest run` |
+| Web (marketing site + copy claims) | **101** | `cd web && npx vitest run` |
 
 Counts are the number pytest/vitest **collect**, and they are enforced: each suite verifies
 its own row (`test_status_ledger.py`, `test_status_ledger_host.py`),

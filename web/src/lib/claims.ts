@@ -10,6 +10,14 @@
  * honestly (`customer_data_status: "not_verified"`, the from_production /
  * from_reproduction split in `agent_packet.py`); the site did not.
  *
+ * Scope, stated precisely so this file does not itself overclaim: the high-risk
+ * surfaces — the financial-services pilot page, the FAQ's compliance answer, and the
+ * competitor comparison — import their sentences from here, so copy and evidence move
+ * together. The remaining entries are an evidence index: they are checked to point at
+ * files that exist, and the rendered copy is independently policed by the
+ * absolute-claim scanner in `web/tests/copy-claims.test.ts`. Wiring a sentence here is
+ * the stronger guarantee; the scanner is the floor under every page.
+ *
  * So each claim here carries:
  *   - `text`     the exact sentence rendered on the page, imported by the page
  *                so copy and evidence cannot drift apart

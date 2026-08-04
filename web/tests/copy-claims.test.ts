@@ -65,6 +65,12 @@ const UNPROVABLE = [
   { re: /\bNPI-free\b/gi, why: "states an absence nothing measures" },
   { re: /\bproving\s+no\s+NPI\b/gi, why: "asserts a proof that does not exist" },
   { re: /\bguarantees?\s+(no|zero)\b/gi, why: "a guarantee is not a control" },
+  // Any "no/zero <things> PII/NPI" construction, however the list is worded. The first
+  // version of this scanner enumerated exact phrases and therefore missed
+  // "No screens, values or PII captured" sitting on the homepage — in a file it was
+  // already reading. Match the SHAPE: a negation, then PII/NPI within a short span.
+  { re: /\b(no|zero)\b[^.!?]{0,60}\b(PII|NPI)\b/gi,
+    why: "absence of PII/NPI in user-authored text is not demonstrable" },
 ];
 
 const ALL_COPY = [
@@ -74,16 +80,43 @@ const ALL_COPY = [
   ),
 ];
 
+/**
+ * Strip code comments before scanning. A comment explaining WHY a claim was removed
+ * ("\"No PII captured\" was the claim here, and we cannot keep it") is not a claim
+ * made to a visitor — it never renders. Without this, writing that explanation trips
+ * the scanner, and the tempting fix is to weaken the pattern. Protocol slashes in
+ * URLs are preserved.
+ */
+function renderedCopy(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
 describe("no absolute PII/NPI claim survives anywhere in the buyer copy", () => {
   for (const file of ALL_COPY) {
     it(`${file.split("/src/")[1]} makes no unprovable absolute claim`, () => {
-      const text = readFileSync(file, "utf8");
+      const text = renderedCopy(readFileSync(file, "utf8"));
       const found = UNPROVABLE.flatMap((rule) =>
         [...text.matchAll(rule.re)].map((m) => `${m[0]} — ${rule.why}`),
       );
       expect(found).toEqual([]);
     });
   }
+
+  it("the scanner catches the phrasing that slipped past its first version", () => {
+    // The exact string that was live on the homepage and passed the original scanner.
+    const missed = "No screens, values or PII captured";
+    expect(
+      UNPROVABLE.flatMap((r) => [...missed.matchAll(r.re)].map((m) => m[0])).length,
+    ).toBeGreaterThan(0);
+    // …and the replacement wording, which stops at what is demonstrable, passes.
+    const honest =
+      "No screens, input values or page text; free text scrubbed server-side";
+    expect(
+      UNPROVABLE.flatMap((r) => [...honest.matchAll(r.re)].map((m) => m[0])),
+    ).toEqual([]);
+  });
 
   it("the absolute-claim scanner actually catches one (self-test)", () => {
     const lie = "Our pilot guarantees zero NPI and never captures PII.";

@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 import socket
 import sqlite3
 import subprocess
@@ -32,6 +33,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Optional
 
 REPO = Path(__file__).resolve().parent.parent
 EXAMPLE = REPO / "examples" / "tiny-transfer"
@@ -80,11 +82,13 @@ def check(condition: bool, message: str) -> None:
         sys.exit(1)
 
 
-def wait_healthy(url: str, proc: subprocess.Popen, what: str, seconds: int = 60) -> None:
+def wait_healthy(url: str, proc: subprocess.Popen, what: str, seconds: int = 60,
+                 log: Optional[Path] = None) -> None:
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         if proc.poll() is not None:
-            print(proc.stdout.read() if proc.stdout else "")
+            if log is not None and log.exists():
+                print(log.read_text(encoding="utf-8", errors="replace")[-4000:])
             print(f"{what} exited before becoming healthy")
             sys.exit(1)
         try:
@@ -144,15 +148,21 @@ def main() -> int:
         STEPSTITCH_PROFILE="financial-services-strict",
         RETENTION_PURGE_INTERVAL_SECONDS="0",
     )
+    # Long-lived processes log to FILES, not to subprocess.PIPE. Nothing reads a pipe
+    # during the ~10-minute run, so once the OS buffer fills the child blocks on write
+    # and the whole job hangs to the CI timeout. A file cannot fill.
+    host_log = open(work / "stepstitch-host.log", "w+", encoding="utf-8")
+    app_log = open(work / "tiny-transfer.log", "w+", encoding="utf-8")
     stepstitch = subprocess.Popen(
         [sys.executable, "-m", "stepstitch_service.cli", "start", "--no-browser",
          "--port", str(host_port), "--db", str(db_path)],
         env=host_env, cwd=str(REPO),
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        stdout=host_log, stderr=subprocess.STDOUT, text=True,
     )
     app = None
     try:
-        wait_healthy(f"{host}/healthz", stepstitch, "StepStitch host")
+        wait_healthy(f"{host}/healthz", stepstitch, "StepStitch host",
+                     log=work / "stepstitch-host.log")
 
         step(1, "operator scopes the deny-by-default profile (approved testids + routes)")
         saved = call(f"{host}/admin/config/scrub", "PUT", {
@@ -173,9 +183,10 @@ def main() -> int:
             cwd=str(EXAMPLE),
             env=dict(os.environ, PORT=str(app_port), STEPSTITCH_HOST=host,
                      STEPSTITCH_INGEST_TOKEN=INGEST),
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            stdout=app_log, stderr=subprocess.STDOUT, text=True,
         )
-        wait_healthy(f"{app_url}/__bug", app, "TinyTransfer")
+        wait_healthy(f"{app_url}/__bug", app, "TinyTransfer",
+                     log=work / "tiny-transfer.log")
 
         step(3, "a real browser hits the bug and reports it through the real SDK")
         result = subprocess.run(
@@ -305,6 +316,12 @@ def main() -> int:
                     proc.wait(timeout=10)
                 except subprocess.TimeoutExpired:
                     proc.kill()
+        for handle in (locals().get("app_log"), locals().get("host_log")):
+            if handle is not None:
+                handle.close()
+        # The scratch dir holds only the throwaway SQLite file and the two logs; a CI
+        # runner is disposable but a developer's /tmp is not.
+        shutil.rmtree(work, ignore_errors=True)
 
 
 if __name__ == "__main__":

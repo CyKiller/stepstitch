@@ -1128,12 +1128,15 @@ DASHBOARD_HTML = r"""<!doctype html>
                  detail: "Chromium is not installed, so reproductions cannot run here. " +
                          "Run: npx playwright install chromium" });
     }
-    // Deny-by-default with nothing approved refuses every semantic selector and route.
+    // Deny-by-default refuses every semantic selector AND every undeclared route until
+    // BOTH lists are populated. The host computes this over both policies, so a
+    // half-configured tenant (testids approved, no route templates) still shows here
+    // rather than being told it is done while every ingest 422s.
     if (s.strict_schema && s.strict_allowlists_configured === false) {
       out.push({ title: "Strict allowlists", blocking: true,
-                 detail: "This profile is deny-by-default and no data-testid values are " +
-                         "approved yet, so incoming traces will be refused with 422. " +
-                         "Approve values in Governance." });
+                 detail: "This profile is deny-by-default. Incoming traces are refused " +
+                         "with 422 until BOTH the approved data-testid values and the " +
+                         "route templates are declared. Set them in Governance." });
     }
     return out;
   }

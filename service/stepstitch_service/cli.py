@@ -583,16 +583,25 @@ def run_doctor(
         if status == 200 and isinstance(body, dict) and body.get("strict_schema"):
             testids = body.get("approved_testids") or []
             routes = body.get("route_templates") or []
-            configured = bool(testids)
+            # BOTH lists, not just testids. The strict profile gates selectors AND routes,
+            # so approving testids alone still 422s every ingest on the route check — and
+            # a testids-only test would report "configured" while nothing can be stored.
+            missing = []
+            if not testids:
+                missing.append("no approved data-testid values")
+            if not routes:
+                missing.append("no declared route templates")
+            configured = not missing
             checks.append(Check(
                 "strict allowlists",
                 PASS if configured else WARN,
                 f"{len(testids)} approved testid(s), {len(routes)} route template(s)"
                 if configured else
-                f"{body.get('base_profile')} is deny-by-default and no values are approved",
+                f"{body.get('base_profile')} is deny-by-default and "
+                + " and ".join(missing),
                 "" if configured else
-                "Every semantic selector and route will be refused with 422 until you "
-                "approve values (console -> Governance, or PUT /admin/config/scrub).",
+                "Ingestion will be refused with 422 until BOTH lists are populated "
+                "(console -> Governance, or PUT /admin/config/scrub).",
             ))
         status, body = send(f"{base}/admin/config/repro", "GET", admin_headers, None)
         if status == 200 and isinstance(body, dict):
