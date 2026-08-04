@@ -13,6 +13,7 @@ import { Section, SectionHeader } from "@/components/section";
 import { Reveal } from "@/components/reveal";
 import { Button } from "@/components/button";
 import { GITHUB_URL } from "@/lib/links";
+import { claim } from "@/lib/claims";
 
 export const metadata: Metadata = {
   title: "Financial-services pilot — StepStitch",
@@ -57,7 +58,11 @@ const modes = [
 ];
 
 const success = [
-  "Every persisted trace, draft and exported record accounted for by its scrub report — and, under the strict profile, stamped strict_schema_passed.",
+  // Sourced from the claim registry, not retyped here: the sentence and the test that
+  // proves it are one object, so a stronger claim cannot be written into this page
+  // without moving the evidence with it.
+  claim("strict-schema-passed"),
+  claim("reproduction-not-certified"),
   "Median time from support ticket to a runnable engineering repro measurably reduced.",
   "Every escalation carries a replayability grade so engineering knows what is reproducible.",
   "At least one bug taken from report to confirmed_fixed regression evidence.",

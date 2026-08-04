@@ -196,6 +196,7 @@ def measure_red_to_green() -> Dict[str, Any]:
     against a fixed one. Returns what was observed — never what was expected."""
     import functools
     import http.server
+    import shutil
     import socket
     import tempfile
     import threading
@@ -243,6 +244,8 @@ def measure_red_to_green() -> Dict[str, Any]:
                                  runs=1, timeout_seconds=120)
     finally:
         server.shutdown()
+        server.server_close()          # release the listening socket, not just the loop
+        shutil.rmtree(work, ignore_errors=True)
 
     # The runner's verdict is about the REPRODUCTION: "reproduced" means the test failed,
     # which is the red half passing. Translated once, here, rather than at each reader.

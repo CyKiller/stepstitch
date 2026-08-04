@@ -101,7 +101,13 @@ def _actor_name(admin: Any) -> str:
 # not per request; the TTL keeps "install it, then refresh" working without making a
 # status poll pay for a subprocess.
 _BROWSER_TTL_SECONDS = 60.0
+# (checked_at, result) — `checked` distinguishes "never probed" from "probed, and the
+# answer was genuinely unknown". Without it an unknown result is never cached, so a
+# machine where the probe cannot answer (no npx, sandboxed, parse failure) respawns a
+# 30-second subprocess on EVERY status poll — reintroducing exactly the cost this
+# cache was added to remove.
 _browser_cache: tuple[float, Optional[bool]] = (0.0, None)
+_browser_checked = False
 
 
 def _browser_present_blocking() -> Optional[bool]:
@@ -120,14 +126,23 @@ def _browser_present_blocking() -> Optional[bool]:
 
 
 async def _browser_present() -> Optional[bool]:
-    global _browser_cache
+    global _browser_cache, _browser_checked
     checked_at, cached = _browser_cache
     now = time.monotonic()
-    if cached is not None and (now - checked_at) < _BROWSER_TTL_SECONDS:
+    if _browser_checked and (now - checked_at) < _BROWSER_TTL_SECONDS:
         return cached
     present = await asyncio.to_thread(_browser_present_blocking)
     _browser_cache = (now, present)
+    _browser_checked = True
     return present
+
+
+def _reset_browser_cache() -> None:
+    """Test seam. The cache is a module global, so it would otherwise leak between
+    tests in one process and make the second assertion about it meaningless."""
+    global _browser_cache, _browser_checked
+    _browser_cache = (0.0, None)
+    _browser_checked = False
 
 
 def _iso(value: Any) -> Optional[str]:
@@ -188,6 +203,22 @@ def build_app(
             return json.loads(row[0]) or {}
         except Exception:
             return {}
+
+    async def _strict_allowlists_configured() -> bool:
+        """Is a deny-by-default profile actually usable, or only half-configured?
+
+        Each policy the active profile turns ON needs its allowlist populated. Reporting
+        on one of them while the other is empty is worse than reporting nothing: the
+        operator is told they are done while every ingest is still refused.
+        """
+        cfg = await _read_scrub_overrides()
+        policy = apply_scrub_overrides(base_policy, cfg)
+        required = []
+        if policy.selector_policy == "approved_testids":
+            required.append(bool(policy.approved_testids))
+        if policy.route_policy == "operator_templates":
+            required.append(bool(policy.route_templates))
+        return all(required) if required else True
 
     async def _scrub_policy_provider() -> ScrubPolicy:
         # The base profile, optionally TIGHTENED by stored operator overrides. Never weakens
@@ -335,10 +366,17 @@ def build_app(
             # Deny-by-default profiles refuse EVERY semantic selector and route until an
             # operator names static values. That is correct, and silently catastrophic if
             # nobody told the operator — so the strip says it outright.
+            #
+            # BOTH lists are required, not just testids: financial-services-strict sets
+            # route_policy="operator_templates" as well, and route_templates defaults to
+            # empty. Approving testids alone leaves every route unmatched, so every ingest
+            # still 422s — while a testids-only check would cheerfully report "configured".
+            # A half-configured tenant is exactly the state this field exists to expose.
             "strict_schema": base_policy.strict_schema_active,
-            "strict_allowlists_configured": bool(
-                (await _read_scrub_overrides()).get("approved_testids")
-            ) if base_policy.strict_schema_active else None,
+            "strict_allowlists_configured": (
+                await _strict_allowlists_configured()
+                if base_policy.strict_schema_active else None
+            ),
             # StepStitch Local pairing. In local mode the credentials are generated, so the
             # console can hand the developer a ready-to-paste snippet instead of asking them
             # to copy a token out of a terminal. Gated three ways: local mode only, admin
@@ -454,6 +492,66 @@ def build_app(
         redacted, kinds = redact_text(req.text or "", compile_extra_redactions(policy))
         return {"status": "ok", "input": req.text, "redacted": redacted, "kinds": kinds}
 
+    # --- Execution state (available on EVERY host) ------------------------------------
+    @app.get("/admin/session/{trace_id}/execution")
+    async def session_execution(trace_id: str,
+                                admin: Any = Depends(require_admin)) -> dict:
+        """How far execution actually got for this trace, and the evidence for it.
+
+        The product could already answer "what verdict was recorded" four different
+        ways, but not the question an operator actually asks first: *is this thing
+        runnable, and did anyone run it?* A compiled draft missing its base URL looked
+        identical to one measured red and fixed. This is that projection — derived,
+        stored nowhere, and it changes none of the existing state machines.
+        """
+        row = await fetchone(
+            "SELECT footsteps, trace_metadata FROM stepstitch_traces WHERE id = ?",
+            (trace_id,))
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        footsteps = json.loads(row[0]) if isinstance(row[0], str) else (row[0] or [])
+        meta = json.loads(row[1]) if isinstance(row[1], str) else (row[1] or {})
+        cfg = await _read_repro_config()
+        items = readiness(cfg, footsteps, fallback_base_url=effective_base_url)
+
+        frozen_row = await fetchone(
+            "SELECT red_verdict, sha256, frozen_at FROM stepstitch_frozen_repros "
+            "WHERE trace_id = ?", (trace_id,))
+        frozen = ({"red_verdict": frozen_row[0], "sha256": frozen_row[1],
+                   "frozen_at": _iso(frozen_row[2])} if frozen_row else None)
+
+        verif_rows = await fetchall(
+            "SELECT pre_passed, post_passed, verdict, evidence_grade, created_at "
+            "FROM stepstitch_verifications WHERE trace_id = ? "
+            "ORDER BY created_at DESC LIMIT 20", (trace_id,))
+        verifications = [
+            {"pre_passed": _as_bool(r[0]), "post_passed": _as_bool(r[1]),
+             "verdict": r[2], "evidence_grade": r[3], "created_at": _iso(r[4])}
+            for r in verif_rows
+        ]
+
+        await audit("stepstitch.execution_state", _actor_name(admin),
+                    {"trace_id": trace_id})
+        scrub = meta.get("_scrub") if isinstance(meta, dict) else None
+        return {
+            "status": "ok",
+            "trace_id": trace_id,
+            **execution_summary(items, frozen=frozen, verifications=verifications),
+            "readiness": items,
+            "verifications": verifications,
+            # The evidence panel: the honest per-trace stamps, in one read.
+            "profile": profile,
+            "schema_status": (scrub or {}).get("schema_status"),
+            "scrub_status": (scrub or {}).get("scrub_status"),
+            # Reproduction diagnostics are operator-configured, so StepStitch cannot
+            # certify what the target app printed — this says so rather than implying
+            # an assurance it does not have.
+            "customer_data_status": "not_verified",
+            # Score AND the reasons for it: a grade with no explanation is a number
+            # an operator cannot act on.
+            "replayability": score_trace(footsteps),
+        }
+
     # --- Reproduce locally (StepStitch Local only) --------------------------------------
     # Executing a browser test is a local-developer action, not something a deployed,
     # multi-tenant host should do on request: it spawns processes and reaches the network.
@@ -522,65 +620,6 @@ def build_app(
             except Exception:
                 logger.warning("stepstitch: could not store reproduction diagnostics",
                                exc_info=True)
-
-        @app.get("/admin/session/{trace_id}/execution")
-        async def session_execution(trace_id: str,
-                                    admin: Any = Depends(require_admin)) -> dict:
-            """How far execution actually got for this trace, and the evidence for it.
-
-            The product could already answer "what verdict was recorded" four different
-            ways, but not the question an operator actually asks first: *is this thing
-            runnable, and did anyone run it?* A compiled draft missing its base URL looked
-            identical to one measured red and fixed. This is that projection — derived,
-            stored nowhere, and it changes none of the existing state machines.
-            """
-            row = await fetchone(
-                "SELECT footsteps, trace_metadata FROM stepstitch_traces WHERE id = ?",
-                (trace_id,))
-            if not row:
-                raise HTTPException(status_code=404, detail="Trace not found")
-            footsteps = json.loads(row[0]) if isinstance(row[0], str) else (row[0] or [])
-            meta = json.loads(row[1]) if isinstance(row[1], str) else (row[1] or {})
-            cfg = await _read_repro_config()
-            items = readiness(cfg, footsteps, fallback_base_url=effective_base_url)
-
-            frozen_row = await fetchone(
-                "SELECT red_verdict, sha256, frozen_at FROM stepstitch_frozen_repros "
-                "WHERE trace_id = ?", (trace_id,))
-            frozen = ({"red_verdict": frozen_row[0], "sha256": frozen_row[1],
-                       "frozen_at": _iso(frozen_row[2])} if frozen_row else None)
-
-            verif_rows = await fetchall(
-                "SELECT pre_passed, post_passed, verdict, evidence_grade, created_at "
-                "FROM stepstitch_verifications WHERE trace_id = ? "
-                "ORDER BY created_at DESC LIMIT 20", (trace_id,))
-            verifications = [
-                {"pre_passed": _as_bool(r[0]), "post_passed": _as_bool(r[1]),
-                 "verdict": r[2], "evidence_grade": r[3], "created_at": _iso(r[4])}
-                for r in verif_rows
-            ]
-
-            await audit("stepstitch.execution_state", _actor_name(admin),
-                        {"trace_id": trace_id})
-            scrub = meta.get("_scrub") if isinstance(meta, dict) else None
-            return {
-                "status": "ok",
-                "trace_id": trace_id,
-                **execution_summary(items, frozen=frozen, verifications=verifications),
-                "readiness": items,
-                "verifications": verifications,
-                # The evidence panel: the honest per-trace stamps, in one read.
-                "profile": profile,
-                "schema_status": (scrub or {}).get("schema_status"),
-                "scrub_status": (scrub or {}).get("scrub_status"),
-                # Reproduction diagnostics are operator-configured, so StepStitch cannot
-                # certify what the target app printed — this says so rather than implying
-                # an assurance it does not have.
-                "customer_data_status": "not_verified",
-                # Score AND the reasons for it: a grade with no explanation is a number
-                # an operator cannot act on.
-                "replayability": score_trace(footsteps),
-            }
 
         # --- The agent loop: freeze, hand off, then judge with the frozen bytes ---------
         @app.post("/admin/session/{trace_id}/freeze")

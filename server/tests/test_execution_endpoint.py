@@ -167,6 +167,91 @@ def test_admin_status_names_each_missing_prerequisite():
     assert body["strict_allowlists_configured"] is None
 
 
+def test_execution_is_available_on_a_deployed_host_not_only_local_mode():
+    """Regression: the endpoint was registered inside the `if local_mode:` block next to
+    freeze/verify-fix/reproduce. Those are gated because they spawn browsers and reach
+    the network; this one is a pure read. The effect was that every deployed tenant —
+    the audience this release targets — silently lost the Execution panel entirely."""
+    db = FakeDB(frozen={"red_verdict": "reproduced"})
+    get_user_id, require_admin = build_auth(ADMIN, INGEST)
+    app = build_app(
+        get_user_id=get_user_id, require_admin=require_admin,
+        execute=db.execute, fetchone=db.fetchone, fetchall=db.fetchall,
+        admin_token=ADMIN, ingest_token=INGEST,
+        base_url="https://staging.example.test",
+        local_mode=False,          # a DEPLOYED host
+    )
+    res = TestClient(app).get("/admin/session/trc-1/execution",
+                              headers={"Authorization": f"Bearer {ADMIN}"})
+    assert res.status_code == 200, "the execution read must exist on a deployed host"
+    assert res.json()["execution_state"] == "reproduced"
+
+    # …while the browser-spawning routes stay local-only, which is why the block exists.
+    routes = {getattr(r, "path", "") for r in app.routes}
+    assert "/admin/session/{trace_id}/execution" in routes
+    for gated in ("reproduce", "freeze", "verify-fix"):
+        assert f"/admin/session/{{trace_id}}/{gated}" not in routes, (
+            f"{gated} spawns processes and must remain local-mode only"
+        )
+
+
+def test_half_configured_strict_allowlists_are_not_reported_as_configured():
+    """Regression: this was computed as bool(approved_testids) alone. The strict profile
+    also gates ROUTES, so approving testids while leaving route_templates empty still
+    422s every single ingest — and the operator was told they were configured."""
+    client = _client(FakeDB(), profile="financial-services-strict")
+    hdr = {"Authorization": f"Bearer {ADMIN}"}
+
+    # testids only — the exact half-configured trap.
+    assert client.put("/admin/config/scrub", headers=hdr, json={
+        "extra_redactions": [], "extra_forbidden_keys": [],
+        "approved_testids": ["pay"], "route_templates": [],
+    }).status_code == 200
+    body = _get(client, "/admin/status").json()
+    assert body["strict_allowlists_configured"] is False, (
+        "testids without route templates must NOT report configured"
+    )
+
+    # routes only — the mirror image.
+    client.put("/admin/config/scrub", headers=hdr, json={
+        "extra_redactions": [], "extra_forbidden_keys": [],
+        "approved_testids": [], "route_templates": ["/accounts/:id"],
+    })
+    assert _get(client, "/admin/status").json()["strict_allowlists_configured"] is False
+
+    # both — genuinely usable.
+    client.put("/admin/config/scrub", headers=hdr, json={
+        "extra_redactions": [], "extra_forbidden_keys": [],
+        "approved_testids": ["pay"], "route_templates": ["/accounts/:id"],
+    })
+    assert _get(client, "/admin/status").json()["strict_allowlists_configured"] is True
+
+
+def test_an_unknown_browser_probe_result_is_cached_not_re_run_every_poll():
+    """Regression: the cache keyed on `cached is not None`, so an UNKNOWN answer was
+    never stored and every /admin/status poll respawned a 30s-timeout subprocess —
+    the cost the async move was made to remove."""
+    import stepstitch_service.host.host as host_mod
+
+    host_mod._reset_browser_cache()
+    calls = {"n": 0}
+
+    def probe():
+        calls["n"] += 1
+        return None                      # the probe genuinely cannot tell
+
+    original = host_mod._browser_present_blocking
+    host_mod._browser_present_blocking = probe
+    try:
+        client = _client(FakeDB())
+        for _ in range(3):
+            assert _get(client, "/admin/status").json()["browser_available"] is None
+        assert calls["n"] == 1, f"probed {calls['n']}x for 3 polls; unknown must cache"
+    finally:
+        host_mod._browser_present_blocking = original
+        host_mod._reset_browser_cache()
+
+
 def test_admin_status_warns_when_a_strict_profile_has_no_allowlists():
     # Deny-by-default with nothing approved refuses every semantic selector. Correct,
     # and silently catastrophic if the operator is never told.

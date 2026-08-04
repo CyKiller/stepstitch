@@ -69,6 +69,41 @@ describe("claim registry", () => {
   });
 });
 
+describe("the registry is actually consumed by the pages", () => {
+  // The registry's whole purpose is that a rendered sentence and its evidence are ONE
+  // object. It shipped defined-but-unimported: the pages kept private copies of the
+  // same sentences, which is precisely the drift it claims to prevent. These pin the
+  // high-risk pages to it — the ones where a false claim costs something.
+  const HIGH_RISK = [
+    "src/app/financial-services-pilot/page.tsx",
+    "src/components/faq.tsx",
+    "src/components/comparison.tsx",
+  ];
+
+  it.each(HIGH_RISK)("%s imports from the claim registry", (rel) => {
+    const text = readFileSync(join(process.cwd(), rel), "utf8");
+    expect(text).toMatch(/from "@\/lib\/claims"/);
+  });
+
+  it("the pilot page renders registered sentences, not retyped copies", () => {
+    const text = readFileSync(
+      join(process.cwd(), "src/app/financial-services-pilot/page.tsx"), "utf8");
+    expect(text).toContain('claim("strict-schema-passed")');
+    expect(text).toContain('claim("reproduction-not-certified")');
+  });
+
+  it("every id referenced by a page actually exists in the registry", () => {
+    // A typo would otherwise throw only when that page is rendered.
+    const ids = new Set(CLAIMS.map((c) => c.id));
+    for (const rel of HIGH_RISK) {
+      const text = readFileSync(join(process.cwd(), rel), "utf8");
+      for (const m of text.matchAll(/claim\("([a-z0-9-]+)"\)/g)) {
+        expect(ids, `${rel} references unknown claim ${m[1]}`).toContain(m[1]);
+      }
+    }
+  });
+});
+
 describe("competitor claims", () => {
   it("every row is dated and sourced", () => {
     expect(COMPETITOR_CLAIMS.length).toBeGreaterThan(0);

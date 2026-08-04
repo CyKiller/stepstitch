@@ -5,7 +5,7 @@ recorded here**, on the commit named below, on this machine or in the named CI r
 Nothing is inferred from an adjacent suite: a browser claim comes from a browser run, a
 PostgreSQL claim comes from a PostgreSQL run.
 
-- **Commit:** `b97d363` (`main`), branch `release/financial-claims-accuracy-rc`
+- **Commit:** `b97d363` (`main`) + the audit fixes on `fix/release-audit-gaps`
 - **Run date:** 2026-08-04
 - **Authoritative CI run:** [30947797324](https://github.com/CyKiller/stepstitch/actions/runs/30947797324) — 9/9 jobs green on this exact commit
 
@@ -62,7 +62,7 @@ Wording banned from the product and site, and guarded by test: "No PII", "No NPI
 ### Service
 | Gate | Command (as CI runs it) | Result |
 |---|---|---|
-| Test suite | `pytest service/tests -q` | **686 passed**, 0 failed, 0 skipped |
+| Test suite | `pytest service/tests -q` | **690 passed**, 0 failed, 0 skipped |
 | Architecture contract | `lint-imports` (cwd `service`) | **1 kept, 0 broken** |
 | Ruff | `ruff check service/stepstitch_service` | **pass** |
 | mypy | `mypy stepstitch_service` (cwd `service`) | **pass** — 67 source files |
@@ -70,7 +70,7 @@ Wording banned from the product and site, and guarded by test: "No PII", "No NPI
 ### Host / API
 | Gate | Command | Result |
 |---|---|---|
-| Test suite | `pytest server/tests -q` | **219 passed, 1 skipped** |
+| Test suite | `pytest server/tests -q` | **222 passed, 1 skipped** |
 | Ruff | `ruff check server` | **pass** |
 | mypy | `mypy server` | **local FAIL (environmental)** — see below |
 | Real PostgreSQL | CI `host` job | **passed in CI** on this commit |
@@ -101,7 +101,7 @@ the CI `host` job against the `postgres:16` service on this commit.
 ### Website
 | Gate | Command | Result |
 |---|---|---|
-| Tests | `npm test` (cwd `web`) | **95 passed** (11 files) |
+| Tests | `npm test` (cwd `web`) | **101 passed** (11 files) |
 | ESLint | `npm run lint` | **pass** |
 | TypeScript | `npx tsc --noEmit` | **pass** |
 | Production build | `npm run build` | **pass** |
@@ -150,6 +150,26 @@ The live loop ends by reading the raw `stepstitch_verifications` row:
 | `git diff --check` | clean |
 | Secret scan | clean — 2 hits are deliberate obviously-fake fixtures (`ssa_AAAA…`, base64 `faketokenfortesting`) |
 | Working tree | clean, 0 changed files |
+
+## Self-audit of this release (findings and fixes)
+
+Before finalizing, the release's own changes were audited against the code. Six defects
+were found **in this cycle's work** and fixed on `fix/release-audit-gaps`; each carries a
+regression test that fails against the previous code.
+
+| # | Defect | Effect | Fix + test |
+|---|---|---|---|
+| 1 | `GET /admin/session/{id}/execution` was registered inside `if local_mode:` | The Execution panel, blockers and `customer_data_status` were **invisible on every deployed host** — the exact audience of this release. The block exists for routes that spawn browsers; this one is a pure read. | Moved out; `test_execution_is_available_on_a_deployed_host_not_only_local_mode` asserts it exists with `local_mode=False` **and** that reproduce/freeze/verify-fix stay gated |
+| 2 | `strict_allowlists_configured` computed from `approved_testids` alone | The strict profile gates selectors **and** routes. Approving testids while leaving `route_templates` empty still 422s every ingest — while status, the setup panel and `doctor` all reported "configured". The precise silent failure the field exists to expose. | Requires every policy the profile enables; `test_half_configured_strict_allowlists_are_not_reported_as_configured` covers testids-only, routes-only and both |
+| 3 | Browser probe cache keyed on `cached is not None` | An **unknown** result was never cached, so a machine where the probe cannot answer respawned a 30-second subprocess on every status poll — the cost the async move removed. | Tri-state cache; `test_an_unknown_browser_probe_result_is_cached_not_re_run_every_poll` asserts one probe across three polls |
+| 4 | `"No screens, values or PII captured"` live on the homepage | An unprovable absolute survived the new scanner, in a file the scanner already read. A second violation (`case-studies.tsx`) was found once the pattern was widened. | Both reworded to the demonstrable claim; scanner now matches the **shape** (`no/zero … PII/NPI`) and excludes code comments, with a self-test using the exact string that escaped |
+| 5 | Claim registry defined but never imported by a page | Its own docstring said pages import it "so copy and evidence cannot drift apart". They kept private copies — the drift it claims to prevent. | Pilot page and FAQ now render `claim(...)`; three tests pin the wiring and reject unknown ids; the docstring now states the real scope |
+| 6 | Long-lived subprocesses on undrained `PIPE`s; scratch dirs never removed | A full OS pipe buffer would block the child and hang the 20-minute CI job. | Processes log to files (a file cannot fill); scratch dirs removed; listening socket closed |
+
+Two findings were assessed and deliberately **not** changed: the `"signed"` evidence-grade
+branch is unreachable today but is forward-looking, and `/admin/status` calls
+`readiness(cfg, [])`, which can only surface base-URL and auth items — the per-trace
+prerequisites appear on the execution endpoint, where the footsteps exist.
 
 ## Grades
 

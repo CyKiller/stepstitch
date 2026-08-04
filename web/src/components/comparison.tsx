@@ -22,11 +22,16 @@ const rows: Row[] = [
     stitch: { kind: "yes", text: "Never" },
   },
   {
+    // "No PII captured" was the claim here, and it is not one we can keep: the SDK
+    // provably never captures screens, input values or page text (there is no such
+    // code path), but free text a user types is user-authored — a name or an address
+    // survives every redaction pattern. So the cell states the architectural fact and
+    // the server-side control, and stops at the boundary of what is demonstrable.
     axis: "PII risk in the tool",
     replay: { kind: "no", text: "High" },
     openreplay: { kind: "partial", text: "Medium" },
     apm: { kind: "partial", text: "Medium" },
-    stitch: { kind: "yes", text: "No screens, values or PII captured" },
+    stitch: { kind: "yes", text: "No screens, input values or page text; free text scrubbed server-side" },
   },
   {
     axis: "Proves the bug is reproducible",
