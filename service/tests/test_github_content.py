@@ -38,7 +38,11 @@ def test_issue_is_privacy_safe_and_deterministic():
     issue = build_issue(s)
     assert issue.title.startswith("[StepStitch]")
     assert "stepstitch:trace_42" in issue.body
-    assert "No NPI" in issue.body or "no NPI" in issue.body
+    # The body says what the server DID (structural capture, server-side scrubbing),
+    # not what it claims is absent: the scrubber's patterns cannot prove a customer's
+    # name never appeared, so an issue filed in someone's tracker must not assert it.
+    assert "server-scrubbed" in issue.body
+    assert "no NPI" not in issue.body.lower()
     blob = issue.title + issue.body
     assert "8675309" not in blob and "data-testid" not in blob
     assert build_issue(s) == issue

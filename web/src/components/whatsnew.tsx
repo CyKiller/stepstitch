@@ -12,7 +12,7 @@ type Item = { icon: Icon; title: string; desc: string; proof: string; href: stri
 // literal and the items together — never one without the other.
 const SHIPPED_IN = "0.6";
 
-// Three moats shipped in 0.6 — each a first-class API + MCP tool, structural and NPI-free.
+// Three moats shipped in 0.6 — each a first-class API + MCP tool, structural only.
 const items: Item[] = [
   {
     icon: Fingerprint,

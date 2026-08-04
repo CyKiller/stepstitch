@@ -154,7 +154,7 @@ export default function DemoPage() {
 
           {/* 3 — privacy scrub */}
           <Reveal>
-            <StepCard n={3} title="The server scrubber proves no NPI persisted">
+            <StepCard n={3} title="The server scrubber reports exactly what it stripped">
               <div className="flex items-center gap-2 text-sm font-semibold text-ok">
                 <ShieldCheck size={17} weight="bold" />
                 Scrub status: {scrub.scrub_status}
@@ -268,12 +268,11 @@ export default function DemoPage() {
                   </div>
                   <p className="text-[12px] text-muted">{verify.note}</p>
                   <p className="text-[12px] text-muted">
-                    Provenance: in this offline demo the two outcomes above are declared
-                    synthetic inputs — no CI ran here. The verdict logic that derives
-                    confirmed_fixed from them is the production code, and the shipped CI
-                    workflow measures both runs for real. Every release also proves the
-                    generated test executes: CI runs a compiled reproduction in Chromium
-                    red, then green.
+                    Provenance: the two outcomes above were <strong>measured</strong>, not
+                    declared. CI runs the compiled reproduction in a real Chromium against
+                    a broken fixture and then a fixed one, and fails if this bundle
+                    disagrees with what it observed. The scenario is synthetic; the
+                    red-to-green transition is a run that actually happened.
                   </p>
                 </div>
               </StepCard>

@@ -15,7 +15,7 @@ pushed.
 | Service (compiler, router, privacy, connectors) | **686** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **220** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **31** | `npx vitest run` |
-| Web (marketing site + copy claims) | **59** | `cd web && npx vitest run` |
+| Web (marketing site + copy claims) | **95** | `cd web && npx vitest run` |
 
 Counts are the number pytest/vitest **collect**, and they are enforced: each suite verifies
 its own row (`test_status_ledger.py`, `test_status_ledger_host.py`),
@@ -66,6 +66,8 @@ repros-scoped token → verify.mjs with a verify-scoped token → freeze/verify-
 | Deep-linkable failures (`#/shape/…`) | `stepstitch_service/host/dashboard.py` | `test_host.py`, `dashboard-demo.spec.ts` |
 | Execution state — `draft` / `ready` / `reproduced` / `confirmed_fixed`, so a compiled draft that cannot run is never mistaken for one that was measured; the console names every missing prerequisite (base URL, route params, form values, auth fixture, browser, strict allowlists) instead of one boolean, and shows whether red and green **actually ran**, the evidence grade, the profile, `schema_status`, `customer_data_status`, and the replayability reasons | `execution.py`, `host.py` `/admin/session/{id}/execution` + `/admin/status`, `dashboard.py` | `test_execution_state.py` (every combination), `test_execution_endpoint.py` |
 | Site's advertised MCP tool list matches the server | `web/src/lib/mcp-tools.ts` | `test_mcp_site_parity.py` |
+| Claim registry — every material marketing statement mapped to the file and test that proves it; the buyer copy may not assert an absolute the scrubber cannot demonstrate (`no NPI`, `never captures PII`, `guarantees`), and competitor rows carry a source and a date | `web/src/lib/claims.ts`, `comparison.tsx` | `claims-registry.test.ts`, `copy-claims.test.ts` (negation-aware + absolute scanners, both self-tested) |
+| Public red-to-green demo is **measured**: the committed evidence bundle records a real Chromium run (broken fixture → red, fixed → green) and CI re-measures it on every commit | `scripts/demo_red_to_green.py --measure` | CI job `demo-console` (bundle drift), `copy-claims.test.ts` |
 | Local reproduction runner (frozen script, env allowlist, timeout, cancel, address allowlist) | `stepstitch_service/runner.py` | `test_runner.py`, `scripts/prove-runner-executes.mjs` (real Chromium, red-to-green) |
 | Agent loop: freeze the test, measure red, judge the fix (fixed / still failing / different failure / unable to verify) | `stepstitch_service/fixcheck.py`, `host/host.py` freeze + verify-fix | `test_fixcheck.py`, `test_agent_loop.py`, `scripts/demo_agent_loop.py` (CI gate) |
 | MCP stdio transport actually spoken by a client | `stepstitch_service/mcp_server.py` | `test_mcp_stdio.py` (spawn, initialize, list, call) |
