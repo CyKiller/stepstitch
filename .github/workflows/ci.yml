@@ -246,7 +246,10 @@ jobs:
         run: npm ci
       - name: Install the example
         working-directory: examples/tiny-transfer
-        run: npm install --no-audit --no-fund
+        # npm ci, not npm install: the example's lockfile pins @playwright/test exactly,
+        # and the runner's execution-envelope digest includes the browser build — an
+        # unpinned resolution here would drift the envelope out from under frozen repros.
+        run: npm ci --no-audit --no-fund
       - name: Install Chromium
         working-directory: examples/tiny-transfer
         run: npx playwright install --with-deps chromium

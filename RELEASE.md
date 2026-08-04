@@ -35,6 +35,15 @@ The manual runbook below remains valid as a fallback / for the regulated vendor 
 - **Strict-CSP clean.** The SDK runs with no `unsafe-eval` and no `unsafe-inline`; it is
   nonce/SRI-friendly. It must pass a stricter CSP than the host app's own.
 - **Deterministic output.** `npm run build` is `tsc` only — same input, same `dist/`.
+- **Playwright is pinned exactly** (`@playwright/test` with no caret, root and
+  `examples/tiny-transfer`, lockfiles committed, CI installs with `npm ci`). The runner
+  bakes the Chromium build into the frozen-repro **execution envelope digest**
+  (`service/stepstitch_service/runner.py`), so an unpinned browser bump would silently
+  invalidate every frozen reproduction with an envelope-mismatch refusal. **Bumping the
+  pin is a deliberate act:** update both `package.json`s + both lockfiles together, and
+  expect operators to re-freeze (`POST /admin/session/{id}/freeze`) any reproduction
+  they still need to verify against — the old frozen rows refuse to run under a new
+  browser build by design.
 
 ## Release steps
 
