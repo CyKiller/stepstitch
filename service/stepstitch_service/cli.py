@@ -417,6 +417,26 @@ def run_doctor(
                             "base_url with PUT /admin/config/repro. Without one, a "
                             "generated reproduction cannot run in CI.",
     ))
+    # …and is that address actually serving? A configured-but-unreachable app is the
+    # documented gap that turns every red run into `needs_setup`, and until now nothing
+    # said so — the operator saw a verdict about their configuration and read it as a
+    # verdict about their bug. WARN, never FAIL: the app is legitimately down while
+    # someone is only capturing traces.
+    if app_base:
+        # Through the injected transport, like every other probe: any HTTP status proves
+        # something is listening (a 404 on the root still answers the question), while 0
+        # is the transport's "could not connect at all".
+        app_status, _ = send(app_base, "GET", {}, None)
+        reachable = app_status != 0
+        checks.append(Check(
+            "application under test",
+            PASS if reachable else WARN,
+            f"{app_base} responded (HTTP {app_status})" if reachable
+            else f"{app_base} did not respond",
+            "" if reachable else "Start the app (or fix the address). Reproductions run "
+                                 "against it — while it is down every run is 'needs setup', "
+                                 "which is a verdict about the environment, not the bug.",
+        ))
 
     # 1b. Can this machine RUN a reproduction? ---------------------------------------------
     # The compiler is Python but the reproduction it emits is a Playwright test executed by
@@ -557,6 +577,23 @@ def run_doctor(
             f"GET /admin/config/scrub -> {status}",
             "" if status == 200 else "The scrub policy could not be read.",
         ))
+        # A deny-by-default profile refuses EVERY semantic selector and route until an
+        # operator names static values. Correct, and silently catastrophic if nobody
+        # said so — a tenant would see nothing but 422s and assume StepStitch is broken.
+        if status == 200 and isinstance(body, dict) and body.get("strict_schema"):
+            testids = body.get("approved_testids") or []
+            routes = body.get("route_templates") or []
+            configured = bool(testids)
+            checks.append(Check(
+                "strict allowlists",
+                PASS if configured else WARN,
+                f"{len(testids)} approved testid(s), {len(routes)} route template(s)"
+                if configured else
+                f"{body.get('base_profile')} is deny-by-default and no values are approved",
+                "" if configured else
+                "Every semantic selector and route will be refused with 422 until you "
+                "approve values (console -> Governance, or PUT /admin/config/scrub).",
+            ))
         status, body = send(f"{base}/admin/config/repro", "GET", admin_headers, None)
         if status == 200 and isinstance(body, dict):
             not_ready = [i for i in body.get("readiness", []) if not i.get("ready")]
