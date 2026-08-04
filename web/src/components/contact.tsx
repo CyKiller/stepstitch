@@ -4,7 +4,7 @@ import { useState } from "react";
 import { track } from "@vercel/analytics";
 import { ArrowRight, CheckCircle } from "@phosphor-icons/react";
 
-type State = "idle" | "submitting" | "done" | "error";
+type State = "idle" | "submitting" | "done" | "error" | "not_delivered";
 
 export function Contact() {
   const [state, setState] = useState<State>("idle");
@@ -24,6 +24,13 @@ export function Contact() {
           message: form.get("message"),
         }),
       });
+      // 502/503 mean the relay is down or unconfigured: the message was NOT
+      // delivered, and the honest thing is to say so — never a success screen
+      // over a discarded submission.
+      if (res.status === 502 || res.status === 503) {
+        setState("not_delivered");
+        return;
+      }
       if (!res.ok) throw new Error();
       track("contact_submit");
       setState("done");
@@ -55,6 +62,26 @@ export function Contact() {
               </p>
               <p className="mt-1 text-sm text-muted">
                 Your message reached our team.
+              </p>
+            </div>
+          ) : state === "not_delivered" ? (
+            <div className="flex min-h-[280px] flex-col items-start justify-center">
+              <p className="text-lg font-semibold text-fg">
+                Your message was not sent.
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                Our contact relay is unavailable right now, so nothing was
+                delivered — we would rather tell you that than show a success
+                screen. Please reach us on{" "}
+                <a
+                  href="https://github.com/CyKiller/stepstitch/issues"
+                  className="font-medium text-fg underline underline-offset-2"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  GitHub
+                </a>{" "}
+                instead, or try again later.
               </p>
             </div>
           ) : (
