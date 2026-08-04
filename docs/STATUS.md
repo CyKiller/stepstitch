@@ -12,7 +12,7 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **655** | `PYTHONPATH=service pytest service/tests/` |
+| Service (compiler, router, privacy, connectors) | **658** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **209** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **31** | `npx vitest run` |
 | Web (marketing site + copy claims) | **59** | `cd web && npx vitest run` |
@@ -43,7 +43,7 @@ the browser sent).
 | Decoupled router (host injects auth/DB) | `service/.../router.py` | `test_router_smoke.py` |
 | Server-side scrubber (NPI trust boundary) | `scrubber.py` | `test_scrubber.py`, `test_scrub_overrides.py` |
 | Replayability score | `replayability.py` | `test_replayability.py` |
-| Deployment profiles | `profiles.py` + `profiles/*.json` | `test_profiles.py` (incl. drift guard) |
+| Deployment profiles (incl. deny-by-default `financial-services-strict`) | `profiles.py` + `profiles/*.json` | `test_profiles.py` (incl. drift guard), `test_strict_policy.py` |
 | Consent / GPC / DNT, kill switch, split retention | SDK + `router.py` + `retention.py` | `test_retention.py`, `test_retention_job.py` |
 | Reproduction-quality eval gate | quality oracle on compiler + scorer | `test_repro_eval.py` |
 | Project reproduction config (base URL, auth fixture, route/form values, API match) | `repro_config.py` | `test_repro_config.py`, `test_repro_config_host.py` |

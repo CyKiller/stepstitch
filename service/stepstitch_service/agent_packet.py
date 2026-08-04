@@ -83,11 +83,15 @@ def privacy_posture(policy_name: str, scrub: Optional[Dict[str, Any]],
         "policy": policy_name,
         "scrub": scrub,
         "never_captured": list(NEVER_FROM_PRODUCTION),
+        # Present only under a strict-schema profile: an explicit statement of which
+        # checks ran ("strict_schema_passed"), never an unprovable "no NPI" claim.
+        "schema_status": (scrub or {}).get("schema_status"),
         # The honest split.
         "from_production": {
             "policy": policy_name,
             "scrub": scrub,
             "never_captured": list(NEVER_FROM_PRODUCTION),
+            "schema_status": (scrub or {}).get("schema_status"),
             "detail": "taken from the person who reported the bug; scrubbed server-side "
                       "before storage",
         },

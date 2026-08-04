@@ -42,6 +42,31 @@ PROFILES: Dict[str, Dict[str, Any]] = {
             "retention_enabled": True, "kill_switch": True,
         },
     },
+    "financial-services-strict": {
+        "name": "financial-services-strict",
+        "description": "Deny-by-default posture for financial tenants. Free text is "
+                       "disabled; forbidden fields hard-reject the POST (422); labels are "
+                       "permanently masked (the SDK's unmask attribute is inert); only "
+                       "operator-approved static data-testid selectors and operator-declared "
+                       "route templates are accepted — unknown semantic selectors and routes "
+                       "are rejected, never stored.",
+        "scrub": {"free_text": "disabled", "max_text_len": 0, "reject_on_forbidden": True,
+                  "selector_policy": "approved_testids",
+                  "route_policy": "operator_templates",
+                  "enforce_masked_labels": True},
+        "posture": {
+            "screenshots": False, "video": False, "dom_text": False,
+            "input_values": False, "raw_urls": False,
+            "request_bodies": False, "response_bodies": False,
+            "console_messages": False, "network_headers": False,
+            "free_text_reports": False,
+            "semantic_selectors": False, "semantic_routes": False,
+            "label_unmasking": False,
+            "consent_required": True, "respect_gpc": True, "respect_dnt": True,
+            "admin_reads_audited": True, "right_to_delete": True,
+            "retention_enabled": True, "kill_switch": True,
+        },
+    },
     "healthcare-strict": {
         "name": "healthcare-strict",
         "description": "Maximum strictness for PHI-adjacent surfaces. Free text is "
@@ -118,6 +143,14 @@ def policy_from_profile(profile: Dict[str, Any]) -> ScrubPolicy:
         free_text=scrub.get("free_text", "scrub"),
         max_text_len=max_len,
         reject_on_forbidden=bool(scrub.get("reject_on_forbidden", False)),
+        # Strict-schema knobs (see scrubber.py). The defaults are the permissive
+        # values, so a profile can only turn a check ON — same tighten-only direction
+        # as the fields above. The allowlists these checks consult (approved testids,
+        # route templates) are operator config, not profile data: they arrive via the
+        # scrub-overrides document and can only scope the deny-by-default checks.
+        selector_policy=str(scrub.get("selector_policy", "any")),
+        route_policy=str(scrub.get("route_policy", "any")),
+        enforce_masked_labels=bool(scrub.get("enforce_masked_labels", False)),
     )
 
 

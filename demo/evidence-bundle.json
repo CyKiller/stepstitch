@@ -211,7 +211,7 @@
         "impact": "3",
         "urgency": "3",
         "correlation_id": "stepstitch:trc_demo_red_to_green_0001",
-        "work_notes": "Replayability score: 0.76 (grade B). Playwright repro available internally. Privacy: Scrubbed / No NPI."
+        "work_notes": "Replayability score: 0.76 (grade B). Playwright repro available internally. Privacy: server-scrubbed, structural fields only."
       },
       "salesforce": {
         "Subject": "User-reported issue: HTTP 500 on /accounts/:id/transfer",
@@ -222,7 +222,7 @@
         "RouteTemplate__c": "/accounts/:id/transfer",
         "ReplayabilityScore__c": 0.76,
         "ReplayabilityGrade__c": "B",
-        "PrivacyStatus__c": "Scrubbed / No NPI",
+        "PrivacyStatus__c": "server-scrubbed, structural fields only",
         "PlaywrightReproLink__c": "internal-link-only"
       },
       "genesys": {
@@ -237,20 +237,20 @@
         "replayability_score": 0.76,
         "replayability_grade": "B",
         "suggested_queue": "digital-platform-escalation",
-        "privacy_status": "Scrubbed / No NPI",
+        "privacy_status": "server-scrubbed, structural fields only",
         "playwright_repro": "internal-link-only"
       },
       "jira": {
         "project_key": "SUP",
         "issuetype": "Bug",
         "summary": "User-reported issue: HTTP 500 on /accounts/:id/transfer",
-        "description": "Sanitized StepStitch summary. Route: /accounts/:id/transfer. Replayability 0.76 (grade B). Steps: 6. Privacy: Scrubbed / No NPI.",
+        "description": "Sanitized StepStitch summary. Route: /accounts/:id/transfer. Replayability 0.76 (grade B). Steps: 6. Privacy: server-scrubbed, structural fields only.",
         "labels": "stepstitch",
         "stepstitch_trace_id": "trc_demo_red_to_green_0001"
       },
       "zendesk": {
         "subject": "User-reported issue: HTTP 500 on /accounts/:id/transfer",
-        "comment_body": "Sanitized StepStitch summary. Route: /accounts/:id/transfer. Replayability 0.76 (grade B). Steps: 6. Privacy: Scrubbed / No NPI.",
+        "comment_body": "Sanitized StepStitch summary. Route: /accounts/:id/transfer. Replayability 0.76 (grade B). Steps: 6. Privacy: server-scrubbed, structural fields only.",
         "priority": "urgent",
         "type": "problem",
         "tags": "stepstitch",
@@ -258,28 +258,28 @@
       },
       "github_issues": {
         "title": "User-reported issue: HTTP 500 on /accounts/:id/transfer",
-        "body": "**Sanitized StepStitch summary** — no screens, field values, raw URLs, or page text.\n\n- Route template: `/accounts/:id/transfer`\n- Replayability: 0.76 (grade B)\n- Steps captured: 6\n- Privacy: Scrubbed / No NPI\n\n_Correlation: stepstitch:trc_demo_red_to_green_0001_",
+        "body": "**Sanitized StepStitch summary** — no screens, field values, raw URLs, or page text.\n\n- Route template: `/accounts/:id/transfer`\n- Replayability: 0.76 (grade B)\n- Steps captured: 6\n- Privacy: server-scrubbed, structural fields only\n\n_Correlation: stepstitch:trc_demo_red_to_green_0001_",
         "labels": "stepstitch,bug",
         "external_id": "stepstitch:trc_demo_red_to_green_0001"
       },
       "linear": {
         "team_key": "SUP",
         "title": "User-reported issue: HTTP 500 on /accounts/:id/transfer",
-        "description": "Sanitized StepStitch summary. Route: /accounts/:id/transfer. Replayability 0.76 (grade B). Steps: 6. Privacy: Scrubbed / No NPI.",
+        "description": "Sanitized StepStitch summary. Route: /accounts/:id/transfer. Replayability 0.76 (grade B). Steps: 6. Privacy: server-scrubbed, structural fields only.",
         "priority": "1",
         "labels": "stepstitch",
         "external_id": "stepstitch:trc_demo_red_to_green_0001"
       },
       "slack": {
         "channel": "#bugs",
-        "text": ":red_circle: *User-reported issue: HTTP 500 on /accounts/:id/transfer*\nRoute: `/accounts/:id/transfer` · Replayability 0.76 (grade B) · Privacy: Scrubbed / No NPI\nCorrelation: stepstitch:trc_demo_red_to_green_0001",
+        "text": ":red_circle: *User-reported issue: HTTP 500 on /accounts/:id/transfer*\nRoute: `/accounts/:id/transfer` · Replayability 0.76 (grade B) · Privacy: server-scrubbed, structural fields only\nCorrelation: stepstitch:trc_demo_red_to_green_0001",
         "unfurl_links": false,
         "external_id": "stepstitch:trc_demo_red_to_green_0001"
       },
       "github": {
         "issue": {
           "title": "[StepStitch] User-reported issue: HTTP 500 on /accounts/:id/transfer",
-          "body": "Reported issue reproduced by StepStitch (privacy-safe; no NPI captured).\n\n- **Route:** `/accounts/:id/transfer`\n- **Replayability:** 0.76 (grade B)\n- **Steps:** 6\n- **Privacy:** Scrubbed / No NPI\n- **Trace correlation id:** `stepstitch:trc_demo_red_to_green_0001`\n\nA deterministic Playwright reproduction is available from StepStitch and can be committed as a regression test. StepStitch never merges — a human reviews and merges.",
+          "body": "Reported issue reproduced by StepStitch (privacy-safe; no NPI captured).\n\n- **Route:** `/accounts/:id/transfer`\n- **Replayability:** 0.76 (grade B)\n- **Steps:** 6\n- **Privacy:** server-scrubbed, structural fields only\n- **Trace correlation id:** `stepstitch:trc_demo_red_to_green_0001`\n\nA deterministic Playwright reproduction is available from StepStitch and can be committed as a regression test. StepStitch never merges — a human reviews and merges.",
           "labels": [
             "stepstitch",
             "privacy-safe",
@@ -326,7 +326,7 @@
     "headline": "User-reported issue: HTTP 500 on /accounts/:id/transfer",
     "replayability_score": 0.76,
     "replayability_grade": "B",
-    "privacy_status": "Scrubbed / No NPI",
+    "privacy_status": "server-scrubbed, structural fields only",
     "step_count": 6,
     "failing_status": 500,
     "exception_type": null,

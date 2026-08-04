@@ -65,9 +65,13 @@ support-to-engineering evidence:
   useful structure (status, method, endpoint template, exception type, source path, line,
   build/release metadata) while raw logs, raw messages, stacks, headers, cookies, bodies,
   screenshots, page text, input values, and full URLs remain out of the trace.
-- **Deployment profiles** — `financial-services-enterprise` (default), `healthcare-strict`
-  (free text dropped, forbidden keys reject 422), `internal-enterprise`,
-  `open-source-default`. A profile may only *tighten* the NPI boundary.
+- **Deployment profiles** — `financial-services-enterprise` (default),
+  `financial-services-strict` (deny-by-default: free text disabled, forbidden fields
+  reject 422, labels permanently masked, only operator-approved static `data-testid`
+  selectors and operator-declared route templates accepted; surviving traces carry
+  `strict_schema_passed`), `healthcare-strict` (free text dropped, forbidden keys reject
+  422), `internal-enterprise`, `open-source-default`. A profile may only *tighten* the
+  NPI boundary.
 - **Financial-services support pack** — flat, sanitized ServiceNow incident, Salesforce
   case, and Genesys support-context drafts built from a structure-derived `TraceSummary`
   (never raw footsteps, the explanation, or the user id). Direct system-of-record writes

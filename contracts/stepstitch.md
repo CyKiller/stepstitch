@@ -130,12 +130,13 @@ A **profile** is a named posture that selects the `ScrubPolicy` (see
 only *tighten* the boundary (free-text scrub→disabled, drop→reject) — it can never
 weaken the allowlist/forbidden sets. Default = `financial-services-enterprise`.
 
-| Profile | free_text | reject_on_forbidden |
-|---|---|---|
-| `financial-services-enterprise` (default) | scrub | drop |
-| `healthcare-strict` | disabled | reject (422) |
-| `internal-enterprise` | scrub (longer notes) | drop |
-| `open-source-default` | scrub | drop |
+| Profile | free_text | reject_on_forbidden | strict schema |
+|---|---|---|---|
+| `financial-services-enterprise` (default) | scrub | drop | — |
+| `financial-services-strict` | disabled | reject (422) | approved testids + operator route templates + permanent label masking |
+| `healthcare-strict` | disabled | reject (422) | — |
+| `internal-enterprise` | scrub (longer notes) | drop | — |
+| `open-source-default` | scrub | drop | — |
 
 A host wires it via `create_stepstitch_router(scrub_policy=load_profile("..."))`.
 

@@ -36,6 +36,27 @@ def test_healthcare_strict_is_hardest():
     assert policy.reject_on_forbidden is True
 
 
+def test_financial_services_strict_is_deny_by_default():
+    policy = load_profile("financial-services-strict")
+    assert policy.free_text == "disabled"
+    assert policy.reject_on_forbidden is True
+    assert policy.selector_policy == "approved_testids"
+    assert policy.route_policy == "operator_templates"
+    assert policy.enforce_masked_labels is True
+    assert policy.strict_schema_active
+    # The allowlists ship EMPTY: until an operator names static values, every
+    # semantic selector and route is rejected. Config scopes; it never disables.
+    assert policy.approved_testids == frozenset()
+    assert policy.route_templates == ()
+
+
+def test_permissive_profiles_do_not_grow_strict_knobs():
+    for name in ("financial-services-enterprise", "healthcare-strict",
+                 "internal-enterprise", "open-source-default"):
+        policy = load_profile(name)
+        assert not policy.strict_schema_active, f"{name} must stay behaviorally unchanged"
+
+
 def test_internal_enterprise_allows_longer_notes():
     policy = load_profile("internal-enterprise")
     assert policy.free_text == "scrub"

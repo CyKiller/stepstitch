@@ -1,0 +1,34 @@
+{
+  "name": "financial-services-strict",
+  "description": "Deny-by-default posture for financial tenants. Free text is disabled; forbidden fields hard-reject the POST (422); labels are permanently masked (the SDK's unmask attribute is inert); only operator-approved static data-testid selectors and operator-declared route templates are accepted \u2014 unknown semantic selectors and routes are rejected, never stored.",
+  "scrub": {
+    "free_text": "disabled",
+    "max_text_len": 0,
+    "reject_on_forbidden": true,
+    "selector_policy": "approved_testids",
+    "route_policy": "operator_templates",
+    "enforce_masked_labels": true
+  },
+  "posture": {
+    "screenshots": false,
+    "video": false,
+    "dom_text": false,
+    "input_values": false,
+    "raw_urls": false,
+    "request_bodies": false,
+    "response_bodies": false,
+    "console_messages": false,
+    "network_headers": false,
+    "free_text_reports": false,
+    "semantic_selectors": false,
+    "semantic_routes": false,
+    "label_unmasking": false,
+    "consent_required": true,
+    "respect_gpc": true,
+    "respect_dnt": true,
+    "admin_reads_audited": true,
+    "right_to_delete": true,
+    "retention_enabled": true,
+    "kill_switch": true
+  }
+}
