@@ -29,6 +29,14 @@ jobs:
         run: npm run type-check
       - name: Unit + redaction-proof suite
         run: npm test
+      # The README / getting-started snippets are compiled by tests/doc-examples.test.ts
+      # (inside `npm test` above). This step covers the one published example that is a
+      # real app file rather than a fence: the React reference integration.
+      - name: Published React example compiles
+        working-directory: examples/web-app-integration
+        run: |
+          npm ci --no-audit --no-fund
+          npm run type-check
       - name: Audit runtime deps (zero-dep invariant -> must stay clean)
         run: npm audit --omit=dev --audit-level=high
 

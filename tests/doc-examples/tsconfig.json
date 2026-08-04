@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true,
+    "declaration": false
+  },
+  "include": ["../doc-examples.test.ts", "./extract.ts"],
+  "exclude": []
+}

@@ -1,0 +1,17 @@
+{
+  "name": "stepstitch-web-app-integration-example",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Reference React integration for @stepstitch/tracker — exists so CI can prove the published example compiles.",
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@stepstitch/tracker": "file:../..",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "typescript": "^5.4.0"
+  }
+}

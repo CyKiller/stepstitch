@@ -17,6 +17,7 @@ The browser SDK has **zero runtime dependencies**. Capture is OFF until you call
 
 ## 2. Wire it into your app
 
+<!-- doc-example:wire-up-ts -->
 ```ts
 import { StepStitchTracker } from "@stepstitch/tracker"
 
