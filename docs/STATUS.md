@@ -27,9 +27,12 @@ the repository.
 
 Also blocking: `ruff`, `mypy`, `tsc --noEmit`, `eslint`, CodeQL, the executable-repro proof
 (`scripts/prove-repro-executes.mjs`), the compliance-evidence drift guard, the import-linter
-layering contract, and two browser jobs the server-side suites cannot replace — `demo-console`
-(the console actually renders) and `tiny-transfer` (the privacy claims hold against the bytes
-the browser sent).
+layering contract, and three browser jobs the server-side suites cannot replace — `demo-console`
+(the console actually renders), `tiny-transfer` (the privacy claims hold against the bytes
+the browser sent), and `tiny-transfer-live` (`scripts/live_financial_loop.py`: real browser →
+real SDK → same-origin proxy → strict scrubber → the raw SQLite row → real MCP stdio with a
+repros-scoped token → verify.mjs with a verify-scoped token → freeze/verify-fix, ending in a
+`confirmed_fixed` row with `evidence_grade='measured'` — no mocks anywhere in the chain).
 
 ## Shipped — done (proven)
 
@@ -58,6 +61,7 @@ the browser sent).
 | `stepstitch start` — local dashboard in one command, no token pasting | `stepstitch_service/host/local.py`, `packages/cli-shim` | `test_local_start.py`, `test_local_onboarding.py`, CI job `first-run` (3 OSes) |
 | doctor knows local mode and reproduction prerequisites (node, playwright) | `stepstitch_service/cli.py` | `test_doctor.py` |
 | Runnable example proving the privacy claims + red→green | `examples/tiny-transfer/` | CI job `tiny-transfer` (13 Playwright tests over the captured payload) |
+| **The whole financial chain with no mocks** — real browser → real SDK → same-origin proxy → strict scrubber → the **stored SQLite row** (not the outbound payload) → real MCP stdio with a `repros` token → `verify.mjs` with a `verify` token → freeze/verify-fix, ending in `confirmed_fixed` + `evidence_grade='measured'` read raw from the row; a hostile semantic POST measured at 422 with nothing stored | `scripts/live_financial_loop.py`, `examples/tiny-transfer/live-report.mjs` | CI job `tiny-transfer-live` |
 | Public demo console — real UI, synthetic data, no credentials, read-only | `stepstitch_service/host/demo.py`, `scripts/build_demo_dataset.py` | `test_demo_app.py`, CI job `demo-console` (13 browser tests) |
 | Deep-linkable failures (`#/shape/…`) | `stepstitch_service/host/dashboard.py` | `test_host.py`, `dashboard-demo.spec.ts` |
 | Site's advertised MCP tool list matches the server | `web/src/lib/mcp-tools.ts` | `test_mcp_site_parity.py` |
