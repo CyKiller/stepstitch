@@ -267,6 +267,40 @@ jobs:
         working-directory: examples/tiny-transfer
         run: npm run test:e2e
 
+  tiny-transfer-live:
+    name: Live financial loop (browser -> DB -> MCP -> red-to-green, no mocks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+          cache: "npm"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install the SDK (builds dist/)
+        run: npm ci
+      - name: Install the example (pinned lockfile)
+        working-directory: examples/tiny-transfer
+        run: npm ci --no-audit --no-fund
+      # local + mcp extras: the loop starts a real `stepstitch start` host AND speaks
+      # real MCP stdio to it via mcp_cli (httpx + mcp).
+      - name: Install the service (local host + MCP client)
+        run: pip install "./service[local,mcp]"
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      # The hermetic tiny-transfer job proves the OUTBOUND payload against a stub.
+      # This job proves everything that stub could never see: the strict scrubber,
+      # the stored SQLite row, the deny-by-default 422, MCP retrieval with a
+      # repros-scoped token, verify.mjs with a verify-scoped token (measured red ->
+      # green -> confirmed_fixed), and the freeze/verify-fix measured-grade row.
+      # Deliberately NO retries: a retry would launder flakiness through a gate
+      # whose entire value is that it is measured.
+      - name: Run the live financial loop
+        run: python3 scripts/live_financial_loop.py
+
   compliance:
     name: Compliance evidence (no drift)
     runs-on: ubuntu-latest

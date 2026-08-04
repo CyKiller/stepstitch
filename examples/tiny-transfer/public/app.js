@@ -87,9 +87,16 @@ $("transfer-form").addEventListener("submit", async (event) => {
   // The explanation is free text a user typed, so it is exactly where real data leaks in.
   // These fakes are here to be redacted by the SERVER-side scrubber, which is the actual
   // trust boundary — the SDK cannot be the last line of defence for text a human wrote.
-  const explanation =
-    `Tried to send $250.00 to account 4111 1111 1111 1234 from dana.holt@example.test ` +
-    `and it failed. My SSN is 000-00-0000 if that matters.`
+  //
+  // A tenant on the financial-services-strict profile disables free text server-side
+  // (an explanation is a hard 422, not a scrub), so the strict variant of this page —
+  // used by the live CI loop — sends no explanation at all. That is how a real strict
+  // integration should wire the widget: don't offer the field.
+  const strict = new URLSearchParams(location.search).get("strict") === "1"
+  const explanation = strict
+    ? undefined
+    : `Tried to send $250.00 to account 4111 1111 1111 1234 from dana.holt@example.test ` +
+      `and it failed. My SSN is 000-00-0000 if that matters.`
 
   try {
     const result = await tracker.submitTrace(explanation, "tiny-transfer")
