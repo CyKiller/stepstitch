@@ -93,6 +93,24 @@ The scrubber, under the default **`financial-services-enterprise`** policy:
   `cookies`, `screenshots`, `dom`, `url`, `query_string`, …) are dropped as a leak
   signal. With `reject_on_forbidden: true` their presence makes the POST a **422**
   instead, and `stepstitch.scrub_reject` is audited.
+- **Unknown keys 422 at the door (every profile):** the ingestion schema is
+  `extra="forbid"` at both the top level and per footstep. A key outside the wire
+  contract (`screenshot`, `value`, `html`, …) is refused with a 422 naming the field —
+  never silently discarded before the scrubber could count it. Proven in
+  `service/tests/test_strict_policy.py`.
+
+A policy may additionally enable the **strict-schema knobs** (used by the
+`financial-services-strict` profile): `selector_policy: "approved_testids"` accepts a
+footstep `target` only when it is an operator-approved static `data-testid` or a purely
+structural path (tags + `:nth-of-type` — no author strings); `route_policy:
+"operator_templates"` accepts a footstep `route` only when it matches an
+operator-declared template; `enforce_masked_labels` re-masks any label to `[masked]`,
+making the SDK's unmask attribute inert for the tenant. Violations are rejected fields
+(422 under `reject_on_forbidden`), and a surviving payload's scrub report carries
+`"schema_status": "strict_schema_passed"` — an explicit statement of which checks ran,
+never an unprovable "no NPI" claim. The operator allowlists live in the scrub-overrides
+document (`approved_testids`, `route_templates`) and can only scope the deny-by-default
+checks — they can never disable them.
 
 The ingestion **response** and the stored `trace_metadata._scrub` both carry the report:
 

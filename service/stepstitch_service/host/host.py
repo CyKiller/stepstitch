@@ -56,6 +56,10 @@ class AgentRegistration(BaseModel):
 class ScrubConfig(BaseModel):
     extra_redactions: list = []      # list of [label, regex] pairs
     extra_forbidden_keys: list = []  # list of metadata key names to additionally drop
+    # Strict-profile allowlists: the specific static values a deny-by-default profile
+    # accepts. Inert on permissive profiles (selector/route policy is profile-owned).
+    approved_testids: list = []      # data-testid values a strict profile accepts
+    route_templates: list = []       # route templates a strict profile accepts
 
 
 class ScrubPreview(BaseModel):
@@ -79,16 +83,29 @@ class ReproConfigBody(BaseModel):
 
 
 def apply_scrub_overrides(base: ScrubPolicy, cfg: dict) -> ScrubPolicy:
-    """Compose the base profile with operator overrides. Both fields only TIGHTEN: extra
-    patterns add redaction, extra keys add drops. A malformed entry is dropped, never able
-    to loosen the base. Pure + testable."""
+    """Compose the base profile with operator overrides. Every field only TIGHTENS or
+    scopes an already-strict check: extra patterns add redaction, extra keys add drops,
+    and the strict allowlists (approved testids / route templates) name the specific
+    static values a deny-by-default profile will accept. Overrides can never flip a
+    strict knob off, remove a built-in rule, or re-enable free text. A malformed entry
+    is dropped, never able to loosen the base. Pure + testable."""
     extra_red = tuple(
         (str(p[0]), str(p[1]))
         for p in (cfg.get("extra_redactions") or [])
         if isinstance(p, (list, tuple)) and len(p) == 2
     )
     extra_keys = frozenset(str(k) for k in (cfg.get("extra_forbidden_keys") or []))
-    return derive_policy(base, extra_redactions=extra_red, extra_forbidden_keys=extra_keys)
+    changes: dict = {"extra_redactions": extra_red, "extra_forbidden_keys": extra_keys}
+    # The strict allowlists are inert unless the base profile turned the matching
+    # policy on (selector_policy / route_policy are profile-owned, never override-
+    # settable), so on a permissive profile these keys change nothing.
+    testids = cfg.get("approved_testids")
+    if isinstance(testids, (list, tuple)):
+        changes["approved_testids"] = frozenset(str(t) for t in testids)
+    templates = cfg.get("route_templates")
+    if isinstance(templates, (list, tuple)):
+        changes["route_templates"] = tuple(str(t) for t in templates)
+    return derive_policy(base, **changes)
 
 
 def _actor_name(admin: Any) -> str:
@@ -294,6 +311,8 @@ def build_app(
             "base_profile": base_policy.name,
             "extra_redactions": cfg.get("extra_redactions", []),
             "extra_forbidden_keys": cfg.get("extra_forbidden_keys", []),
+            "approved_testids": cfg.get("approved_testids", []),
+            "route_templates": cfg.get("route_templates", []),
         }
 
     @app.put("/admin/config/scrub")
@@ -311,7 +330,14 @@ def build_app(
                                     detail=f"invalid regex for '{label}': {exc}")
             patterns.append([label, raw])
         keys = [str(k) for k in req.extra_forbidden_keys]
-        cfg = {"extra_redactions": patterns, "extra_forbidden_keys": keys}
+        testids = [str(t) for t in req.approved_testids]
+        templates = [str(t) for t in req.route_templates]
+        cfg = {
+            "extra_redactions": patterns,
+            "extra_forbidden_keys": keys,
+            "approved_testids": testids,
+            "route_templates": templates,
+        }
         await execute("DELETE FROM stepstitch_config WHERE key = ?", ("scrub_overrides",))
         await execute(
             "INSERT INTO stepstitch_config (key, value, updated_at, updated_by) "
@@ -320,7 +346,8 @@ def build_app(
              _actor_name(admin)),
         )
         await audit("stepstitch.scrub_config_update", _actor_name(admin),
-                    {"patterns": len(patterns), "forbidden_keys": len(keys)})
+                    {"patterns": len(patterns), "forbidden_keys": len(keys),
+                     "approved_testids": len(testids), "route_templates": len(templates)})
         return {"status": "ok", **cfg}
 
     # --- Reproduction config (project settings the compiler needs; never credentials) ---

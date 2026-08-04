@@ -127,6 +127,69 @@ def compile_extra_redactions(
     return tuple(compiled)
 
 
+# --- Strict-schema primitives ---------------------------------------------------
+#
+# Under the strict financial posture, semantic content is not scrubbed — it is
+# refused. A selector is acceptable only when it provably carries no author- or
+# customer-authored string: an operator-approved static ``data-testid`` value, or a
+# purely structural path (tag names and :nth-of-type positions). Routes must match
+# an operator-declared template. Everything else is a rejected field.
+
+# The label constant the SDK stores for masked elements (src/types.ts MASKED).
+MASKED_LABEL = "[masked]"
+
+# One segment of a structural path as built by ``buildSelector`` (redaction.ts):
+# a lowercase tag name, optionally positioned. Tag names are static application
+# code, never per-customer data, so they cannot carry NPI.
+_STRUCTURAL_SEGMENT_RE = re.compile(r"^[a-z][a-z0-9-]*(?::nth-of-type\(\d+\))?$")
+# A data-testid segment, exactly as the SDK emits it: [data-testid="..."] with
+# CSS-escaped contents.
+_TESTID_SEGMENT_RE = re.compile(r'^\[data-testid="((?:[^"\\]|\\.)*)"\]$')
+
+
+def _unescape_css(value: str) -> str:
+    return re.sub(r"\\(.)", r"\1", value)
+
+
+def selector_allowed(target: str, approved_testids: frozenset) -> bool:
+    """True when every segment of ``target`` is structural or an approved testid.
+
+    Mirrors the SDK's ``buildSelector`` grammar: segments joined by `` > ``, each a
+    tag (optionally ``:nth-of-type(n)``) or a ``[data-testid="..."]`` anchor. ``#id``
+    segments and anything else are NOT allowed — ids are author strings the operator
+    has not vouched for.
+    """
+    if not target:
+        return True
+    for segment in target.split(" > "):
+        if _STRUCTURAL_SEGMENT_RE.match(segment):
+            continue
+        m = _TESTID_SEGMENT_RE.match(segment)
+        if m and _unescape_css(m.group(1)) in approved_testids:
+            continue
+        return False
+    return True
+
+
+def route_matches_templates(route: str, templates: Tuple[str, ...]) -> bool:
+    """True when ``route`` (already templated) matches one operator template.
+
+    Segment-wise: a template segment starting with ``:`` matches any segment
+    (including the scrubber's generic ``:id``); a literal segment must be equal.
+    """
+    route_segs = route.split("/")
+    for template in templates:
+        tmpl_segs = template.split("/")
+        if len(tmpl_segs) != len(route_segs):
+            continue
+        if all(
+            t.startswith(":") or t == r
+            for t, r in zip(tmpl_segs, route_segs)
+        ):
+            return True
+    return False
+
+
 # --- Policy -------------------------------------------------------------------
 
 # Structural, NPI-free metadata the server is willing to store. Anything else is
@@ -211,6 +274,31 @@ class ScrubPolicy:
     # config. ``extra_redactions`` is a tuple of ``(label, regex-string)``.
     extra_redactions: Tuple[Tuple[str, str], ...] = ()
     extra_forbidden_keys: frozenset = frozenset()
+    # Strict-schema knobs (financial-services-strict). Defaults are the permissive
+    # values, so every existing profile behaves exactly as before.
+    #   selector_policy "approved_testids": a footstep target must be an operator-
+    #   approved static data-testid or a purely structural path; anything else is a
+    #   rejected field. Deny-by-default: an empty allowlist rejects every semantic
+    #   selector, and operator config can only name specific static values — it can
+    #   never turn the check off.
+    selector_policy: str = "any"  # "any" | "approved_testids"
+    approved_testids: frozenset = frozenset()
+    #   route_policy "operator_templates": a footstep route (post-templating) must
+    #   match one operator-declared template; unknown semantic routes are rejected.
+    route_policy: str = "any"  # "any" | "operator_templates"
+    route_templates: Tuple[str, ...] = ()
+    #   enforce_masked_labels: any label other than "[masked]" is re-masked before
+    #   storage — the SDK's unmask attribute has no effect on what this tenant stores.
+    enforce_masked_labels: bool = False
+
+    @property
+    def strict_schema_active(self) -> bool:
+        """True when any strict-schema knob is on (drives the schema_status report)."""
+        return (
+            self.selector_policy != "any"
+            or self.route_policy != "any"
+            or self.enforce_masked_labels
+        )
 
     @property
     def all_forbidden_keys(self) -> frozenset:
@@ -328,7 +416,44 @@ def scrub_trace_payload(
             scrubbed_fields.append(f"footsteps[{i}].route")
         step["route"] = templated
 
+        if policy.route_policy == "operator_templates" and not route_matches_templates(
+            templated, policy.route_templates
+        ):
+            # Unknown semantic route: refused, never stored. Under reject_on_forbidden
+            # this becomes a 422; otherwise the route is reduced to "/" so the unknown
+            # slug cannot persist either way.
+            scrubbed_fields.append(f"footsteps[{i}].route")
+            rejected_fields.append(f"footsteps[{i}].route")
+            step["route"] = "/"
+
+        if policy.enforce_masked_labels:
+            label = step.get("label")
+            if isinstance(label, str) and label != MASKED_LABEL:
+                # Re-mask, don't reject: masking is loss-free for privacy, and it is
+                # what makes the SDK's unmask attribute inert for this tenant.
+                scrubbed_fields.append(f"footsteps[{i}].label")
+                step["label"] = MASKED_LABEL
+
+        if policy.selector_policy == "approved_testids":
+            target = step.get("target")
+            if isinstance(target, str) and not selector_allowed(
+                target, policy.approved_testids
+            ):
+                scrubbed_fields.append(f"footsteps[{i}].target")
+                rejected_fields.append(f"footsteps[{i}].target")
+                step["target"] = None
+
         for text_key in ("label", "target"):
+            if text_key == "target" and policy.selector_policy == "approved_testids":
+                # Already checked against the selector allowlist above — the value is
+                # an operator-approved static testid or a purely structural path (or
+                # None). That check is strictly stronger than the free-text regexes,
+                # which would otherwise mangle an approved testid containing digits.
+                continue
+            if text_key == "label" and policy.enforce_masked_labels:
+                # The label is exactly "[masked]" after enforcement above; the generic
+                # pass would truncate it to max_text_len (1 under disabled free text).
+                continue
             val = step.get(text_key)
             if isinstance(val, str):
                 redacted, kinds = redact_text(val, extra)
@@ -378,6 +503,15 @@ def scrub_trace_payload(
         "scrubbed_fields": ordered,
         "policy": policy.name,
     }
+    if policy.strict_schema_active:
+        # An explicit, honest status: the strict schema checks ran and the stored
+        # payload satisfies them. Never phrased as "no NPI proven" — the checks are
+        # what is proven. (A rejected payload raises above and stores nothing; the
+        # dropped-violations wording only appears under a non-rejecting variant.)
+        report["schema_status"] = (
+            "strict_schema_passed" if not rejected_fields
+            else "strict_schema_violations_dropped"
+        )
     return result, report
 
 
@@ -391,9 +525,12 @@ __all__ = [
     "ScrubPolicy",
     "ScrubRejection",
     "FINANCIAL_SERVICES_ENTERPRISE",
+    "MASKED_LABEL",
     "scrub_trace_payload",
     "redact_text",
     "route_template",
     "derive_policy",
     "compile_extra_redactions",
+    "selector_allowed",
+    "route_matches_templates",
 ]
