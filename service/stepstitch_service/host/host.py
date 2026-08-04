@@ -288,6 +288,9 @@ def build_app(
         return {
             "status": "ok",
             "base_profile": base_policy.name,
+            # Tells the console whether the strict allowlist editors apply, without
+            # the page inferring anything from the profile NAME.
+            "strict_schema": base_policy.strict_schema_active,
             "extra_redactions": cfg.get("extra_redactions", []),
             "extra_forbidden_keys": cfg.get("extra_forbidden_keys", []),
             "approved_testids": cfg.get("approved_testids", []),
