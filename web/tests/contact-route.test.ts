@@ -91,14 +91,66 @@ describe("POST /api/contact validation", () => {
 });
 
 describe("POST /api/contact without a webhook", () => {
-  it("returns ok:true and does not call fetch", async () => {
+  it("refuses with 503 relay_unconfigured instead of faking success", async () => {
+    // The original behavior returned ok:true here — the visitor saw "your
+    // message reached our team" while the submission was discarded. The route
+    // must now refuse honestly so the form can say the message did not send.
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
 
     const res = await POST(makeJsonRequest(validPayload));
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "relay_unconfigured" });
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("the canary also reports the missing relay as 503", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const res = await POST(makeJsonRequest({ canary: true }));
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "relay_unconfigured" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/contact canary", () => {
+  const HOOK = "https://hooks.example.test/relay";
+
+  it("relays a clearly-labeled canary payload and returns the real status", async () => {
+    process.env.CONTACT_WEBHOOK_URL = HOOK;
+    const fetchSpy = vi.fn(async () => ({ ok: true, status: 200 }) as Response);
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const res = await POST(makeJsonRequest({ canary: true }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, canary: true });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe(HOOK);
+    const sent = JSON.parse(String(init.body));
+    // The receiving channel must be able to tell this is not a real enquiry.
+    expect(sent.canary).toBe(true);
+    expect(sent.text).toContain("[canary]");
+    expect(sent.text).toContain("not a real enquiry");
+    // No fabricated personal fields ride along.
+    expect(sent.name).toBeUndefined();
+    expect(sent.email).toBeUndefined();
+  });
+
+  it("surfaces a failing webhook as 502 so the deploy check goes red", async () => {
+    process.env.CONTACT_WEBHOOK_URL = HOOK;
+    const fetchSpy = vi.fn(async () => ({ ok: false, status: 500 }) as Response);
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const res = await POST(makeJsonRequest({ canary: true }));
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "relay_failed" });
   });
 });
 

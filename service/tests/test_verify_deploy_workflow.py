@@ -82,12 +82,27 @@ def test_both_hosts_probe_the_full_public_contract():
 def test_contract_failures_still_fail_the_job_through_the_gate():
     job = _doc()["jobs"]["verify"]
     by_name = {s["name"]: s for s in job["steps"]}
-    # continue-on-error exists so BOTH contracts report; the gate makes failure real.
+    # continue-on-error exists so ALL contracts report; the gate makes failure real.
     assert by_name["Railway public contract"]["continue-on-error"] is True
     assert by_name["Vercel public contract"]["continue-on-error"] is True
+    assert by_name["Contact relay canary"]["continue-on-error"] is True
     gate = by_name["Gate on both contracts"]["run"]
     assert "exit 1" in gate
     assert "steps.railway.outcome" in gate and "steps.vercel.outcome" in gate
+    assert "steps.contact.outcome" in gate
+
+
+def test_contact_canary_is_labeled_delivered_for_real_and_gated():
+    """The canary must prove an actual delivery (200 + canary:true echoed), be
+    unmistakably synthetic to the receiving channel, and hard-fail otherwise —
+    a missing CONTACT_WEBHOOK_URL must never verify green."""
+    script = _steps()["Contact relay canary"]
+    assert '\'{"canary": true}\'' in script
+    assert '"$SITE/api/contact"' in script
+    assert '[ "$code" = "200" ]' in script
+    assert 'grep -q \'"canary":true\'' in script
+    assert "exit 1" in script
+    assert "::warning::" not in script, "an undelivered canary must fail, not warn"
 
 
 def test_probes_are_quoted_functions_not_word_split_strings():
@@ -108,6 +123,7 @@ def test_summary_reports_shas_and_both_contract_outcomes():
     assert "steps.revision.outputs.confirmed" in script
     assert "steps.railway.outcome" in script
     assert "steps.vercel.outcome" in script
+    assert "steps.contact.outcome" in script
 
 
 @pytest.mark.parametrize("workflow", [VERIFY, CLEAN_INSTALL], ids=lambda p: p.name)

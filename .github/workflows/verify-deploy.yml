@@ -119,13 +119,38 @@ jobs:
           probe POST "$SITE/dashboard/demo/api/stepstitch/v1/session/probe/verify" 403
           probe PUT  "$SITE/dashboard/demo/admin/config/repro" 403
 
+      - name: Contact relay canary
+        id: contact
+        continue-on-error: true
+        run: |
+          # Proves the PRODUCTION contact relay end to end: CONTACT_WEBHOOK_URL present
+          # on Vercel AND the webhook accepting a delivery. The payload is a clearly
+          # labeled canary ("not a real enquiry"), so the receiving channel can ignore
+          # it. A 503 here means a visitor's message would be refused (honestly) instead
+          # of delivered — configuration work, not code work — and the deploy check goes
+          # red until the relay actually works.
+          code="000"
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -sS --max-time 20 -X POST -H "Content-Type: application/json" \
+              -d '{"canary": true}' -o /tmp/canary-body -w "%{http_code}" \
+              "$SITE/api/contact" 2>/dev/null) || code="000"
+            if [ "$code" = "200" ] && grep -q '"canary":true' /tmp/canary-body; then
+              echo "ok: contact relay canary delivered -> $code"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::contact relay canary returned '$code' (expected 200 with canary:true). CONTACT_WEBHOOK_URL is missing or the webhook is rejecting deliveries — a visitor's message would not reach the team."
+          exit 1
+
       - name: Gate on both contracts
         run: |
           railway="${{ steps.railway.outcome }}"
           vercel="${{ steps.vercel.outcome }}"
-          echo "railway=$railway vercel=$vercel"
-          [ "$railway" = "success" ] && [ "$vercel" = "success" ] || {
-            echo "::error::public contract failed (railway=$railway, vercel=$vercel)"
+          contact="${{ steps.contact.outcome }}"
+          echo "railway=$railway vercel=$vercel contact=$contact"
+          [ "$railway" = "success" ] && [ "$vercel" = "success" ] && [ "$contact" = "success" ] || {
+            echo "::error::public contract failed (railway=$railway, vercel=$vercel, contact=$contact)"
             exit 1
           }
 
@@ -142,6 +167,7 @@ jobs:
             echo "| Exact revision confirmed | ${{ steps.revision.outputs.confirmed || 'no' }} |"
             echo "| Railway contract ($RAILWAY_HOST) | ${{ steps.railway.outcome }} |"
             echo "| Vercel contract ($SITE) | ${{ steps.vercel.outcome }} |"
+            echo "| Contact relay canary ($SITE/api/contact) | ${{ steps.contact.outcome }} |"
             echo ""
             echo "Deploys are made by the native Railway and Vercel Git integrations; this workflow only verifies them."
           } >> "$GITHUB_STEP_SUMMARY"
