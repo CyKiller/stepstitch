@@ -43,7 +43,7 @@ def test_summary_is_flat_and_derived_from_structure_only():
     assert s.diagnostic_type == "api_error"
     assert s.diagnostic_endpoint == "/api/accounts/:id/distributions"
     assert "500" in s.headline
-    assert s.privacy_status == "Scrubbed / No NPI"
+    assert s.privacy_status == "server-scrubbed, structural fields only"
     # summary dict is flat
     for v in s.as_dict().values():
         assert isinstance(v, _FLAT_SCALARS)

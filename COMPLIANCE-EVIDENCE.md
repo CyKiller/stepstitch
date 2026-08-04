@@ -80,6 +80,7 @@ Every ingestion is scrubbed server-side before storage, independent of the SDK (
 | Profile | free_text | forbidden-key handling |
 |---|---|---|
 | `financial-services-enterprise` | scrub | drop |
+| `financial-services-strict` | disabled | reject (422) |
 | `healthcare-strict` | disabled | reject (422) |
 | `internal-enterprise` | scrub | drop |
 | `open-source-default` | scrub | drop |

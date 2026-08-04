@@ -130,7 +130,11 @@ def build_trace_summary(
         headline=headline,
         replayability_score=replay["score"],
         replayability_grade=replay["grade"],
-        privacy_status="Scrubbed / No NPI",
+        # Describes the mechanism, not an unprovable absence: every stored field passed
+        # the server-side scrubber and only structural fields reach a summary. "No NPI"
+        # is a claim the scrubber cannot prove (a name survives regex redaction), so the
+        # status names what actually ran instead.
+        privacy_status="server-scrubbed, structural fields only",
         step_count=replay["signals"]["steps"],
         failing_status=failing_status,
         exception_type=exception_type,

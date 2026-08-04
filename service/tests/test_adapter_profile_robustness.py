@@ -11,7 +11,7 @@ from stepstitch_service.integrations import assert_flat, build_trace_summary, ex
 from stepstitch_service.integrations.base import FORBIDDEN_DRAFT_KEYS
 from stepstitch_service.integrations.bundle import default_draft_adapters
 from stepstitch_service.profiles import available_profiles, get_profile, policy_from_profile
-from stepstitch_service.scrubber import ScrubRejection, scrub_trace_payload
+from stepstitch_service.scrubber import ScrubRejection, derive_policy, scrub_trace_payload
 
 # Same NPI markers the conformance kit checks for (integrations/conformance.py).
 _NPI_MARKERS = ("123-45-6789", "8675309", "data-testid")
@@ -41,19 +41,31 @@ def _hostile_payload(*, with_explanation: bool = True):
 
 def test_every_profile_produces_npi_free_flat_drafts_for_every_adapter():
     assert available_profiles() == sorted(
-        ["financial-services-enterprise", "healthcare-strict",
-         "internal-enterprise", "open-source-default"]
+        ["financial-services-enterprise", "financial-services-strict",
+         "healthcare-strict", "internal-enterprise", "open-source-default"]
     )
 
     for profile_name in available_profiles():
         policy = policy_from_profile(get_profile(profile_name))
+        if policy.strict_schema_active:
+            # financial-services-strict is deny-by-default: with no operator config it
+            # rejects EVERY semantic selector and route — that is the boundary working,
+            # and a summary of a trace that cannot ingest is not a thing. To exercise
+            # the adapters under this profile, scope the checks the way an operator
+            # would (the scrub-overrides document naming this app's static values).
+            policy = derive_policy(
+                policy,
+                approved_testids=frozenset({"submit"}),
+                route_templates=("/accounts/:id/distributions",
+                                 "/api/accounts/:id/distributions"),
+            )
         try:
             scrubbed, report = scrub_trace_payload(_hostile_payload(), policy)
         except ScrubRejection:
-            # healthcare-strict disables free text *and* hard-rejects it (422 at the
+            # The strict profiles disable free text *and* hard-reject it (422 at the
             # router) rather than silently dropping it — that IS the tightened
             # boundary working. A real host simply never sends `explanation` under
-            # this profile; footsteps-only ingestion still must scrub cleanly.
+            # these profiles; footsteps-only ingestion still must scrub cleanly.
             scrubbed, report = scrub_trace_payload(
                 _hostile_payload(with_explanation=False), policy
             )

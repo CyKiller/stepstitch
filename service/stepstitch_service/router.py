@@ -561,6 +561,9 @@ def create_stepstitch_router(
             "policy": scrub_policy.name,
             "scrub": scrub,
             "never_captured": list(NEVER_FROM_PRODUCTION),
+            # Present only when a strict-schema profile checked this trace: says which
+            # checks ran and passed ("strict_schema_passed"), never "no NPI proven".
+            "schema_status": (scrub or {}).get("schema_status"),
         }
 
     @router.get("/session/{trace_id}/agent-packet")

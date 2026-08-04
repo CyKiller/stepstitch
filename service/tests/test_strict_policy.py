@@ -283,6 +283,41 @@ def test_router_stores_strict_schema_passed_on_clean_strict_ingest():
     assert stored_meta["_scrub"]["schema_status"] == "strict_schema_passed"
 
 
+def test_privacy_posture_surfaces_schema_status():
+    # Ingest under strict, then read the posture back through a router whose
+    # fetchone serves the row the ingest actually stored — measured round trip.
+    client, db = _build(scrub_policy=_strict_policy())
+    r = client.post("/api/stepstitch/v1/session", json=_clean_ingest_body())
+    assert r.status_code == 200
+    stored_meta = db.inserted[6]
+
+    class PostureDB(CapturingDB):
+        async def fetchone(self, query, params=()):
+            return (stored_meta,) if "trace_metadata" in query else None
+
+    async def audit(action, actor, detail):
+        pass
+
+    db2 = PostureDB()
+    router = create_stepstitch_router(
+        get_user_id=lambda: "user-42",
+        require_admin=lambda: {"user_id": "admin-1"},
+        execute=db2.execute,
+        fetchone=db2.fetchone,
+        fetchall=db2.fetchall,
+        audit=audit,
+        generate_playwright_test=generate_playwright_test,
+        scrub_policy=_strict_policy(),
+    )
+    app = FastAPI()
+    app.include_router(router, prefix="/api")
+    posture = TestClient(app).get("/api/stepstitch/v1/session/t1/privacy-posture")
+    assert posture.status_code == 200
+    body = posture.json()
+    assert body["schema_status"] == "strict_schema_passed"
+    assert body["scrub"]["schema_status"] == "strict_schema_passed"
+
+
 # --- Overrides: allowlists scope, never loosen ------------------------------------
 
 

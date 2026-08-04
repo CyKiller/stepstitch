@@ -108,7 +108,7 @@ def test_summary_is_sanitized_and_audited():
     assert summary["route"] == "/accounts/:id/distributions"
     assert "8675309" not in json.dumps(summary)
     assert summary["failing_status"] == 500
-    assert summary["privacy_status"] == "Scrubbed / No NPI"
+    assert summary["privacy_status"] == "server-scrubbed, structural fields only"
     assert any(a[0] == "stepstitch.summary" for a in db.audits)
 
 
