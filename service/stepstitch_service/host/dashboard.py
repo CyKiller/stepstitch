@@ -654,6 +654,10 @@ DASHBOARD_HTML = r"""<!doctype html>
     return { method: "POST", headers: { "Content-Type": "application/json" },
              body: JSON.stringify(body) };
   }
+  function jsonPut(body) {
+    return { method: "PUT", headers: { "Content-Type": "application/json" },
+             body: JSON.stringify(body) };
+  }
 
   // ---- shared pieces --------------------------------------------------------------------
   function box(title, kids) {
@@ -2606,28 +2610,35 @@ DASHBOARD_HTML = r"""<!doctype html>
     } catch (e) { return mount(fail(e)); }
 
     var root = el("div", { class: "detail" });
-    var overrides = cfg.overrides || {};
-    var patterns = overrides.patterns || [];
-    var keys = overrides.forbidden_keys || [];
+    // Wire shape = the host's ScrubConfig document, verbatim: extra_redactions is a
+    // list of [label, regex] PAIRS, keys/testids/templates are string lists, the save
+    // is a PUT. server/tests/test_dashboard_contract.py pins these tokens against the
+    // pydantic model — the first version of this page invented its own shape
+    // ({overrides:{patterns:[{label,regex}]}}, POSTed) and silently saved nothing.
+    var pending = {
+      extra_redactions: (cfg.extra_redactions || []).slice(),
+      extra_forbidden_keys: (cfg.extra_forbidden_keys || []).slice(),
+      approved_testids: (cfg.approved_testids || []).slice(),
+      route_templates: (cfg.route_templates || []).slice()
+    };
 
     // Scrub policy
     var label = el("input", { placeholder: "label (e.g. empid)", "aria-label": "pattern label" });
     var regex = el("input", { placeholder: "regex (e.g. EMP-\\d+)", "aria-label": "pattern regex" });
     var keyIn = el("input", { placeholder: "metadata key", "aria-label": "metadata key" });
-    var pending = { patterns: patterns.slice(), forbidden_keys: keys.slice() };
     var listNode = el("div", {});
 
     function drawLists() {
       clear(listNode);
       listNode.appendChild(el("div", { class: "note", text: "Custom redaction patterns" }));
-      listNode.appendChild(pending.patterns.length
-        ? el("div", { class: "chips" }, pending.patterns.map(function (p) {
-            return el("span", { class: "chip mono", text: (p.label || "?") + " · " + (p.regex || "") });
+      listNode.appendChild(pending.extra_redactions.length
+        ? el("div", { class: "chips" }, pending.extra_redactions.map(function (p) {
+            return el("span", { class: "chip mono", text: (p[0] || "?") + " · " + (p[1] || "") });
           }))
         : el("div", { class: "muted", text: "None yet." }));
       listNode.appendChild(el("div", { class: "note", text: "Extra dropped metadata keys" }));
-      listNode.appendChild(pending.forbidden_keys.length
-        ? el("div", { class: "chips" }, pending.forbidden_keys.map(function (k) {
+      listNode.appendChild(pending.extra_forbidden_keys.length
+        ? el("div", { class: "chips" }, pending.extra_forbidden_keys.map(function (k) {
             return el("span", { class: "chip mono", text: k });
           }))
         : el("div", { class: "muted", text: "None yet." }));
@@ -2636,12 +2647,12 @@ DASHBOARD_HTML = r"""<!doctype html>
 
     var addPat = el("button", { class: "ghost", text: "Add pattern", onclick: function () {
       if (!label.value.trim() || !regex.value.trim()) return;
-      pending.patterns.push({ label: label.value.trim(), regex: regex.value.trim() });
+      pending.extra_redactions.push([label.value.trim(), regex.value.trim()]);
       label.value = ""; regex.value = ""; drawLists();
     } });
     var addKey = el("button", { class: "ghost", text: "Add key", onclick: function () {
       if (!keyIn.value.trim()) return;
-      pending.forbidden_keys.push(keyIn.value.trim()); keyIn.value = ""; drawLists();
+      pending.extra_forbidden_keys.push(keyIn.value.trim()); keyIn.value = ""; drawLists();
     } });
 
     var previewIn = el("textarea", { rows: 3, style: "width:100%",
@@ -2651,13 +2662,13 @@ DASHBOARD_HTML = r"""<!doctype html>
       onclick: async function () {
         try {
           var r = await adminApi("/scrub/preview", jsonPost({ text: previewIn.value,
-            overrides: pending }));
+            extra_redactions: pending.extra_redactions }));
           previewOut.textContent = r.redacted || "";
         } catch (e) { previewOut.textContent = e.message; }
       } });
     var saveBtn = el("button", { class: "primary", text: "Save scrub policy",
       onclick: async function () {
-        try { await adminApi("/config/scrub", jsonPost(pending)); renderGovernance(); }
+        try { await adminApi("/config/scrub", jsonPut(pending)); renderGovernance(); }
         catch (e) { previewOut.textContent = e.message; }
       } });
 
@@ -2672,6 +2683,52 @@ DASHBOARD_HTML = r"""<!doctype html>
       el("div", { class: "row-actions" }, [previewBtn, saveBtn]),
       previewOut
     ]));
+
+    // Strict allowlists — only meaningful when the base profile enforces the
+    // strict schema (deny-by-default). The host says so explicitly; never inferred
+    // from the profile name.
+    if (cfg.strict_schema) {
+      var testidIn = el("input", { placeholder: "data-testid (e.g. transfer-submit)",
+        "aria-label": "approved testid" });
+      var routeIn = el("input", { placeholder: "route template (e.g. /accounts/:id)",
+        "aria-label": "route template" });
+      var strictList = el("div", {});
+      function drawStrict() {
+        clear(strictList);
+        strictList.appendChild(el("div", { class: "note", text: "Approved data-testid selectors" }));
+        strictList.appendChild(pending.approved_testids.length
+          ? el("div", { class: "chips" }, pending.approved_testids.map(function (t) {
+              return el("span", { class: "chip mono", text: t });
+            }))
+          : el("div", { class: "muted",
+              text: "None yet — every semantic selector is rejected until you approve specific testids." }));
+        strictList.appendChild(el("div", { class: "note", text: "Approved route templates" }));
+        strictList.appendChild(pending.route_templates.length
+          ? el("div", { class: "chips" }, pending.route_templates.map(function (t) {
+              return el("span", { class: "chip mono", text: t });
+            }))
+          : el("div", { class: "muted",
+              text: "None yet — every route is rejected until you declare templates." }));
+      }
+      drawStrict();
+      var addTestid = el("button", { class: "ghost", text: "Approve testid", onclick: function () {
+        if (!testidIn.value.trim()) return;
+        pending.approved_testids.push(testidIn.value.trim()); testidIn.value = ""; drawStrict();
+      } });
+      var addRoute = el("button", { class: "ghost", text: "Declare template", onclick: function () {
+        if (!routeIn.value.trim()) return;
+        pending.route_templates.push(routeIn.value.trim()); routeIn.value = ""; drawStrict();
+      } });
+      root.appendChild(box("Strict allowlists", [
+        el("div", { class: "muted", text: "This profile is deny-by-default: only the static " +
+          "data-testid values and route templates named here are accepted; everything else is " +
+          "refused with a 422. The lists scope the checks — they can never disable them. " +
+          "Saved together with the scrub policy above." }),
+        el("div", { class: "row-actions", style: "margin-top:12px" }, [testidIn, addTestid]),
+        el("div", { class: "row-actions" }, [routeIn, addRoute]),
+        strictList
+      ]));
+    }
 
     // Audit
     var entries = audit.entries || [];

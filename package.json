@@ -1,7 +1,7 @@
 {
   "name": "@stepstitch/tracker",
   "version": "0.10.0",
-  "description": "StepStitch — issue-to-repro infrastructure (not session replay): turns a user-reported problem into scrubbed diagnostics, a replayability score, and a copyable Playwright reproduction, without capturing screens, input values, or page text. Zero runtime dependencies.",
+  "description": "StepStitch \u2014 issue-to-repro infrastructure (not session replay): turns a user-reported problem into scrubbed diagnostics, a replayability score, and a copyable Playwright reproduction, without capturing screens, input values, or page text. Zero runtime dependencies.",
   "license": "Apache-2.0",
   "keywords": [
     "playwright",
@@ -58,7 +58,7 @@
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json && node scripts/finalize-dist.mjs",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build && npm run type-check && npm test",
-    "type-check": "tsc -p tsconfig.json --noEmit && tsc -p tests/doc-examples/tsconfig.json --noEmit",
+    "type-check": "tsc -p tsconfig.json --noEmit && tsc -p tests/doc-examples/tsconfig.json --noEmit && tsc -p tests/e2e/tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "stamp": "node scripts/stamp-build.mjs",
