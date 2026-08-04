@@ -17,11 +17,11 @@ import { GITHUB_URL } from "@/lib/links";
 export const metadata: Metadata = {
   title: "Financial-services pilot — StepStitch",
   description:
-    "A 30-day, self-hosted pilot that turns regulated support tickets into privacy-safe, reproducible engineering evidence — scrubbed trace, replayability score, Playwright repro, and ServiceNow/Salesforce/GitHub drafts. No NPI captured, nothing sent without human approval.",
+    "A 30-day, self-hosted pilot that turns regulated support tickets into privacy-safe, reproducible engineering evidence — scrubbed trace, replayability score, Playwright repro, and ServiceNow/Salesforce/GitHub drafts. Free text, unapproved selectors and undeclared routes are refused with HTTP 422 under the strict profile; nothing is sent without human approval.",
 };
 
 const whoFor = [
-  "Regulated financial-services teams where support escalations to engineering must carry zero NPI.",
+  "Regulated financial-services teams where support escalations to engineering must carry no customer data the team cannot account for.",
   "Microsoft tenants standardizing on Copilot Studio / Power Platform for agent workflows.",
   "Risk, compliance, and model-risk reviewers who need evidence they can read, not certificates to trust.",
 ];
@@ -35,7 +35,7 @@ const installed = [
 
 const day30 = [
   "A working report → scrub → score → repro → draft → verified-fix loop on a real support flow.",
-  "A folder of scrubbed traces with per-trace scrub reports proving no NPI was persisted.",
+  "A folder of scrubbed traces, each with the server's own report of exactly what it stripped at ingestion.",
   "Deterministic Playwright reproductions your engineers can run in CI as regression tests.",
   "ServiceNow incident + Salesforce case + GitHub issue drafts, created but never auto-sent.",
   "A confirmed-fixed regression corpus: bugs that went red in CI before the fix and green after.",
@@ -57,7 +57,7 @@ const modes = [
 ];
 
 const success = [
-  "Zero NPI in any persisted trace, draft, or exported record (provable from the scrub reports).",
+  "Every persisted trace, draft and exported record accounted for by its scrub report — and, under the strict profile, stamped strict_schema_passed.",
   "Median time from support ticket to a runnable engineering repro measurably reduced.",
   "Every escalation carries a replayability grade so engineering knows what is reproducible.",
   "At least one bug taken from report to confirmed_fixed regression evidence.",
@@ -78,7 +78,7 @@ export default function FinancialServicesPilotPage() {
         <div className="mt-6">
           <SectionHeader
             eyebrow="30-day pilot"
-            title="A regulated support-to-engineering pilot, with no NPI in the middle"
+            title="A regulated support-to-engineering pilot, with the boundary in the code"
             body="In 30 days, turn user-reported bugs from a regulated app into privacy-safe, reproducible engineering evidence — a scrubbed trace, a replayability score, sanitized diagnostics, a Playwright repro, and ticket/PR drafts — without capturing screens, input values, or page text. Self-hosted and open source, so your reviewers can verify every line."
           />
         </div>

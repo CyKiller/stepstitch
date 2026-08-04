@@ -235,6 +235,14 @@ jobs:
         run: |
           PYTHONPATH=service python3 scripts/build_demo_dataset.py
           git diff --exit-code server/demo_dataset.json
+      # The public /demo page's red-to-green is MEASURED, not declared: this re-runs the
+      # compiled reproduction in this job's real Chromium (broken fixture -> red, fixed
+      # fixture -> green) and fails if the committed bundle disagrees with what it just
+      # observed. Without this the page's headline claim would be a literal in a script.
+      - name: Red-to-green evidence bundle is measured, not asserted
+        run: |
+          PYTHONPATH=service python3 scripts/demo_red_to_green.py --measure
+          git diff --exit-code demo/evidence-bundle.json web/src/lib/demo-bundle.json
       - name: Drive the demo console
         run: npm run test:demo-console
 

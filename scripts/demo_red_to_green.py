@@ -11,7 +11,7 @@ is mocked or hand-written.
 The eight-step story it proves:
   1. User reports a bug
   2. StepStitch captures structural footsteps only
-  3. The server scrubber proves no NPI persisted
+  3. The server scrubber reports exactly what it stripped
   4. A replayability score tells engineering if the bug is reproducible
   5. StepStitch generates a Playwright repro
   6. A ticket/PR draft is created (dry-run — never sent)
@@ -29,6 +29,7 @@ Outputs (committed, deterministic — re-running produces an identical bundle):
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -143,7 +144,130 @@ def _timeline(footsteps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return rows
 
 
-def build_bundle() -> Dict[str, Any]:
+BUNDLE_PATH = REPO_ROOT / "demo" / "evidence-bundle.json"
+
+# The fixture the measurement runs against: a page whose button either throws (red) or
+# succeeds (green). Deliberately tiny — the claim being measured is "the compiled repro
+# fails while the bug exists and passes once it does not", not anything about this app.
+_FIXTURE_PAGE = """<!doctype html>
+<html><head><meta charset="utf-8"><title>Demo</title></head>
+<body>
+  <h1 id="title">Transfer</h1>
+  <button id="go" data-testid="go" onclick="{handler}">Send</button>
+</body></html>
+"""
+_FIXTURE_BROKEN = "throw new TypeError('amount is not a function')"
+_FIXTURE_FIXED = "document.getElementById('title').textContent = 'Sent'"
+
+# The reproduction the measurement executes. Compiled by the real compiler from a trace
+# whose terminal step is the same exception the broken fixture raises.
+_MEASURED_FOOTSTEPS: List[Dict[str, Any]] = [
+    {"timestamp": "2026-08-04T12:00:00Z", "type": "navigation",
+     "route": "/index.html", "label": "[masked]"},
+    {"timestamp": "2026-08-04T12:00:02Z", "type": "click", "route": "/index.html",
+     "target": '[data-testid="go"]', "label": "[masked]"},
+    {"timestamp": "2026-08-04T12:00:03Z", "type": "exception", "route": "/index.html",
+     "label": "[masked]", "metadata": {"error_type": "TypeError"}},
+]
+
+
+def committed_measurement() -> Dict[str, Any]:
+    """The measurement recorded in the committed bundle.
+
+    Reused (never re-invented) when regenerating offline, so `npm run demo` still works
+    with no browser and no network — the documented no-backend path — while the numbers
+    it writes remain the ones a real run produced.
+    """
+    try:
+        stored = json.loads(BUNDLE_PATH.read_text(encoding="utf-8"))
+        recorded = stored["steps"]["7_ci_verification"]["measurement"]
+    except (OSError, KeyError, ValueError) as exc:
+        raise SystemExit(
+            "No measured red-to-green result is committed yet, and this run cannot "
+            "invent one. Regenerate it on a machine with Chromium:\n"
+            "    PYTHONPATH=service python3 scripts/demo_red_to_green.py --measure\n"
+            f"({exc})"
+        ) from exc
+    return dict(recorded)
+
+
+def measure_red_to_green() -> Dict[str, Any]:
+    """Actually run the compiled reproduction: red against a broken fixture, green
+    against a fixed one. Returns what was observed — never what was expected."""
+    import functools
+    import http.server
+    import socket
+    import tempfile
+    import threading
+
+    from stepstitch_service.runner import REPRODUCED, RUNNER_VERSION, run_reproduction
+
+    work = Path(tempfile.mkdtemp(prefix="stepstitch-demo-measure-"))
+    app_dir = work / "app"
+    app_dir.mkdir(parents=True, exist_ok=True)
+
+    def write(handler: str) -> None:
+        (app_dir / "index.html").write_text(
+            _FIXTURE_PAGE.format(handler=handler), encoding="utf-8")
+
+    class _NoStore(http.server.SimpleHTTPRequestHandler):
+        # The fix is written between two runs; a 304 would hand the browser the old page
+        # and the "green" run would silently re-test the bug.
+        def end_headers(self):
+            self.send_header("Cache-Control", "no-store, max-age=0")
+            super().end_headers()
+
+        def send_header(self, key, value):
+            if key.lower() == "last-modified":
+                return
+            super().send_header(key, value)
+
+        def log_message(self, *args):
+            pass
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = int(probe.getsockname()[1])
+
+    write(_FIXTURE_BROKEN)
+    server = http.server.HTTPServer(
+        ("127.0.0.1", port), functools.partial(_NoStore, directory=str(app_dir)))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base_url = f"http://127.0.0.1:{port}"
+    script = generate_playwright_test(TRACE_ID, _MEASURED_FOOTSTEPS, base_url)
+    try:
+        red = run_reproduction(session_id=TRACE_ID, script=script, base_url=base_url,
+                               runs=1, timeout_seconds=120)
+        write(_FIXTURE_FIXED)
+        green = run_reproduction(session_id=TRACE_ID, script=script, base_url=base_url,
+                                 runs=1, timeout_seconds=120)
+    finally:
+        server.shutdown()
+
+    # The runner's verdict is about the REPRODUCTION: "reproduced" means the test failed,
+    # which is the red half passing. Translated once, here, rather than at each reader.
+    pre_passed = red.verdict != REPRODUCED
+    post_passed = green.verdict != REPRODUCED
+    if pre_passed or not post_passed:
+        raise SystemExit(
+            "The demo fixture did not go red then green "
+            f"(red={red.verdict}, green={green.verdict}). Refusing to write a bundle "
+            "that would claim a transition nobody observed."
+        )
+    return {
+        "evidence_grade": "measured",
+        "pre_passed": pre_passed,
+        "post_passed": post_passed,
+        "red_verdict": red.verdict,
+        "green_verdict": green.verdict,
+        "runner_version": RUNNER_VERSION,
+        "detail": "Measured by running the compiled reproduction against a broken fixture "
+                  "and then a fixed one. Re-measured in CI on every commit; the committed "
+                  "bundle must equal what that run observes.",
+    }
+
+
+def build_bundle(measure: bool = False) -> Dict[str, Any]:
     raw = _raw_bug_report()
 
     # Step 3 — server-side scrub (the trust boundary). Returns the sanitized payload and a
@@ -177,10 +301,16 @@ def build_bundle() -> Dict[str, Any]:
         },
     }
 
-    # Step 7 — CI verification. StepStitch never runs code; the customer's CI runs the repro
-    # and reports pass/fail. confirmed_fixed derives ONLY from pre-failed + post-passed.
-    pre_passed = False  # repro fails while the bug exists (red)
-    post_passed = True  # repro passes once the fix lands (green)
+    # Step 7 — CI verification. confirmed_fixed derives ONLY from pre-failed + post-passed,
+    # and those two booleans are MEASURED: `--measure` runs the compiled reproduction in a
+    # real browser against a broken fixture and then a fixed one, and the committed bundle
+    # records what was observed. Without the flag the generator reuses the committed
+    # measurement rather than inventing one — the offline demo (documented as needing no
+    # network and no browser) still regenerates byte-identically, and nobody can quietly
+    # replace a measurement with an assertion.
+    measurement = measure_red_to_green() if measure else committed_measurement()
+    pre_passed = measurement["pre_passed"]
+    post_passed = measurement["post_passed"]
     verdict = derive_verdict(pre_passed, post_passed)
     verification = VerificationResult(
         trace_id=TRACE_ID,
@@ -204,7 +334,7 @@ def build_bundle() -> Dict[str, Any]:
         "story": [
             "1. User reports a bug",
             "2. StepStitch captures structural footsteps only",
-            "3. The server scrubber proves no NPI persisted",
+            "3. The server scrubber reports exactly what it stripped",
             "4. A replayability score tells engineering if the bug is reproducible",
             "5. StepStitch generates a Playwright repro",
             "6. A ticket/PR draft is created (dry-run — never sent)",
@@ -260,6 +390,9 @@ def build_bundle() -> Dict[str, Any]:
             "7_ci_verification": {
                 **verification.as_dict(),
                 "note": "confirmed_fixed derives only from pre_passed=false + post_passed=true.",
+                # Provenance for the two booleans above: which browser observed them, and
+                # under which runner. Regenerated with --measure in CI on every commit.
+                "measurement": measurement,
             },
             "8_regression_corpus": {
                 "verdict": verdict,
@@ -272,11 +405,12 @@ def build_bundle() -> Dict[str, Any]:
 
 
 def main() -> None:
-    bundle = build_bundle()
+    measure = "--measure" in sys.argv[1:]
+    bundle = build_bundle(measure=measure)
     text = json.dumps(bundle, indent=2, ensure_ascii=False) + "\n"
 
     targets = [
-        REPO_ROOT / "demo" / "evidence-bundle.json",
+        BUNDLE_PATH,
         REPO_ROOT / "web" / "src" / "lib" / "demo-bundle.json",
     ]
     for path in targets:

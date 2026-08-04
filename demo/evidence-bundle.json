@@ -7,7 +7,7 @@
   "story": [
     "1. User reports a bug",
     "2. StepStitch captures structural footsteps only",
-    "3. The server scrubber proves no NPI persisted",
+    "3. The server scrubber reports exactly what it stripped",
     "4. A replayability score tells engineering if the bug is reproducible",
     "5. StepStitch generates a Playwright repro",
     "6. A ticket/PR draft is created (dry-run — never sent)",
@@ -279,7 +279,7 @@
       "github": {
         "issue": {
           "title": "[StepStitch] User-reported issue: HTTP 500 on /accounts/:id/transfer",
-          "body": "Reported issue reproduced by StepStitch (privacy-safe; no NPI captured).\n\n- **Route:** `/accounts/:id/transfer`\n- **Replayability:** 0.76 (grade B)\n- **Steps:** 6\n- **Privacy:** server-scrubbed, structural fields only\n- **Trace correlation id:** `stepstitch:trc_demo_red_to_green_0001`\n\nA deterministic Playwright reproduction is available from StepStitch and can be committed as a regression test. StepStitch never merges — a human reviews and merges.",
+          "body": "Reported issue reproduced by StepStitch (structural evidence, server-scrubbed).\n\n- **Route:** `/accounts/:id/transfer`\n- **Replayability:** 0.76 (grade B)\n- **Steps:** 6\n- **Privacy:** server-scrubbed, structural fields only\n- **Trace correlation id:** `stepstitch:trc_demo_red_to_green_0001`\n\nA deterministic Playwright reproduction is available from StepStitch and can be committed as a regression test. StepStitch never merges — a human reviews and merges.",
           "labels": [
             "stepstitch",
             "privacy-safe",
@@ -304,7 +304,16 @@
       "verdict": "confirmed_fixed",
       "fix_ref": "demo-pr-1",
       "run_url": "https://ci.example.test/runs/stepstitch-demo",
-      "note": "confirmed_fixed derives only from pre_passed=false + post_passed=true."
+      "note": "confirmed_fixed derives only from pre_passed=false + post_passed=true.",
+      "measurement": {
+        "evidence_grade": "measured",
+        "pre_passed": false,
+        "post_passed": true,
+        "red_verdict": "reproduced",
+        "green_verdict": "not_reproduced",
+        "runner_version": "1",
+        "detail": "Measured by running the compiled reproduction against a broken fixture and then a fixed one. Re-measured in CI on every commit; the committed bundle must equal what that run observes."
+      }
     },
     "8_regression_corpus": {
       "verdict": "confirmed_fixed",

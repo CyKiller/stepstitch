@@ -2,6 +2,7 @@ import { Check, X, Minus } from "@phosphor-icons/react/dist/ssr";
 import { Reveal } from "./reveal";
 import { Section, SectionHeader } from "./section";
 import { MCP_TOOL_COUNT } from "@/lib/mcp-tools";
+import { COMPETITOR_CLAIMS, COMPETITOR_CLAIMS_AS_OF } from "@/lib/claims";
 
 type Cell = { kind: "yes" | "no" | "partial"; text: string };
 type Row = {
@@ -133,6 +134,36 @@ export function Comparison() {
               ))}
             </tbody>
           </table>
+        </div>
+      </Reveal>
+
+      {/* A statement about someone else's product needs a date and a source, or it is
+          just an assertion that ages badly. The registry carries both. */}
+      <Reveal>
+        <div className="mt-6 rounded-xl border border-line bg-surface-2/40 p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">
+            What these columns are based on
+          </p>
+          <ul className="mt-3 grid gap-2">
+            {COMPETITOR_CLAIMS.map((c) => (
+              <li key={c.id} className="text-[13px] leading-relaxed text-muted">
+                <span className="font-medium text-fg">{c.subject}</span> — {c.text}{" "}
+                <a
+                  href={c.source}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline underline-offset-2 hover:text-fg"
+                >
+                  vendor documentation
+                </a>
+                , checked {c.asOf}.
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-[12px] text-muted">
+            Products change. These were read on {COMPETITOR_CLAIMS_AS_OF}; if something
+            here is out of date, tell us and we will correct it.
+          </p>
         </div>
       </Reveal>
     </Section>

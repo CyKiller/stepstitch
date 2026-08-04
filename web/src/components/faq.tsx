@@ -17,7 +17,7 @@ const faqs = [
   },
   {
     q: "Is it compatible with HIPAA / SEC Reg S-P?",
-    a: "StepStitch is self-hosted and never captures PII, so customer data never leaves your boundary. The healthcare-strict profile disables free text entirely; the financial-services profile scrubs and drops forbidden keys. See the Security page for the full crosswalk.",
+    a: "StepStitch is self-hosted, so nothing leaves your boundary at all, and the SDK captures structure rather than content — no screens, input values or page text. Free text a user types is the one place customer data can enter, and the server scrubs it: healthcare-strict and financial-services-strict disable it outright and refuse the request with a 422; the default profile redacts and drops forbidden keys. StepStitch provides technical controls and evidence, not a compliance certification — see the Security page for the crosswalk.",
   },
   {
     q: "What frameworks does it work with?",

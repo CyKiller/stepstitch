@@ -52,7 +52,7 @@ class IssueContent:
 def build_body(summary: TraceSummary) -> str:
     """The privacy-safe issue/PR body text, derived only from the sanitized summary."""
     return (
-        "Reported issue reproduced by StepStitch (privacy-safe; no NPI captured).\n\n"
+        "Reported issue reproduced by StepStitch (structural evidence, server-scrubbed).\n\n"
         f"- **Route:** `{summary.route}`\n"
         f"- **Replayability:** {summary.replayability_score:.2f} "
         f"(grade {summary.replayability_grade})\n"
