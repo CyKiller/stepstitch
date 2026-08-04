@@ -12,8 +12,8 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **667** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **213** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Service (compiler, router, privacy, connectors) | **686** | `PYTHONPATH=service pytest service/tests/` |
+| Host (auth, dashboard, real Postgres) | **220** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **31** | `npx vitest run` |
 | Web (marketing site + copy claims) | **59** | `cd web && npx vitest run` |
 
@@ -64,6 +64,7 @@ repros-scoped token → verify.mjs with a verify-scoped token → freeze/verify-
 | **The whole financial chain with no mocks** — real browser → real SDK → same-origin proxy → strict scrubber → the **stored SQLite row** (not the outbound payload) → real MCP stdio with a `repros` token → `verify.mjs` with a `verify` token → freeze/verify-fix, ending in `confirmed_fixed` + `evidence_grade='measured'` read raw from the row; a hostile semantic POST measured at 422 with nothing stored | `scripts/live_financial_loop.py`, `examples/tiny-transfer/live-report.mjs` | CI job `tiny-transfer-live` |
 | Public demo console — real UI, synthetic data, no credentials, read-only | `stepstitch_service/host/demo.py`, `scripts/build_demo_dataset.py` | `test_demo_app.py`, CI job `demo-console` (13 browser tests) |
 | Deep-linkable failures (`#/shape/…`) | `stepstitch_service/host/dashboard.py` | `test_host.py`, `dashboard-demo.spec.ts` |
+| Execution state — `draft` / `ready` / `reproduced` / `confirmed_fixed`, so a compiled draft that cannot run is never mistaken for one that was measured; the console names every missing prerequisite (base URL, route params, form values, auth fixture, browser, strict allowlists) instead of one boolean, and shows whether red and green **actually ran**, the evidence grade, the profile, `schema_status`, `customer_data_status`, and the replayability reasons | `execution.py`, `host.py` `/admin/session/{id}/execution` + `/admin/status`, `dashboard.py` | `test_execution_state.py` (every combination), `test_execution_endpoint.py` |
 | Site's advertised MCP tool list matches the server | `web/src/lib/mcp-tools.ts` | `test_mcp_site_parity.py` |
 | Local reproduction runner (frozen script, env allowlist, timeout, cancel, address allowlist) | `stepstitch_service/runner.py` | `test_runner.py`, `scripts/prove-runner-executes.mjs` (real Chromium, red-to-green) |
 | Agent loop: freeze the test, measure red, judge the fix (fixed / still failing / different failure / unable to verify) | `stepstitch_service/fixcheck.py`, `host/host.py` freeze + verify-fix | `test_fixcheck.py`, `test_agent_loop.py`, `scripts/demo_agent_loop.py` (CI gate) |

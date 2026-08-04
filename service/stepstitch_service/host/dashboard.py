@@ -1114,6 +1114,30 @@ DASHBOARD_HTML = r"""<!doctype html>
   // ---- setup ------------------------------------------------------------------------------
   // Four steps, each DETECTED rather than ticked by hand, so the checklist can never claim
   // something that is not true.
+  // Every unmet prerequisite for actually RUNNING a reproduction, each naming the
+  // setting to change. The old panel had one boolean here and left the operator to
+  // guess which of four settings it meant.
+  function missingPrerequisites(s) {
+    var out = (s.readiness || []).filter(function (i) { return !i.ready; })
+      .map(function (i) {
+        return { title: i.title, detail: i.detail, blocking: !!i.blocking };
+      });
+    // The browser is a prerequisite the API cannot see until a run fails.
+    if (s.browser_available === false) {
+      out.push({ title: "Browser", blocking: true,
+                 detail: "Chromium is not installed, so reproductions cannot run here. " +
+                         "Run: npx playwright install chromium" });
+    }
+    // Deny-by-default with nothing approved refuses every semantic selector and route.
+    if (s.strict_schema && s.strict_allowlists_configured === false) {
+      out.push({ title: "Strict allowlists", blocking: true,
+                 detail: "This profile is deny-by-default and no data-testid values are " +
+                         "approved yet, so incoming traces will be refused with 422. " +
+                         "Approve values in Governance." });
+    }
+    return out;
+  }
+
   function setupSteps(status) {
     var s = status || {};
     return [
@@ -1131,7 +1155,11 @@ DASHBOARD_HTML = r"""<!doctype html>
                 "values to use for templated routes and form fields. Without this every " +
                 "reproduction targets localhost:3000 and cannot run in CI. Set " +
                 "STEPSTITCH_APP_BASE_URL, or store per-project settings with " +
-                "PUT /admin/config/repro. Run `stepstitch doctor` to check the whole setup." },
+                "PUT /admin/config/repro. Run `stepstitch doctor` to check the whole setup.",
+        // Per-item detail from /admin/status, so the panel names WHICH prerequisite is
+        // missing (base URL / route params / form values / auth fixture / browser)
+        // instead of one unhelpful "not ready".
+        missing: missingPrerequisites(s) },
       { done: (s.verifications || 0) > 0, title: "Let CI report results",
         detail: "Your CI runs the generated test on the buggy commit and again on the fix, " +
                 "then posts both measured outcomes back. Until it does, nothing can be proven " +
@@ -1323,11 +1351,22 @@ DASHBOARD_HTML = r"""<!doctype html>
                       "without ever capturing anyone's screen, typing, or personal details. " +
                       "Four steps, and you only need the first two to see it work." }),
       el("ol", {}, steps.map(function (st) {
+        var missing = st.missing || [];
         return el("li", { class: st.done ? "done" : "" }, [
           el("span", { class: "tick", text: st.done ? "✓" : "", "aria-hidden": "true" }),
           el("div", {}, [
             el("div", { class: "st", text: st.title }),
-            el("div", { class: "sd", text: st.detail })
+            el("div", { class: "sd", text: st.detail }),
+            // Name each unmet prerequisite and the setting that fixes it.
+            missing.length
+              ? el("ul", { class: "sd", style: "margin:6px 0 0;padding-left:18px" },
+                  missing.map(function (m) {
+                    return el("li", {}, [
+                      el("strong", { text: m.title + (m.blocking ? "" : " (optional)") }),
+                      el("span", { text: " — " + m.detail })
+                    ]);
+                  }))
+              : null
           ])
         ]);
       })),
@@ -1814,8 +1853,11 @@ DASHBOARD_HTML = r"""<!doctype html>
   async function loadTrace(id) {
     var paths = ["/summary", "/replayability", "/privacy-posture", "/diagnostic-summary",
                  "/verifications"];
-    var results = await Promise.all(paths.map(function (p) {
-      return api("/session/" + id + p).catch(function () { return {}; });
+    var results = await Promise.all(paths.concat([null]).map(function (p) {
+      // The execution read is admin-scoped and lives outside the service prefix.
+      return p === null
+        ? adminApi("/session/" + id + "/execution").catch(function () { return {}; })
+        : api("/session/" + id + p).catch(function () { return {}; });
     }));
     return {
       id: id,
@@ -1823,8 +1865,52 @@ DASHBOARD_HTML = r"""<!doctype html>
       replayability: results[1].replayability || {},
       privacy: results[2] || {},
       diagnostic: (results[3].diagnostic || {}),
-      verifications: results[4].verifications || []
+      verifications: results[4].verifications || [],
+      execution: results[5] || {}
     };
+  }
+
+  // Plain-language labels for the execution axis. The vocabulary is pinned in
+  // service/stepstitch_service/execution.py and by test_execution_state.py.
+  var EXECUTION_LABELS = {
+    draft: { label: "Draft", plain: "Generated, not runnable yet" },
+    ready: { label: "Ready", plain: "Ready to run — nothing has been run yet" },
+    reproduced: { label: "Reproduced", plain: "The failure was measured" },
+    confirmed_fixed: { label: "Confirmed fixed", plain: "Measured red, then measured green" }
+  };
+
+  function executionBox(exec) {
+    if (!exec || !exec.execution_state) return null;
+    var known = EXECUTION_LABELS[exec.execution_state] ||
+                { label: exec.execution_state, plain: "" };
+    var rows = [
+      el("div", { class: "row-actions" }, [
+        el("span", { class: "chip", text: tech ? exec.execution_state : known.label }),
+        el("span", { class: "muted", text: exec.meaning || "" })
+      ]),
+      // The honest pair: did anyone actually RUN this, and who measured it.
+      kvTable({
+        "Red run happened": exec.red_ran ? "yes" : "no",
+        "Green run happened": exec.green_ran ? "yes" : "no",
+        "Evidence grade": exec.evidence_grade || "none recorded",
+        "Frozen reproduction": exec.frozen
+          ? ("yes — red verdict " + (exec.frozen_red_verdict || "?")) : "no",
+        "Privacy profile": exec.profile || "—",
+        "Schema status": exec.schema_status || "not a strict-schema profile",
+        "Customer data in reproduction": exec.customer_data_status || "not_verified"
+      })
+    ];
+    if ((exec.blockers || []).length) {
+      rows.push(el("div", { class: "note", text: "Before this can run" }));
+      rows.push(el("ul", { class: "muted", style: "margin:4px 0 0;padding-left:18px" },
+        exec.blockers.map(function (b) {
+          return el("li", {}, [
+            el("strong", { text: b.title || b.id }),
+            el("span", { text: " — " + (b.detail || "") })
+          ]);
+        })));
+    }
+    return box("Execution", rows);
   }
 
   function shapeDetail(shape, trace) {
@@ -2050,6 +2136,12 @@ DASHBOARD_HTML = r"""<!doctype html>
       ]),
       privacyProof(trace)
     ]));
+
+    // How far execution actually got, and the evidence for it. Separate from the
+    // verdict on purpose: "a verdict was recorded" and "StepStitch ran it" are
+    // different claims, and the console must never let one read as the other.
+    var execBox = executionBox(trace.execution);
+    if (execBox) wrap.appendChild(execBox);
 
     wrap.appendChild(box(tech ? "Fingerprint — how this shape is identified"
                               : "How we know these reports are the same bug", [

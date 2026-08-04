@@ -25,7 +25,9 @@ from pydantic import BaseModel
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
 from stepstitch_service.compiler import DEFAULT_BASE_URL
 from stepstitch_service.diagnostics import SOURCE_LOCAL_REPRODUCTION, EnvelopeMismatch
+from stepstitch_service.execution import execution_summary
 from stepstitch_service.profiles import load_profile
+from stepstitch_service.replayability import score_trace
 from stepstitch_service.repro_config import ReproConfig, ReproConfigError, readiness
 from stepstitch_service.scrubber import (
     ScrubPolicy,
@@ -91,6 +93,35 @@ def _actor_name(admin: Any) -> str:
     if isinstance(admin, dict):
         return str(admin.get("user_id") or admin.get("sub") or "admin")
     return str(admin)
+
+
+def _browser_present() -> Optional[bool]:
+    """Is the browser a reproduction would launch installed here? ``None`` = unknown.
+
+    Never raises and never shells out for long: a dashboard GET must not be able to
+    hang or 500 because a probe misbehaved. Unknown stays unknown — reporting "no
+    browser" when we simply could not tell would send an operator installing
+    something they already have.
+    """
+    try:
+        from ..runner import _browser_identity
+
+        return _browser_identity(headless=True).present
+    except Exception:
+        return None
+
+
+def _iso(value: Any) -> Optional[str]:
+    """Timestamps come back as datetimes from asyncpg and as strings from SQLite."""
+    if value is None:
+        return None
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
+def _as_bool(value: Any) -> Optional[bool]:
+    """SQLite stores booleans as 0/1; asyncpg returns real bools. ``None`` stays None —
+    'nobody ran it' must never collapse into 'it passed'."""
+    return None if value is None else bool(value)
 
 logger = logging.getLogger("stepstitch.host")
 
@@ -273,6 +304,22 @@ def build_app(
             # this to know if the loop is closed — without it, the verified-fix corpus can never
             # fill and Fix Memory has nothing to match against.
             "verifications": await _count("stepstitch_verifications"),
+            # The per-item setup picture, not just a boolean. The console used to say
+            # "reproduction config: not ready" and leave the operator to guess WHICH of
+            # base URL / route params / form values / auth fixture was missing.
+            "readiness": readiness(
+                repro_cfg, [], fallback_base_url=effective_base_url),
+            # A generated test cannot run without a browser, and that is invisible from
+            # the API until something fails. Checked here (cheap, no subprocess) so the
+            # setup panel can name it like any other missing prerequisite.
+            "browser_available": _browser_present(),
+            # Deny-by-default profiles refuse EVERY semantic selector and route until an
+            # operator names static values. That is correct, and silently catastrophic if
+            # nobody told the operator — so the strip says it outright.
+            "strict_schema": base_policy.strict_schema_active,
+            "strict_allowlists_configured": bool(
+                (await _read_scrub_overrides()).get("approved_testids")
+            ) if base_policy.strict_schema_active else None,
             # StepStitch Local pairing. In local mode the credentials are generated, so the
             # console can hand the developer a ready-to-paste snippet instead of asking them
             # to copy a token out of a terminal. Gated three ways: local mode only, admin
@@ -456,6 +503,65 @@ def build_app(
             except Exception:
                 logger.warning("stepstitch: could not store reproduction diagnostics",
                                exc_info=True)
+
+        @app.get("/admin/session/{trace_id}/execution")
+        async def session_execution(trace_id: str,
+                                    admin: Any = Depends(require_admin)) -> dict:
+            """How far execution actually got for this trace, and the evidence for it.
+
+            The product could already answer "what verdict was recorded" four different
+            ways, but not the question an operator actually asks first: *is this thing
+            runnable, and did anyone run it?* A compiled draft missing its base URL looked
+            identical to one measured red and fixed. This is that projection — derived,
+            stored nowhere, and it changes none of the existing state machines.
+            """
+            row = await fetchone(
+                "SELECT footsteps, trace_metadata FROM stepstitch_traces WHERE id = ?",
+                (trace_id,))
+            if not row:
+                raise HTTPException(status_code=404, detail="Trace not found")
+            footsteps = json.loads(row[0]) if isinstance(row[0], str) else (row[0] or [])
+            meta = json.loads(row[1]) if isinstance(row[1], str) else (row[1] or {})
+            cfg = await _read_repro_config()
+            items = readiness(cfg, footsteps, fallback_base_url=effective_base_url)
+
+            frozen_row = await fetchone(
+                "SELECT red_verdict, sha256, frozen_at FROM stepstitch_frozen_repros "
+                "WHERE trace_id = ?", (trace_id,))
+            frozen = ({"red_verdict": frozen_row[0], "sha256": frozen_row[1],
+                       "frozen_at": _iso(frozen_row[2])} if frozen_row else None)
+
+            verif_rows = await fetchall(
+                "SELECT pre_passed, post_passed, verdict, evidence_grade, created_at "
+                "FROM stepstitch_verifications WHERE trace_id = ? "
+                "ORDER BY created_at DESC LIMIT 20", (trace_id,))
+            verifications = [
+                {"pre_passed": _as_bool(r[0]), "post_passed": _as_bool(r[1]),
+                 "verdict": r[2], "evidence_grade": r[3], "created_at": _iso(r[4])}
+                for r in verif_rows
+            ]
+
+            await audit("stepstitch.execution_state", _actor_name(admin),
+                        {"trace_id": trace_id})
+            scrub = meta.get("_scrub") if isinstance(meta, dict) else None
+            return {
+                "status": "ok",
+                "trace_id": trace_id,
+                **execution_summary(items, frozen=frozen, verifications=verifications),
+                "readiness": items,
+                "verifications": verifications,
+                # The evidence panel: the honest per-trace stamps, in one read.
+                "profile": profile,
+                "schema_status": (scrub or {}).get("schema_status"),
+                "scrub_status": (scrub or {}).get("scrub_status"),
+                # Reproduction diagnostics are operator-configured, so StepStitch cannot
+                # certify what the target app printed — this says so rather than implying
+                # an assurance it does not have.
+                "customer_data_status": "not_verified",
+                # Score AND the reasons for it: a grade with no explanation is a number
+                # an operator cannot act on.
+                "replayability": score_trace(footsteps),
+            }
 
         # --- The agent loop: freeze, hand off, then judge with the frozen bytes ---------
         @app.post("/admin/session/{trace_id}/freeze")
