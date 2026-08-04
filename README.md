@@ -238,6 +238,7 @@ SSO — see [docs/DEPLOY.md](docs/DEPLOY.md).
 The SDK posts to a path in **your** app, which forwards to StepStitch with the ingest token
 attached. The token never reaches browser JavaScript:
 
+<!-- doc-example:ingest-proxy-js -->
 ```js
 // POST /api/stepstitch/ingest  — your server, same origin as your app
 export async function POST(request) {
@@ -270,6 +271,7 @@ exactly what is still missing. Configuration stores env var **names**, never cre
 
 ## Usage
 
+<!-- doc-example:usage-ts -->
 ```ts
 import { StepStitchTracker } from "@stepstitch/tracker"
 

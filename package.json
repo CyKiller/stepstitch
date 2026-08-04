@@ -58,7 +58,7 @@
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json && node scripts/finalize-dist.mjs",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build && npm run type-check && npm test",
-    "type-check": "tsc -p tsconfig.json --noEmit",
+    "type-check": "tsc -p tsconfig.json --noEmit && tsc -p tests/doc-examples/tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "stamp": "node scripts/stamp-build.mjs",
@@ -76,9 +76,9 @@
     "test:benchmark": "python3 scripts/benchmark_problems.py",
     "test:diagnostics-inert": "node scripts/prove-diagnostics-are-inert.mjs"
   },
-  "dependencies": {},
   "devDependencies": {
     "@playwright/test": "1.62.0",
+    "@types/node": "20.19.9",
     "jsdom": "^24.1.0",
     "typescript": "^5.4.0",
     "vitest": "^4.1.10"
