@@ -1,0 +1,192 @@
+{
+  "$comment": "Tenant fixture pack for `stepstitch policy verify`. Every value is deliberately synthetic (000-00-0000, 4111..., *.example.test, FAKE-* sentinels) — never real NPI. The pack proves the strict profile refuses or neutralizes each hostile shape: free-text PII, names/addresses, account numbers, emails, semantic route slugs, semantic selectors, unmask attempts, forbidden and unknown fields.",
+  "version": 1,
+  "profile": "financial-services-strict",
+  "overrides": {
+    "approved_testids": ["amount-input", "recipient-select", "transfer-submit"],
+    "route_templates": ["/", "/transfer", "/accounts/:id"],
+    "extra_redactions": [["fake-acct", "FAKE-ACCT-\\d+"]],
+    "extra_forbidden_keys": ["internal_note"]
+  },
+  "fixtures": [
+    {
+      "name": "ssn-and-card-in-explanation",
+      "expect": "rejected",
+      "must_not_persist": ["000-00-0000", "4111 1111 1111 1111"],
+      "payload": {
+        "app_id": "tenant-app",
+        "explanation": "Customer SSN 000-00-0000 card 4111 1111 1111 1111 could not transfer",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {"sdk_version": "0.10.0"}
+      }
+    },
+    {
+      "name": "name-and-address-in-explanation",
+      "expect": "rejected",
+      "must_not_persist": ["Jane Doe", "12 Synthetic Way"],
+      "payload": {
+        "app_id": "tenant-app",
+        "explanation": "Jane Doe at 12 Synthetic Way, Faketown reported the failure",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "name": "semantic-route-slug",
+      "expect": "rejected",
+      "must_not_persist": ["jane-doe-smith"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "navigation", "route": "/customers/jane-doe-smith",
+           "label": "[masked]"}
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "name": "semantic-selector",
+      "expect": "rejected",
+      "must_not_persist": ["customer-ssn-field"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"customer-ssn-field\"]", "label": "[masked]"}
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "name": "unapproved-testid-with-account-digits",
+      "expect": "rejected",
+      "must_not_persist": ["acct-000998877"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"acct-000998877\"]", "label": "[masked]"}
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "name": "unmask-attempt-label",
+      "expect": "redacted",
+      "must_not_persist": ["Jane Doe", "8842"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]",
+           "label": "Jane Doe — Account 8842"}
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "name": "hostile-top-level-keys",
+      "expect": "rejected",
+      "must_not_persist": ["fake-png-bytes", "session=FAKESECRETCOOKIE"],
+      "payload": {
+        "app_id": "tenant-app",
+        "screenshot": "fake-png-bytes",
+        "cookies": "session=FAKESECRETCOOKIE",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "name": "forbidden-footstep-metadata",
+      "expect": "rejected",
+      "must_not_persist": ["card=4111111111111111"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "api_error", "route": "/transfer",
+           "label": "[masked]",
+           "metadata": {"status": 500, "request_body": "card=4111111111111111"}}
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "name": "operator-extra-forbidden-key",
+      "expect": "rejected",
+      "must_not_persist": ["call jane back about the fake account"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {"internal_note": "call jane back about the fake account"}
+      }
+    },
+    {
+      "name": "operator-custom-pattern-account-number",
+      "expect": "redacted",
+      "must_not_persist": ["FAKE-ACCT-000111222"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {"user_agent": "agent-notes FAKE-ACCT-000111222"}
+      }
+    },
+    {
+      "name": "email-in-allowlisted-metadata",
+      "expect": "redacted",
+      "must_not_persist": ["jane.doe@customer.example.test"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {"user_agent": "reported by jane.doe@customer.example.test"}
+      }
+    },
+    {
+      "name": "unknown-metadata-key-dropped",
+      "expect": "dropped",
+      "must_not_persist": ["synthetic-crumb"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {"favorite_color": "synthetic-crumb"}
+      }
+    },
+    {
+      "name": "clean-structural-payload",
+      "expect": "accepted",
+      "must_not_persist": [],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "navigation", "route": "/", "label": "[masked]"},
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"amount-input\"]", "label": "[masked]"},
+          {"timestamp": "t", "type": "api_error", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]",
+           "metadata": {"status": 500, "method": "POST", "endpoint": "/accounts/:id"}}
+        ],
+        "metadata": {"sdk_version": "0.10.0", "viewport": "1280x720"}
+      }
+    }
+  ]
+}

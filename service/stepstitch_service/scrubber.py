@@ -521,6 +521,35 @@ def derive_policy(base: ScrubPolicy = FINANCIAL_SERVICES_ENTERPRISE, **changes: 
     return replace(base, **changes)
 
 
+def apply_scrub_overrides(base: ScrubPolicy, cfg: Dict[str, Any]) -> ScrubPolicy:
+    """Compose the base profile with operator overrides. Every field only TIGHTENS or
+    scopes an already-strict check: extra patterns add redaction, extra keys add drops,
+    and the strict allowlists (approved testids / route templates) name the specific
+    static values a deny-by-default profile will accept. Overrides can never flip a
+    strict knob off, remove a built-in rule, or re-enable free text. A malformed entry
+    is dropped, never able to loosen the base. Pure + testable, stdlib-only — the host
+    and the ``stepstitch policy verify`` CLI both use exactly this function, so a
+    fixture run and a live ingest can never disagree about what a config means."""
+    extra_red = tuple(
+        (str(p[0]), str(p[1]))
+        for p in (cfg.get("extra_redactions") or [])
+        if isinstance(p, (list, tuple)) and len(p) == 2
+    )
+    extra_keys = frozenset(str(k) for k in (cfg.get("extra_forbidden_keys") or []))
+    changes: Dict[str, Any] = {
+        "extra_redactions": extra_red, "extra_forbidden_keys": extra_keys}
+    # The strict allowlists are inert unless the base profile turned the matching
+    # policy on (selector_policy / route_policy are profile-owned, never override-
+    # settable), so on a permissive profile these keys change nothing.
+    testids = cfg.get("approved_testids")
+    if isinstance(testids, (list, tuple)):
+        changes["approved_testids"] = frozenset(str(t) for t in testids)
+    templates = cfg.get("route_templates")
+    if isinstance(templates, (list, tuple)):
+        changes["route_templates"] = tuple(str(t) for t in templates)
+    return derive_policy(base, **changes)
+
+
 __all__ = [
     "ScrubPolicy",
     "ScrubRejection",
@@ -530,6 +559,7 @@ __all__ = [
     "redact_text",
     "route_template",
     "derive_policy",
+    "apply_scrub_overrides",
     "compile_extra_redactions",
     "selector_allowed",
     "route_matches_templates",

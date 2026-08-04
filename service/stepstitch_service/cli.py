@@ -666,6 +666,30 @@ def build_parser() -> argparse.ArgumentParser:
     mcp.add_argument("--base-url", default=None,
                      help="service mount incl. prefix (default: STEPSTITCH_BASE_URL)")
 
+    policy = sub.add_parser(
+        "policy",
+        help="validate a scrub/capture policy against tenant fixtures",
+        description="Policy tooling. `stepstitch policy verify fixtures.json` runs every "
+                    "fixture through the same scrubber and schema boundary the live "
+                    "router uses and reports rejected / dropped / redacted / accepted — "
+                    "plus any must_not_persist literal that would have reached storage.",
+    )
+    policy_sub = policy.add_subparsers(dest="policy_command")
+    policy_verify = policy_sub.add_parser(
+        "verify",
+        help="run a fixtures file against a profile + operator overrides",
+        description="Prove, before go-live, that the configured policy refuses the "
+                    "payloads you are worried about (synthetic names, account numbers, "
+                    "emails, semantic slugs and selectors). Exit 0 = every fixture "
+                    "behaved as declared and nothing leaked; 1 = a mismatch or a leak; "
+                    "2 = unusable input.",
+    )
+    policy_verify.add_argument("fixtures", help="path to the fixtures JSON file")
+    policy_verify.add_argument("--profile", default=None,
+                               help="override the profile named in the file")
+    policy_verify.add_argument("--json", action="store_true", dest="as_json",
+                               help="emit machine-readable results")
+
     start = sub.add_parser(
         "start",
         help="run StepStitch Local: dashboard + SQLite store on 127.0.0.1, no setup",
@@ -685,6 +709,35 @@ def build_parser() -> argparse.ArgumentParser:
                             "with a least-privilege token — no token pasting, because "
                             "this process already holds the credential")
     return parser
+
+
+def _policy_command(args: Any, parser: argparse.ArgumentParser) -> int:
+    if getattr(args, "policy_command", None) != "verify":
+        parser.print_help()
+        return 2
+    # Imported here, not at module top: the fixture runner lives with the scrubber
+    # (both stdlib-only), and this module must keep its no-web-stack import guarantee.
+    from stepstitch_service.policy_verify import render_report, verify_fixtures
+
+    path = Path(args.fixtures)
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        print(f"fixtures file not found: {path}")
+        return 2
+    except json.JSONDecodeError as exc:
+        print(f"fixtures file is not valid JSON: {exc}")
+        return 2
+    try:
+        run = verify_fixtures(doc, profile_override=args.profile)
+    except ValueError as exc:
+        print(f"unusable fixtures file: {exc}")
+        return 2
+    if args.as_json:
+        print(json.dumps(run.as_dict(), indent=2))
+    else:
+        print(render_report(run))
+    return 0 if run.ok else 1
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -711,6 +764,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             open_browser=not args.no_browser,
             connect=args.connect,
         )
+    if args.command == "policy":
+        return _policy_command(args, parser)
     if args.command != "doctor":
         parser.print_help()
         return 2
