@@ -72,6 +72,14 @@ support-to-engineering evidence:
   `strict_schema_passed`), `healthcare-strict` (free text dropped, forbidden keys reject
   422), `internal-enterprise`, `open-source-default`. A profile may only *tighten* the
   NPI boundary.
+- **Tenant fixture validator** — `stepstitch policy verify fixtures.json` proves, before
+  go-live, that the configured profile + operator overrides refuse or neutralize the
+  payloads a tenant is worried about (synthetic names, addresses, account numbers,
+  emails, semantic route slugs, semantic selectors). Ships with a financial pack
+  (`examples/policy/financial-fixtures.json`), reports rejected / dropped / redacted /
+  accepted per fixture plus any `must_not_persist` literal that would have reached
+  storage, and its offline classifier is drift-guarded against the live router
+  (`test_policy_verify.py`).
 - **Financial-services support pack** — flat, sanitized ServiceNow incident, Salesforce
   case, and Genesys support-context drafts built from a structure-derived `TraceSummary`
   (never raw footsteps, the explanation, or the user id). Direct system-of-record writes

@@ -136,8 +136,13 @@ def policy_from_profile(profile: Dict[str, Any]) -> ScrubPolicy:
     tighten free-text/rejection behavior.
     """
     scrub = profile.get("scrub", {})
-    # max_text_len of 0 means "no free text" — represented via free_text="disabled".
-    max_len = scrub.get("max_text_len", 280) or 1
+    # max_text_len of 0 means "no free text" — that is what free_text="disabled"
+    # already enforces (the explanation is rejected whole). The cap still applies to
+    # the ALLOWLISTED structural strings (sdk_version, viewport, method, ...), so 0
+    # must not collapse to a 1-character truncation that mangles "0.10.0" into "0" —
+    # those fields are exactly the forensic metadata a strict tenant needs intact.
+    # They remain allowlist-gated and PII-redacted at the default cap.
+    max_len = scrub.get("max_text_len", 280) or 280
     return derive_policy(
         name=profile["name"],
         free_text=scrub.get("free_text", "scrub"),
