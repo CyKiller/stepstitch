@@ -50,5 +50,5 @@ in a guarded optional-mount that logs and continues when the package is absent.
 
 - `npm run type-check` and `npm run build` (route + bundle).
 - End-to-end: grant consent → click/error → "Report a bug" → confirm a structural,
-  NPI-free trace row → open `/admin/stepstitch` as `admin_operator` → Copy Test Code →
+  structural trace row → open `/admin/stepstitch` as `admin_operator` → Copy Test Code →
   run the generated Playwright locally.

@@ -20,7 +20,7 @@ Signing is **tenant-controlled**. If you set `STEPSTITCH_SIGNING_KEY`, the host 
 bytes with **your** key via the `cosign` CLI — the StepStitch service core never holds a key. If
 unset, the bundle is returned unsigned; the hash is always tamper-evident regardless.
 
-The bundle is **NPI-free** — it only composes already-sanitized reads.
+The bundle is **structure-derived** — it only composes already-sanitized reads.
 
 ## Verify independently (no StepStitch account)
 

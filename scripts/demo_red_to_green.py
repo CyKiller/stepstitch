@@ -350,7 +350,7 @@ def build_bundle(measure: bool = False) -> Dict[str, Any]:
                 "headline": summary.headline,
                 "raw_unsafe_input": {
                     "note": (
-                        "Synthetic placeholders ONLY (no real NPI). Present to demonstrate "
+                        "Synthetic placeholders ONLY — never real customer data. Present to demonstrate "
                         "the scrubber dropping forbidden fields and redacting PII-shaped text."
                     ),
                     "explanation": raw["explanation"],

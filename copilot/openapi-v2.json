@@ -24,7 +24,7 @@
     "/session/{trace_id}/summary": {
       "get": {
         "operationId": "GetTraceSummary",
-        "summary": "Sanitized, structure-derived summary (no NPI).",
+        "summary": "Sanitized, structure-derived summary (no raw values).",
         "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
         "responses": { "200": { "description": "Sanitized summary" }, "404": { "description": "Not found" } }
       }
@@ -64,7 +64,7 @@
     "/session/{trace_id}/similar-fixes": {
       "get": {
         "operationId": "MatchVerifiedFixes",
-        "summary": "Match this trace against the verified-fix corpus by structure (no NPI).",
+        "summary": "Match this trace against the verified-fix corpus by structure (no raw values).",
         "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
         "responses": { "200": { "description": "Similar verified fixes" }, "404": { "description": "Not found" } }
       }
@@ -72,7 +72,7 @@
     "/session/{trace_id}/attestation": {
       "get": {
         "operationId": "GetAttestation",
-        "summary": "Signed, independently-verifiable evidence bundle (no NPI).",
+        "summary": "Signed, independently-verifiable evidence bundle (no raw values).",
         "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
         "responses": { "200": { "description": "Attestation bundle" }, "404": { "description": "Not found" } }
       }
@@ -80,7 +80,7 @@
     "/session/{trace_id}/fragility": {
       "get": {
         "operationId": "GetFragilityMap",
-        "summary": "Per-step fragility ranking, worst-first (no NPI).",
+        "summary": "Per-step fragility ranking, worst-first (no raw values).",
         "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
         "responses": { "200": { "description": "Fragility map" }, "404": { "description": "Not found" } }
       }
@@ -88,7 +88,7 @@
     "/session/{trace_id}/minimal-repro": {
       "get": {
         "operationId": "GenerateMinimalRepro",
-        "summary": "Smallest failing path compiled to Playwright (no NPI).",
+        "summary": "Smallest failing path compiled to Playwright (no raw values).",
         "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
         "responses": { "200": { "description": "Minimal repro" }, "404": { "description": "Not found" } }
       }
@@ -96,7 +96,7 @@
     "/session/{trace_id}/agent-packet": {
       "get": {
         "operationId": "GetAgentPacket",
-        "summary": "Safe Agent Packet: summary + replayability + privacy posture + diagnostic + Playwright repro, composed into one call (no NPI).",
+        "summary": "Safe Agent Packet: summary + replayability + privacy posture + diagnostic + Playwright repro, composed into one call (no raw values).",
         "parameters": [ { "name": "trace_id", "in": "path", "required": true, "schema": { "type": "string" } } ],
         "responses": { "200": { "description": "Agent packet" }, "404": { "description": "Not found" } }
       }

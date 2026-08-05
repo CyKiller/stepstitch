@@ -8,7 +8,7 @@ customer-specific in the product — it is a configuration guide for a regulated
 
 A user-reported issue becomes: a scrubbed event timeline, a replayability score, sanitized
 diagnostics, a copyable **Playwright reproduction**, and a flat **ServiceNow incident +
-Salesforce case** draft — with **no NPI** captured at any point (proven by
+Salesforce case** draft — with customer data policy-scrubbed at every step (proven by
 `tests/redaction-proof.test.ts` + `service/tests/test_scrubber.py`).
 
 ## Two delivery modes (pick per tenant)

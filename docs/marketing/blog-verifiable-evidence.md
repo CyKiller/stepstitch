@@ -53,7 +53,7 @@ sha256sum <(jq -cS . bundle.json)   # must equal bundle_sha256
 cosign verify-blob --key tenant.pub --signature attestation.sig bundle.json
 ```
 
-The bundle is structural and PII-free by construction — it only composes already-sanitized reads. So
+The bundle is structural and structural by construction — it only composes already-sanitized reads. So
 the thing you can verify is also the thing that was always safe to share.
 
 ## Why this is only possible on the right substrate

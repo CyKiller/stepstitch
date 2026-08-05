@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 
 // Guard the buyer-facing copy against the one thing StepStitch must never claim: that it
@@ -73,11 +73,26 @@ const UNPROVABLE = [
     why: "absence of PII/NPI in user-authored text is not demonstrable" },
 ];
 
+/**
+ * EVERY buyer-facing surface, discovered by walking the tree — not an enumerated list.
+ *
+ * The first version of this named eleven files while the site had fifty-two, and so
+ * missed the footer, the Open Graph card and the site-wide meta description, all of
+ * which carried "No screens, no input values, no PII". That is the same defect as
+ * enumerating exact phrases instead of matching the shape, one layer up: an allowlist
+ * of places rather than of words. A new page is covered the moment it is created.
+ */
+function walk(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) return walk(full);
+    return entry.isFile() && /\.tsx?$/.test(entry.name) ? [full] : [];
+  });
+}
+
 const ALL_COPY = [
-  ...PAGES,
-  ...["faq.tsx", "comparison.tsx", "hero.tsx", "case-studies.tsx", "whatsnew.tsx"].map(
-    (f) => join(process.cwd(), "src", "components", f),
-  ),
+  ...walk(join(process.cwd(), "src", "app")),
+  ...walk(join(process.cwd(), "src", "components")),
 ];
 
 /**
@@ -174,5 +189,22 @@ describe("'live' claims are conditional, never ambient", () => {
     expect(measurement.green_verdict).toBe("not_reproduced");
     expect(measurement.pre_passed).toBe(false);
     expect(measurement.post_passed).toBe(true);
+  });
+});
+
+describe("the guard's coverage cannot silently shrink", () => {
+  it("walks the whole buyer-facing surface, not an enumerated subset", () => {
+    // The regression this encodes: 11 files were scanned while 52 existed.
+    expect(ALL_COPY.length).toBeGreaterThan(40);
+  });
+
+  it("covers the three surfaces that escaped the enumerated version", () => {
+    for (const rel of [
+      "src/components/footer.tsx",
+      "src/app/opengraph-image.tsx",
+      "src/app/layout.tsx",
+    ]) {
+      expect(ALL_COPY.some((f) => f.endsWith(rel.replace(/\//g, sep)))).toBe(true);
+    }
   });
 });

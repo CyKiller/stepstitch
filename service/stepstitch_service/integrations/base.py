@@ -2,8 +2,8 @@
 
 A :class:`TraceSummary` is the *only* thing adapters are allowed to see. It is a flat,
 already-scrubbed projection of a trace — never the raw footsteps, the full explanation,
-or the user id. Building drafts from the summary (not the trace) is what guarantees no
-system of record receives NPI.
+or the user id. Building drafts from the summary (not the trace) is the structural
+reason a system of record never receives raw footsteps, free text or the user id.
 """
 from __future__ import annotations
 

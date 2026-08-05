@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS stepstitch_traces (
     retention_expires_at TIMESTAMPTZ,
     created_at           TIMESTAMPTZ NOT NULL,
     -- Structural fingerprint (Failure Shapes). Derived from already-scrubbed fields only, so it
-    -- carries no NPI; stored outside the body so a shape stays matchable after retention purge.
+    -- carries no raw values; stored outside the body so a shape stays matchable after retention purge.
     fingerprint          TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_stepstitch_created_at  ON stepstitch_traces (created_at DESC);
@@ -66,7 +66,7 @@ CREATE INDEX IF NOT EXISTS ix_stepstitch_verif_grade   ON stepstitch_verificatio
 
 -- Agent connections: named, scoped bearer tokens for AI/MCP consumers. Only the token
 -- HASH is stored (never the token) + a scope tier; enforcement lives in the host
--- (server/agents.py). Carries no NPI.
+-- (server/agents.py). Carries no raw values.
 CREATE TABLE IF NOT EXISTS stepstitch_agents (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,
@@ -82,7 +82,7 @@ CREATE INDEX IF NOT EXISTS ix_stepstitch_agents_token ON stepstitch_agents (toke
 -- Recorded before a session is handed to a fixing agent, together with the measured red run
 -- that proved the failure was present. Verification reruns THIS script; a different script is
 -- refused. The agent may change the application, never the test that judges it. Structural
--- only (a compiled Playwright spec derived from already-scrubbed footsteps) — no NPI.
+-- only (a compiled Playwright spec derived from already-scrubbed footsteps) — no raw values.
 CREATE TABLE IF NOT EXISTS stepstitch_frozen_repros (
     trace_id     TEXT PRIMARY KEY,
     script       TEXT NOT NULL,
@@ -123,7 +123,7 @@ CREATE INDEX IF NOT EXISTS ix_stepstitch_diag_trace ON stepstitch_diagnostics (t
 
 -- Operator config (dashboard). A small per-key JSON store; today holds the scrub overrides
 -- (custom redaction patterns + extra forbidden keys) that only ever TIGHTEN the base
--- profile. Carries no NPI.
+-- profile. Carries no raw values.
 CREATE TABLE IF NOT EXISTS stepstitch_config (
     key         TEXT PRIMARY KEY,
     value       TEXT NOT NULL,

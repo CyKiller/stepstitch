@@ -9,7 +9,8 @@ can cluster traces into **failure shapes** with a query instead of parsing every
 on every board load. Mirrors 0004, which added the same column to ``stepstitch_verifications``.
 
 The fingerprint is derived entirely from fields the ingest scrubber has already cleared —
-templated routes and structural selectors — so this stores no NPI and moves no privacy boundary.
+templated routes and structural selectors — so this stores only structural fields and
+moves no privacy boundary.
 Because it lives outside the trace body, a shape and its fix stay matchable after retention
 purges the body.
 

@@ -12,7 +12,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "StepStitch: issue-to-repro infrastructure, not session replay",
   description:
-    "Turn a user-reported bug into a regression test. A replayability score and a Playwright repro, with no screens, input values, or PII. Open source, self-hosted.",
+    "Turn a user-reported bug into a regression test. A replayability score and a Playwright repro, with no screens, input values or page text captured; free text is policy-scrubbed. Open source, self-hosted.",
   metadataBase: new URL(SITE_URL),
   robots: { index: true, follow: true },
   openGraph: {

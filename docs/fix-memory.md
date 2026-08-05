@@ -17,7 +17,7 @@ fingerprint** and stores it alongside the verdict:
   exception type, diagnostic endpoint, and the terminal selector.
 
 The fingerprint is persisted at verify-time, so it **survives body purge** — a confirmed fix stays
-matchable long after the trace body is retention-expired. Fingerprints are **NPI-free** by
+matchable long after the trace body is retention-expired. Fingerprints are **structure-derived** by
 construction: routes are templated and selectors are structural (the server-side scrubber already
 guaranteed this at ingest).
 

@@ -6,9 +6,9 @@ new trace's fingerprint is matched against the stored fingerprints to surface *"
 shape before"* — institutional memory an agent can consume without ever seeing raw data.
 
 Design: pure, deterministic, **dependency-free**, and explainable (every match reports the fields
-that agreed). Fingerprints carry no NPI — routes are templated and selectors are structural; the
-server-side scrubber already guaranteed that at ingest. Match weights are configurable so a
-deployer can tune what "similar" means.
+that agreed). Fingerprints carry no raw values — routes are templated and selectors
+are structural; the server-side scrubber already ensured that at ingest. Match
+weights are configurable so a deployer can tune what "similar" means.
 """
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ def fingerprint(
     """Reduce a trace summary (+ optional footsteps) to a structural fingerprint.
 
     ``summary`` is ``TraceSummary.as_dict()`` (or any dict with those keys). The fingerprint
-    is JSON-serializable and NPI-free, so it is safe to persist and expose to agents.
+    is JSON-serializable and structural, so it is safe to persist and expose to agents.
     """
     return {
         "route": summary.get("route"),

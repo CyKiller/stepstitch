@@ -106,7 +106,7 @@ export function Footer() {
 
         <div className="mt-12 flex flex-col gap-2 border-t border-line pt-6 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
           <p>Apache-2.0 licensed. Self-hosted.</p>
-          <p>Structural evidence only. No screens, no input values, no PII.</p>
+          <p>Structural evidence only. No screens, no input values, no page text.</p>
         </div>
       </div>
     </footer>

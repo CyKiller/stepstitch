@@ -95,7 +95,7 @@ the optional `mcp` extra (`pip install 'stepstitch-service[mcp]'`). Dispatch pro
 deployed service via an injected `call_route`, so the scrubber, admin auth, and `stepstitch.*`
 read-audit stay centralized in the service.
 - **Default posture (enforced):** read-only + draft-only; `is_destructive` guard runs at import and **no** `delete`/`purge`/kill-switch/retention/raw-`explanation` tool can ship.
-- **Acceptance (green):** `test_mcp_surface.py` — `test_no_destructive_mcp_tool`, `test_tool_definitions_have_schemas`, and `test_dispatch_drives_service_sanitized_and_audited` (E2E: tool call → real service → sanitized, no NPI, audited). **The full service suite is a required-green CI gate.**
+- **Acceptance (green):** `test_mcp_surface.py` — `test_no_destructive_mcp_tool`, `test_tool_definitions_have_schemas`, and `test_dispatch_drives_service_sanitized_and_audited` (E2E: tool call → real service → sanitized, structure-derived, audited). **The full service suite is a required-green CI gate.**
 
 ### P2 — Connector enablement, finished  ✅ **SHIPPED**  *(product scope: connectors only)*
 `copilot/` documents **two live-service connector paths**, both sharing `system-prompt.md`

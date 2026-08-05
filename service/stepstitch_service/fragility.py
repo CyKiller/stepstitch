@@ -1,7 +1,7 @@
 """Fragility Radar — predict which steps will break, and shrink a trace to its failing path.
 
 Two pure, deterministic views built on the same structural signals the replayability scorer
-already produces (no extra capture, no NPI):
+already produces (no extra capture; structural fields only):
 
   * **Fragility map** — per interactive step, how brittle is its selector (and is its route
     templated), ranked worst-first, with a concrete recommendation. This turns the
@@ -30,7 +30,7 @@ _REC = {
 
 
 def compute_fragility_map(footsteps: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Per-step brittleness, ranked worst-first. Pure, deterministic, NPI-free."""
+    """Per-step brittleness, ranked worst-first. Pure, deterministic, structural."""
     items: List[Dict[str, Any]] = []
     for i, step in enumerate(footsteps or []):
         if str(step.get("type", "")).lower() not in _INTERACTIVE:

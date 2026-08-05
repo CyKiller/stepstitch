@@ -21,7 +21,7 @@ text, input values, or raw URLs unless explicitly opted in.
     "method": "POST",
     "endpoint": "/api/accounts/:id",
     "error_type": "TypeError"
-  }                                         // structural, NPI-free only (optional)
+  }                                         // structural fields only (optional)
 }
 ```
 
@@ -203,7 +203,7 @@ surface** column says whether the route is also exposed to agents through the
 MCP/OpenAPI connector:
 
 - **✅ agent-safe** — one of the thirteen `COPILOT_SAFE_OPERATIONS`; read-only or draft-only,
-  NPI-free, exposed via the MCP server and `openapi-v2.json`.
+  structure-derived, exposed via the MCP server and `openapi-v2.json`.
 - **admin-only** — operator-only; never an agent/MCP tool (carries `explanation`, raw
   bodies, or governance/verification reads).
 - **admin-only · human-gated** — a governed write loop; off unless the host injects it,
@@ -217,10 +217,10 @@ MCP/OpenAPI connector:
 | `GET /session/{id}/privacy-posture` | per-trace scrub report + never-captured list | ✅ agent-safe | `stepstitch.privacy_posture` |
 | `GET /session/{id}/diagnostic-summary` | sanitized frontend/API diagnostic summary | ✅ agent-safe | `stepstitch.diagnostic_summary` |
 | `GET /session/{id}/playwright` | compile repro (text only) | ✅ agent-safe | `stepstitch.compile` |
-| `GET /session/{id}/similar-fixes` | structural match to the verified-fix corpus (no NPI) | ✅ agent-safe | `stepstitch.similar_fixes` |
-| `GET /session/{id}/attestation` | signed, independently-verifiable evidence bundle (no NPI) | ✅ agent-safe | `stepstitch.attestation` |
-| `GET /session/{id}/fragility` | per-step fragility ranking, worst-first (no NPI) | ✅ agent-safe | `stepstitch.fragility` |
-| `GET /session/{id}/minimal-repro` | smallest failing path compiled to Playwright (no NPI) | ✅ agent-safe | `stepstitch.minimal_repro` |
+| `GET /session/{id}/similar-fixes` | structural match to the verified-fix corpus (no raw values) | ✅ agent-safe | `stepstitch.similar_fixes` |
+| `GET /session/{id}/attestation` | signed, independently-verifiable evidence bundle (no raw values) | ✅ agent-safe | `stepstitch.attestation` |
+| `GET /session/{id}/fragility` | per-step fragility ranking, worst-first (no raw values) | ✅ agent-safe | `stepstitch.fragility` |
+| `GET /session/{id}/minimal-repro` | smallest failing path compiled to Playwright (no raw values) | ✅ agent-safe | `stepstitch.minimal_repro` |
 | `GET /session/{id}/agent-packet` | Safe Agent Packet: summary + replayability + privacy posture + diagnostic + repro, composed | ✅ agent-safe | `stepstitch.agent_packet` |
 | `POST /session/{id}/export-preview` | build ServiceNow + Salesforce + Genesys drafts (sends nothing) | ✅ agent-safe (draft) | `stepstitch.export_preview` |
 | `POST /session/{id}/financial-services-export-preview` | named financial-services support draft pack (sends nothing) | ✅ agent-safe (draft) | `stepstitch.financial_services_export_preview` |
@@ -240,7 +240,7 @@ MCP/OpenAPI connector:
 
 `GET /session/{id}` and `GET /session/{id}/replayability` carry a deterministic
 reproducibility score computed purely from the structural footsteps (no extra capture,
-no NPI), proven in `service/tests/test_replayability.py`:
+no raw values), proven in `service/tests/test_replayability.py`:
 
 ```jsonc
 {

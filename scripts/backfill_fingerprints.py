@@ -8,7 +8,7 @@ known gap in docs/STATUS.md).
 
 The fingerprint is derived with the SAME function the ingest path uses
 (``fix_memory.fingerprint`` over ``build_trace_summary``), so a backfilled row is
-indistinguishable from a freshly ingested one. It is structural and NPI-free: templated route,
+indistinguishable from a freshly ingested one. It is structural and structural: templated route,
 diagnostic type, failing status, exception type, endpoint, terminal selector.
 
 Usage:

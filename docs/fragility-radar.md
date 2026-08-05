@@ -16,7 +16,7 @@ faster repro by dropping the steps that don't matter.
 - **Templated routes** — a `/accounts/:id` route needs a fixture to replay, adding fragility.
 
 Each step gets a `risk` score and a concrete recommendation (e.g. "add a data-testid"). It is pure,
-deterministic, and NPI-free — selectors are structural.
+deterministic, and structure-derived — selectors are structural.
 
 ```json
 { "fragility": [

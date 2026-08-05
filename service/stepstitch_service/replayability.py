@@ -2,7 +2,7 @@
 
 A privacy-safe trace is only useful if it is *reproducible*. This module scores a
 trace 0..1 (with a letter grade and human-readable warnings) purely from the
-structural footsteps already on the wire — no extra capture, no NPI. Like the
+structural footsteps already on the wire — no extra capture; structural fields only. Like the
 scrubber and compiler it is pure (no I/O, no state) so the scoring boundaries are
 directly unit-testable.
 

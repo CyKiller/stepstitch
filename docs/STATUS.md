@@ -12,7 +12,7 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **690** | `PYTHONPATH=service pytest service/tests/` |
+| Service (compiler, router, privacy, connectors) | **703** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **223** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **38** | `npx vitest run` |
 | Web (marketing site + copy claims) | **101** | `cd web && npx vitest run` |
@@ -141,7 +141,7 @@ the governed, human-approved create or handoff.
 The **default** builds no outbound send layer. An *optional* governed direct-write
 (`delivery/`) exists for customers not on Power Platform: off by default,
 human-approval-gated, audited, and deliberately excluded from the agent/MCP surface, so
-the draft-only default and the no-NPI guarantee are unchanged.
+the draft-only default and the scrub boundary are unchanged.
 
 ## Remaining — gated (not engineering)
 

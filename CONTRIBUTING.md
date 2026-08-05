@@ -75,7 +75,7 @@ The adapter framework (`integrations/base.py`) is the only public extension seam
 1. Subclass `DraftAdapter` and build a **flat** draft via `assert_flat` (scalars only, no
    forbidden keys).
 2. Derive every field from `TraceSummary` — nothing else.
-3. Add tests proving flatness and no-NPI (a conformance kit is provided for this).
+3. Add tests proving flatness and that no forbidden key or planted marker survives (a conformance kit is provided for this).
 4. Adapters may import **only** `integrations.base` — never core internals. This layering is
    enforced by `service/tests/test_open_core_boundary.py` and `.importlinter`.
 

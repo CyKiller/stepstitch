@@ -192,7 +192,7 @@ def route_matches_templates(route: str, templates: Tuple[str, ...]) -> bool:
 
 # --- Policy -------------------------------------------------------------------
 
-# Structural, NPI-free metadata the server is willing to store. Anything else is
+# Structural, structural metadata the server is willing to store. Anything else is
 # dropped (strict allowlist) — values are still PII-scrubbed before storage.
 _DEFAULT_METADATA_ALLOWLIST = frozenset(
     {
