@@ -6,7 +6,7 @@ transfer form is one shape, one decision, one fix — not forty rows.
 
 Grouping on structure is something only StepStitch can do. Error trackers group by stack trace
 and replay tools group by session; the fingerprint from :mod:`.fix_memory` is derived purely from
-already-scrubbed structural fields, so it is NPI-free by construction and — because it is stored
+already-scrubbed structural fields, so it is structural by construction and — because it is stored
 independently of the trace body — a shape and its fix **survive retention purge**. The evidence
 expires; the institutional memory does not.
 

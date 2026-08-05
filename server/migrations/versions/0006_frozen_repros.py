@@ -13,7 +13,8 @@ change the application, but it can never weaken, replace or regenerate the test 
 its own fix.
 
 Contents are structural only — a compiled Playwright spec derived from footsteps the ingest
-scrubber has already cleared — so this stores no NPI and moves no privacy boundary. It sits
+scrubber has already cleared — so this stores only structural fields and moves no
+privacy boundary. It sits
 outside the trace body deliberately: a frozen reproduction and its verdict must stay valid
 after retention purges the body it came from.
 """

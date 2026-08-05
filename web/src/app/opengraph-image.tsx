@@ -46,7 +46,7 @@ export default function OgImage() {
             <span style={{ color: "#34d399" }}>regression test</span>.
           </div>
           <div style={{ color: "#a1a1aa", fontSize: 32 }}>
-            Issue-to-repro infrastructure. No screens, no input values, no PII.
+            Issue-to-repro infrastructure. No screens, no input values, no page text.
           </div>
         </div>
 

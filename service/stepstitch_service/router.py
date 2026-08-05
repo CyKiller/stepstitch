@@ -845,7 +845,7 @@ def create_stepstitch_router(
             raise HTTPException(status_code=404, detail="Trace not found")
         verdict = derive_verdict(payload.pre_passed, payload.post_passed)
         # Fix Memory: persist the trace's structural fingerprint now, while the body still
-        # exists, so a confirmed fix stays matchable after the body is purged. NPI-free.
+        # exists, so a confirmed fix stays matchable after the body is purged. structural.
         footsteps = _loads(row[0])
         summary = build_trace_summary(trace_id, footsteps, project_id=row[1])
         fp_json = json.dumps(fix_fingerprint(summary.as_dict(), footsteps))
@@ -898,7 +898,7 @@ def create_stepstitch_router(
         limit: int = Query(5, ge=1, le=50),
     ) -> Dict[str, Any]:
         # Fix Memory: match this trace's structural fingerprint against the verified-fix corpus
-        # ("you've fixed this shape before"). Read-only, audited. Fingerprints are NPI-free
+        # ("you've fixed this shape before"). Read-only, audited. Fingerprints are structural
         # (templated routes + structural selectors), so this is safe on the agent surface.
         row = await fetchone(
             "SELECT footsteps, project_id FROM stepstitch_traces WHERE id = ?", (trace_id,))
@@ -941,7 +941,7 @@ def create_stepstitch_router(
         # Evidence Attestation: a canonical, tamper-evident bundle (scrub report + replayability
         # + verdict + sdk build) anyone can verify INDEPENDENTLY (recompute the hash; if signed,
         # cosign verify-blob with the tenant's key). Optionally signed by a host-injected signer
-        # bound to the tenant's key — the service never holds a key. Read-only, audited, NPI-free.
+        # bound to the tenant's key — the service never holds a key. Read-only, audited, structural.
         row = await fetchone(
             "SELECT footsteps, project_id, trace_metadata FROM stepstitch_traces WHERE id = ?",
             (trace_id,))
@@ -1045,7 +1045,7 @@ def create_stepstitch_router(
         admin: Any = Depends(require_admin),
     ) -> Dict[str, Any]:
         # Fragility Radar: which steps are most likely to break (selector brittleness +
-        # templated routes), ranked worst-first. Read-only, audited, NPI-free.
+        # templated routes), ranked worst-first. Read-only, audited, structural.
         row = await fetchone(
             "SELECT footsteps FROM stepstitch_traces WHERE id = ?", (trace_id,))
         if not row:

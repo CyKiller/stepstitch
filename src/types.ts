@@ -30,7 +30,7 @@ export interface UserFootstep {
    */
   label: string
   /**
-   * Structural, NPI-free metadata only. Useful keys include status, method, endpoint,
+   * Structural, structural metadata only. Useful keys include status, method, endpoint,
    * error_type, source_path, line, and column. Raw logs/messages/stacks/bodies are
    * forbidden by contract and scrubbed again server-side.
    */

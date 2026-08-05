@@ -19,7 +19,7 @@
     "1_bug_report": {
       "headline": "User-reported issue: HTTP 500 on /accounts/:id/transfer",
       "raw_unsafe_input": {
-        "note": "Synthetic placeholders ONLY (no real NPI). Present to demonstrate the scrubber dropping forbidden fields and redacting PII-shaped text.",
+        "note": "Synthetic placeholders ONLY — never real customer data. Present to demonstrate the scrubber dropping forbidden fields and redacting PII-shaped text.",
         "explanation": "Transfer to account 000000 failed; reach me at user@example.test or 000-00-0000.",
         "forbidden_fields_sent": [
           "metadata.headers",

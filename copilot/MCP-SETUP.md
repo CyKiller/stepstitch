@@ -29,10 +29,10 @@ remote/tenant clients, which `connect` deliberately does not handle.
 | `get_privacy_posture` | `GET /session/{id}/privacy-posture` | scrub report + never-captured list |
 | `get_diagnostic_summary` | `GET /session/{id}/diagnostic-summary` | sanitized diagnostics + next step |
 | `generate_playwright_repro` | `GET /session/{id}/playwright` | runnable Playwright code (text) |
-| `match_verified_fixes` | `GET /session/{id}/similar-fixes` | structural matches to prior verified fixes (no NPI) |
-| `get_attestation` | `GET /session/{id}/attestation` | signed, independently-verifiable evidence bundle (no NPI) |
-| `get_fragility_map` | `GET /session/{id}/fragility` | per-step fragility ranking, worst-first (no NPI) |
-| `generate_minimal_repro` | `GET /session/{id}/minimal-repro` | smallest failing path compiled to Playwright (no NPI) |
+| `match_verified_fixes` | `GET /session/{id}/similar-fixes` | structural matches to prior verified fixes (no raw values) |
+| `get_attestation` | `GET /session/{id}/attestation` | signed, independently-verifiable evidence bundle (no raw values) |
+| `get_fragility_map` | `GET /session/{id}/fragility` | per-step fragility ranking, worst-first (no raw values) |
+| `generate_minimal_repro` | `GET /session/{id}/minimal-repro` | smallest failing path compiled to Playwright (no raw values) |
 | `get_agent_packet` (**Safe Agent Packet**) | `GET /session/{id}/agent-packet` | the six rows above, composed into one call |
 | `create_export_preview` | `POST /session/{id}/export-preview` | ServiceNow/Salesforce/Genesys **drafts** |
 | `create_fs_export_preview` | `POST /session/{id}/financial-services-export-preview` | named FS support **draft** pack |
@@ -41,7 +41,7 @@ remote/tenant clients, which `connect` deliberately does not handle.
 
 `get_agent_packet` is the one name behind the "safe packet to help fix it" pitch: instead of an
 agent making five separate round-trips (summary, replayability, privacy posture, diagnostic,
-repro), one call returns all five, still read-only and NPI-free — no new capability, just fewer
+repro), one call returns all five, still read-only and structure-derived — no new capability, just fewer
 round-trips. Reach for the individual tools when you only need one field; reach for the packet
 when you're handing a bug to an agent for the first time.
 

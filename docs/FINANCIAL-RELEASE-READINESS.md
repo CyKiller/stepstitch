@@ -5,16 +5,18 @@ recorded here**, on the commit named below, on this machine or in the named CI r
 Nothing is inferred from an adjacent suite: a browser claim comes from a browser run, a
 PostgreSQL claim comes from a PostgreSQL run.
 
-- **Commit:** `b97d363` (`main`) + the audit fixes on `fix/release-audit-gaps`
+- **Baseline commit:** `0c35997` (`main`) — the audit fixes, merged as PR #107
+- **This candidate adds:** the repo-wide claim truth pass on `fix/repo-wide-claim-truth-pass`
 - **Run date:** 2026-08-04
 - **Authoritative CI run:** [30947797324](https://github.com/CyKiller/stepstitch/actions/runs/30947797324) — 9/9 jobs green on this exact commit
 
 ## Scope of this candidate
 
 The corrective work (financial claims, privacy status, website accuracy, contact
-behavior, demo evidence, runner probe, execution states) is **already merged to `main`**
-as PRs #95–#105. This document is the release evidence for that work, not a further code
-change. See "Provenance" at the end.
+behavior, demo evidence, runner probe, execution states) is merged to `main` as
+PRs #95–#105. PR #107 then merged both this report and six fixes for defects found by
+auditing that work. This candidate adds the repo-wide claim truth pass described under
+"Second audit" below. See "Provenance" at the end.
 
 ## Privacy boundary (the position this release is allowed to claim)
 
@@ -171,6 +173,44 @@ branch is unreachable today but is forward-looking, and `/admin/status` calls
 `readiness(cfg, [])`, which can only surface base-URL and auth items — the per-trace
 prerequisites appear on the execution endpoint, where the footsteps exist.
 
+## Second audit: the enforcement was narrower than the policy
+
+An external review of the first audit found that the truthfulness *policy* was stricter
+than its *enforcement*. The website scanner enumerated **11 files while the site had 52**,
+so it never read the footer, the Open Graph card or the site-wide meta description — all
+three of which carried "No screens, no input values, no PII". That is the same defect the
+first audit fixed one layer down (enumerating exact phrases rather than matching the
+shape), repeated as an allowlist of *places* rather than of *words*.
+
+A repo-wide scan then found **122 surviving absolutes across 37 files** — not only on the
+website: MCP tool descriptions sent to agents, the Copilot OpenAPI pack, the Salesforce
+integration guide, the financial pilot runbook, `GOVERNANCE.md`, `CONTRIBUTING.md`, the
+frozen contract, issue templates, SQL schema comments and the SDK's own public types.
+
+Fixed by inverting the default:
+
+| Guard | Before | After |
+|---|---|---|
+| `web/tests/copy-claims.test.ts` | 11 enumerated files | walks `src/app` + `src/components` recursively (52 files); a test asserts coverage >40 and names the three surfaces that escaped |
+| `service/tests/test_claim_surface.py` (new) | did not exist | walks the **whole repository**; every hit must be explicitly justified with a reason, rather than every file explicitly included |
+
+The new guard also carries a **rot check**: an entry in its justified list that no longer
+contains an absolute fails the suite, so the allowlist cannot quietly become a loophole.
+It caught two entries during this very pass, once regenerating the demo bundles removed
+the wording at source.
+
+Replacement vocabulary, chosen to stop at what is demonstrable:
+
+- "No screens, input values or page text" — architectural; there is no such code path.
+- "free text is policy-scrubbed" — the scrubber runs; it does not prove absence.
+- "no raw values" — for structure-derived reads that never see the explanation.
+- "Policy scrubbed / data unverified" — the Salesforce `PrivacyStatus__c` value.
+- "the scrub boundary" — replacing "the NPI guarantee", because there is no guarantee.
+
+Passages that describe a false claim *as false* were deliberately left intact and
+justified by name — `contracts/stepstitch.md` and `docs/STATUS.md` both define the rule
+and must be able to quote the wording they forbid.
+
 ## Grades
 
 Two scores, deliberately distinct.
@@ -240,6 +280,10 @@ What remains, in priority order:
 
 ## Provenance
 
-The corrective code landed as PRs #95, #96, #97, #99, #100, #101, #102, #103, #104, #105,
-merged to `main` before this report. This branch adds only this document. Nothing in the
-repository was reset, discarded, reverted or force-pushed to produce it.
+The corrective code landed as PRs #95, #96, #97, #99, #100, #101, #102, #103, #104 and
+#105. **PR #107** then merged the six audit fixes *together with the first version of this
+report* — the report's branch was the base of the fix branch, so both commits (`c70ae2d`,
+`0c35997`) landed in one merge; PR #106 was closed as superseded rather than merged, since
+merging it would have been a no-op. This candidate adds the repo-wide truth pass on top of
+`0c35997`. Nothing in the repository was reset, discarded, reverted or force-pushed at any
+point.

@@ -8,7 +8,7 @@ re-compute the hash (no tooling needed) and, if signed, ``cosign verify-blob`` w
 public key — without trusting StepStitch or even reaching us.
 
 Design: pure + deterministic. The same trace always produces the same canonical bytes and hash,
-so the signature is stable and tamper-evident. The bundle is structural/NPI-free by construction
+so the signature is stable and tamper-evident. The bundle is structural/structural by construction
 (it only composes already-sanitized reads). Signing is **not** done here — a host injects a signer
 bound to the tenant's key — so the service never holds a key.
 """
@@ -31,7 +31,7 @@ def build_attestation(
     sdk_build: Optional[str],
     latest_verification: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    """Compose the canonical evidence bundle from already-sanitized reads. Pure + NPI-free."""
+    """Compose the canonical evidence bundle from already-sanitized reads. Pure + structural."""
     return {
         "schema": SCHEMA,
         "trace_id": trace_id,

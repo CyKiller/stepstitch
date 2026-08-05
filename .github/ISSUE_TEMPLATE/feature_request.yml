@@ -34,4 +34,4 @@ body:
       label: Privacy considerations
       description: >
         Does this touch capture, scrubbing, drafts, or the agent surface? How does it
-        preserve the no-NPI guarantee?
+        preserve the scrub boundary?

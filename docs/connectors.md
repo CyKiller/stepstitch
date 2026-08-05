@@ -76,7 +76,7 @@ def test_my_adapter():
     assert_adapter_conformant(MyAdapter())
 ```
 
-The kit checks flatness, no forbidden keys, no NPI markers, and determinism — the same
+The kit checks flatness, no forbidden keys, no planted markers, and determinism — the same
 guarantees the built-in adapters pass.
 
 ## 3. Register it (so hosts discover it automatically)

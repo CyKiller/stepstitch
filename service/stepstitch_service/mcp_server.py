@@ -119,7 +119,7 @@ COPILOT_SAFE_OPERATIONS: Tuple[CopilotSafeOperation, ...] = (
         tool_name="get_trace_summary",
         method="GET",
         path="/session/{trace_id}/summary",
-        description="Sanitized, structure-derived summary of a trace (no NPI).",
+        description="Sanitized, structure-derived summary of a trace (no raw values).",
         params=(_TRACE_ID,),
     ),
     CopilotSafeOperation(
@@ -161,7 +161,8 @@ COPILOT_SAFE_OPERATIONS: Tuple[CopilotSafeOperation, ...] = (
         method="GET",
         path="/session/{trace_id}/similar-fixes",
         description="Match this trace against the verified-fix corpus by structure — surfaces "
-                    "'you've fixed this shape before' with the prior fix ref. Structural, no NPI.",
+                    "'you've fixed this shape before' with the prior fix ref. "
+                    "Structural fields only.",
         params=(_TRACE_ID,),
     ),
     CopilotSafeOperation(
@@ -170,7 +171,8 @@ COPILOT_SAFE_OPERATIONS: Tuple[CopilotSafeOperation, ...] = (
         method="GET",
         path="/session/{trace_id}/attestation",
         description="Signed, independently-verifiable evidence bundle (scrub report + "
-                    "replayability + verdict + SDK build) with a tamper-evident hash. No NPI.",
+                    "replayability + verdict + SDK build) with a tamper-evident hash. "
+                    "Structural fields only.",
         params=(_TRACE_ID,),
     ),
     CopilotSafeOperation(
@@ -179,7 +181,7 @@ COPILOT_SAFE_OPERATIONS: Tuple[CopilotSafeOperation, ...] = (
         method="GET",
         path="/session/{trace_id}/fragility",
         description="Per-step fragility ranking (selector brittleness + templated routes), "
-                    "worst-first — predicts what will break. No NPI.",
+                    "worst-first — predicts what will break. Structural fields only.",
         params=(_TRACE_ID,),
     ),
     CopilotSafeOperation(
@@ -188,7 +190,7 @@ COPILOT_SAFE_OPERATIONS: Tuple[CopilotSafeOperation, ...] = (
         method="GET",
         path="/session/{trace_id}/minimal-repro",
         description="The smallest failing path compiled to Playwright (drops unrelated-route "
-                    "detours). No NPI.",
+                    "detours). Structural fields only.",
         params=(_TRACE_ID,),
     ),
     CopilotSafeOperation(
@@ -197,7 +199,8 @@ COPILOT_SAFE_OPERATIONS: Tuple[CopilotSafeOperation, ...] = (
         method="GET",
         path="/session/{trace_id}/agent-packet",
         description="The Safe Agent Packet: summary + replayability + privacy posture + "
-                    "diagnostic + Playwright repro composed into one call. No NPI; a "
+                    "diagnostic + Playwright repro composed into one call. "
+                    "Structural fields only; a "
                     "convenience wrapper over five already agent-safe reads, not new capability.",
         params=(_TRACE_ID,),
     ),

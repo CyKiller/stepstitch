@@ -201,7 +201,7 @@ def _diagnostics_redactor(text: str) -> str:
 
     ``scrub_transcript`` alone was the whole story here for one release, and it is a
     credentials scrubber — bearer tokens, secret-shaped assignments, URL userinfo, agent
-    tokens. Zero PII patterns. But ``console_errors`` and ``failure_stack`` carry whatever
+    tokens. No raw values patterns. But ``console_errors`` and ``failure_stack`` carry whatever
     the application printed, and an app run against a staging backend will happily
     ``console.error`` a real email, phone number or card. So every string gets the
     server-side scrubber's PII rules too — email, ssn, card, phone, dates, long digit

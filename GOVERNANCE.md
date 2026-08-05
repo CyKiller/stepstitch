@@ -22,7 +22,7 @@ boundary.
 - **Significant or architectural changes** (anything touching the scrubber, the privacy
   boundary, the agent/MCP surface, licensing, or public APIs): proposed as an issue or an
   ADR under `docs/adr/` and decided by the maintainer after discussion.
-- **Non-negotiable invariant:** no change may weaken the NPI guarantee or expose a
+- **Non-negotiable invariant:** no change may weaken the scrub boundary or expose a
   destructive/direct-write capability on the autonomous agent surface. This overrides
   convenience, feature requests, and contributor preference.
 

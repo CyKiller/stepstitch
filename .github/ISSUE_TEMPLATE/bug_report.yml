@@ -43,9 +43,9 @@ body:
     validations:
       required: true
   - type: checkboxes
-    id: no-npi
+    id: customer-data-removed
     attributes:
       label: Confirmation
       options:
-        - label: This report contains no NPI / real user data
+        - label: I have removed customer data and real user data from this report
           required: true

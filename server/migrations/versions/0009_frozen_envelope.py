@@ -19,7 +19,7 @@ application destroys the red baseline, the one artefact that cannot be recreated
 
 ``execution_envelope_json`` is not decoration. A refusal whose message is two hex prefixes
 is undiagnosable, and developers work around checks they cannot read; storing the frozen
-record lets the refusal say *which field moved*. It carries no NPI — config settings, a
+record lets the refusal say *which field moved*. It carries no raw values — config settings, a
 browser version, and environment variable NAMES, never values.
 """
 from __future__ import annotations

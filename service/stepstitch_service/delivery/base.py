@@ -10,7 +10,7 @@ surface. A write happens only when ALL of these hold:
 3. It was not a dry run (dry run is the default).
 
 The payload sent is *exactly* the ``assert_flat``-validated draft the export-preview
-endpoints return — never anything more. That keeps the no-NPI guarantee intact: direct-write
+endpoints return — never anything more. That keeps the scrub boundary intact: direct-write
 changes only *where the draft goes*, never *what is in it*.
 """
 from __future__ import annotations

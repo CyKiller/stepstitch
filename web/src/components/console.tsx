@@ -38,7 +38,7 @@ const panels: Panel[] = [
   {
     icon: Eye,
     title: "See exactly what the model sees",
-    desc: "For any trace, preview the literal MCP payload an agent receives — alongside the never-captured list — before you approve a connection. No screens, values, or PII ever leave the boundary.",
+    desc: "For any trace, preview the literal MCP payload an agent receives — alongside the never-captured list — before you approve a connection. It is self-hosted, so nothing leaves your boundary at all.",
     proof: "GET /session/{id}/privacy-posture",
   },
   {

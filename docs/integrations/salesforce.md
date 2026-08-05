@@ -19,11 +19,11 @@ Deploy these six custom fields once. They are the exact fields the draft emits:
 
 | API name | Type | Notes |
 |---|---|---|
-| `StepStitchTraceId__c` | Text(255), External ID | Opaque trace id (no NPI); enables reverse lookup |
+| `StepStitchTraceId__c` | Text(255), External ID | Opaque trace id (no raw values); enables reverse lookup |
 | `RouteTemplate__c` | Text(255) | Templated route, e.g. `/accounts/:id` |
 | `ReplayabilityScore__c` | Number(3,2) | 0.00–1.00 reproducibility score |
 | `ReplayabilityGrade__c` | Text(1) | Letter grade A–F |
-| `PrivacyStatus__c` | Text(40) | e.g. `Scrubbed / No NPI` |
+| `PrivacyStatus__c` | Text(40) | e.g. `Policy scrubbed / data unverified` |
 | `PlaywrightReproLink__c` | Text(255) | Internal-only pointer; never a public URL |
 
 Stock built-in Case fields used by the draft: `Subject` (capped to 255 chars by StepStitch),
