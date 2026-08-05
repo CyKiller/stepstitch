@@ -71,8 +71,20 @@ async function openGovernance(page: import("@playwright/test").Page) {
   // then we navigate like an operator — by clicking the Governance tab.
   await page.goto("about:blank")
   await page.goto(`${HOST}/dashboard#ss=${ADMIN_TOKEN}`)
+
+  // Wait for the READ the view depends on, not for the text it eventually paints.
+  // renderGovernance() fetches /admin/config/scrub and /audit before it can draw
+  // anything; on a cold CI runner those two round-trips against a just-booted host
+  // outran the default 5s expect timeout, and the failure looked like "Scrub policy
+  // is missing" rather than "the page had not finished loading". Waiting on the
+  // response is deterministic — no sleep, no retry, no flake laundered into a pass.
+  const config = page.waitForResponse(
+    (r) => r.url().includes("/admin/config/scrub") && r.request().method() === "GET",
+    { timeout: 30_000 },
+  )
   await page.getByText("Governance").first().click()
-  await expect(page.getByText("Scrub policy").first()).toBeVisible()
+  await config
+  await expect(page.getByText("Scrub policy").first()).toBeVisible({ timeout: 15_000 })
 }
 
 test("a saved pattern survives a full reload — the save actually persists", async ({ page }) => {
