@@ -4,6 +4,28 @@ All notable changes to StepStitch are recorded here. Versions are repo-wide tags
 SDK (`@stepstitch/tracker`) and the backend (`stepstitch_service`) are versioned in
 lockstep per `RELEASE.md`.
 
+## [0.11.0](https://github.com/CyKiller/stepstitch/compare/v0.10.0...v0.11.0) (2026-08-07)
+
+
+### Features
+
+* **ci:** the financial chain, executed end to end with no mocks ([eedd440](https://github.com/CyKiller/stepstitch/commit/eedd4402f9c171395642abc60f55fdb480410039))
+* **cli:** stepstitch policy verify - the tenant fixture validator ([d80ed60](https://github.com/CyKiller/stepstitch/commit/d80ed609ab981cc8feac9ea97c2ff5e8365d2ff0))
+* **host:** draft / ready / reproduced / confirmed_fixed, and the missing prerequisite by name ([86aee2d](https://github.com/CyKiller/stepstitch/commit/86aee2dc87a093535d5eadacf280f698d48b5306))
+* **service:** financial-services-strict — the deny-by-default capture profile ([469de1b](https://github.com/CyKiller/stepstitch/commit/469de1b704cc01bb3a4d585d2a52fec7fafa2a3d))
+
+
+### Bug Fixes
+
+* close six defects this release's own audit found ([0c35997](https://github.com/CyKiller/stepstitch/commit/0c359977d28461dd440a42b2de1b6f14b9ce1265))
+* enforce the truthfulness policy across the whole repository, not 11 files ([9f3726f](https://github.com/CyKiller/stepstitch/commit/9f3726f7627d14c40fd21d0b135f269b56b4c3df))
+* guard all four ledger rows, not two ([429ae83](https://github.com/CyKiller/stepstitch/commit/429ae83db1a609404b06ae66daa526358f317f7b))
+* **host:** the browser probe must not block the event loop ([f72c2c9](https://github.com/CyKiller/stepstitch/commit/f72c2c99dab942b6807889757f44e00bc9220d06))
+* **host:** the scrub editor actually saves, and strict tenants can scope their allowlists ([93d75d8](https://github.com/CyKiller/stepstitch/commit/93d75d839ef5ab8b0b2040e28fe113e75711860b))
+* **service:** unknown ingest keys 422 at the door, and strict-schema scrub primitives ([f336569](https://github.com/CyKiller/stepstitch/commit/f336569d1741a0147b9eac33d8f687d7377ee283))
+* **web:** a claim registry, and a demo whose red-to-green was actually measured ([b97d363](https://github.com/CyKiller/stepstitch/commit/b97d363b86fc2311f04fb775ad12e00e3e3cdce2))
+* **web:** the contact form never fakes success, and production proves its relay ([e0432a1](https://github.com/CyKiller/stepstitch/commit/e0432a18605c87cd558e67e0462ca91900917e5b))
+
 ## [0.10.0](https://github.com/CyKiller/stepstitch/compare/v0.9.1...v0.10.0) (2026-07-31)
 
 
