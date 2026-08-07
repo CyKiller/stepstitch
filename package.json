@@ -58,7 +58,7 @@
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json && node scripts/finalize-dist.mjs",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build && npm run type-check && npm test",
-    "type-check": "tsc -p tsconfig.json --noEmit && tsc -p tests/doc-examples/tsconfig.json --noEmit && tsc -p tests/e2e/tsconfig.json --noEmit",
+    "type-check": "tsc -p tsconfig.json --noEmit && tsc -p tests/doc-examples/tsconfig.json --noEmit && tsc -p tests/e2e/tsconfig.json --noEmit && tsc -p tests/status-ledger.tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "stamp": "node scripts/stamp-build.mjs",

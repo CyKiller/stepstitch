@@ -1,0 +1,14 @@
+{
+  // The ledger guard shells out to `vitest list` and reads docs/STATUS.md, so it needs
+  // node builtins. The root project keeps "types": [] on purpose — the SDK and its
+  // browser tests must never quietly start depending on node globals — so this guard
+  // type-checks under its own project, exactly like tests/doc-examples and tests/e2e.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true,
+    "declaration": false
+  },
+  "include": ["./status-ledger.test.ts"],
+  "exclude": []
+}

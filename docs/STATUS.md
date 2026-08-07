@@ -14,16 +14,20 @@ pushed.
 |---|---|---|
 | Service (compiler, router, privacy, connectors) | **703** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **223** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
-| SDK (type-check + redaction proof) | **38** | `npx vitest run` |
-| Web (marketing site + copy claims) | **101** | `cd web && npx vitest run` |
+| SDK (type-check + redaction proof) | **40** | `npx vitest run` |
+| Web (marketing site + copy claims) | **149** | `cd web && npx vitest run` |
 
-Counts are the number pytest/vitest **collect**, and they are enforced: each suite verifies
-its own row (`test_status_ledger.py`, `test_status_ledger_host.py`),
+Counts are the number pytest/vitest **collect**, and every row is enforced: each suite
+verifies its own row — `test_status_ledger.py` (Service), `test_status_ledger_host.py`
+(Host), `tests/status-ledger.test.ts` (SDK) and `web/tests/status-ledger.test.ts` (Web) —
 so CI fails if this table drifts or cites a test that does not exist. The check is split
 per suite deliberately — the Service job does not install the host's dependencies, so
 counting `server/tests` from there under-reports without erroring. The old version of this
 doc sat a month stale claiming "183 service + 31 host" and naming a proof that was not in
-the repository.
+the repository. The Web row then repeated the mistake at a different level: only Service
+and Host were guarded, so the row read 101 against an actual 148 and nothing failed. The
+SDK guard now also asserts that *every* row in this table names a guard that exists, and
+that no guard outlives its row, so coverage cannot silently shrink again.
 
 Also blocking: `ruff`, `mypy`, `tsc --noEmit`, `eslint`, CodeQL, the executable-repro proof
 (`scripts/prove-repro-executes.mjs`), the compliance-evidence drift guard, the import-linter
