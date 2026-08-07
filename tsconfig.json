@@ -14,10 +14,16 @@
     "types": []
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"],
-  // The doc-examples and e2e suites need node builtins (fs, child_process); they
-  // type-check under their own projects (tests/doc-examples/tsconfig.json,
-  // tests/e2e/tsconfig.json, chained in the type-check script) so THIS project
-  // keeps "types": [] — the SDK and its browser tests must never quietly start
-  // depending on node globals.
-  "exclude": ["tests/doc-examples.test.ts", "tests/doc-examples", "tests/e2e"]
+  // The doc-examples, e2e and status-ledger suites need node builtins (fs,
+  // child_process); they type-check under their own projects
+  // (tests/doc-examples/tsconfig.json, tests/e2e/tsconfig.json,
+  // tests/status-ledger.tsconfig.json, chained in the type-check script) so THIS
+  // project keeps "types": [] — the SDK and its browser tests must never quietly
+  // start depending on node globals.
+  "exclude": [
+    "tests/doc-examples.test.ts",
+    "tests/doc-examples",
+    "tests/e2e",
+    "tests/status-ledger.test.ts"
+  ]
 }
