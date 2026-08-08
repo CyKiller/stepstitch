@@ -12,7 +12,7 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **720** | `PYTHONPATH=service pytest service/tests/` |
+| Service (compiler, router, privacy, connectors) | **731** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **223** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **40** | `npx vitest run` |
 | Web (marketing site + copy claims) | **154** | `cd web && npx vitest run` |
@@ -134,6 +134,7 @@ repros-scoped token → verify.mjs with a verify-scoped token → freeze/verify-
 | Open-core split (adapters injected, never imported by core) | `router.py` + `integrations/bundle.py` | `test_open_core_boundary.py` + import-linter contract |
 | Compliance pack — regulatory crosswalk + model-risk principles (informational), profile-aware | `compliance.py` | `test_compliance.py` (crosswalk + drift guard) |
 | Reproduction Success corpus — 11 categories; ready-rate, refusal-naming, byte-determinism, intended-red gates | `repro_eval.py` + `examples/repro/` | `test_repro_corpus.py` + `prove-repro-corpus.mjs` (e2e-proof) |
+| `stepstitch init` — guided wiring: scaffold, repro config, sample report, idempotent uninstall | `scaffold.py` + `cli.py run_init` | `test_init.py` + clean-install `first-run` (3 OSes) |
 | Supply chain — SBOM, SRI, provenance-signed publish | `scripts/`, `RELEASE.md`, `.github/workflows/release.yml` | `sbom.cdx.json`, signed release assets |
 
 ## Architecture decision: StepStitch core, integrations at the edge

@@ -6,6 +6,21 @@ here is self-hosted and Apache-2.0 — no account, no SaaS, no credentials.
 > Prefer to watch first? The [red-to-green demo](https://stepstitch.vercel.app/demo) runs
 > the whole loop end-to-end in the browser.
 
+## The guided path
+
+With a local host running (`npx stepstitch start`), one command scaffolds the wiring
+below into your app — the same-origin ingest proxy, a safe tracker wrapper, and the
+report control — detects your framework, configures a synthetic reproduction, and sends
+one sample report so you can see a trace in the console immediately:
+
+```bash
+npx stepstitch init
+```
+
+It never overwrites a file you have edited, never writes a credential into a file, and
+`npx stepstitch init --uninstall` removes exactly what it created. The manual steps
+below remain the reference for what the generated files do.
+
 ## 1. Install the SDK
 
 ```bash

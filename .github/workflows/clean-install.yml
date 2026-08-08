@@ -284,6 +284,45 @@ jobs:
         shell: bash
         run: test -f "$RUNNER_TEMP/local.db"
 
+      # `stepstitch init` against the running host: scaffold an express-shaped app,
+      # verify the files + repro config + sample report actually landed, then prove
+      # --uninstall removes exactly what init wrote. The shim passes argv through, so
+      # this is the same `npx stepstitch init` a stranger runs.
+      - name: stepstitch init wires an app end-to-end, and uninstalls cleanly
+        shell: bash
+        env:
+          STEPSTITCH_SERVICE_SPEC: ./service[local]
+          STEPSTITCH_AUTO_INSTALL: "1"
+          STEPSTITCH_ADMIN_TOKEN: ci-admin-token
+          STEPSTITCH_INGEST_TOKEN: ci-ingest-token
+        run: |
+          APP="$RUNNER_TEMP/init-app"
+          mkdir -p "$APP"
+          printf '{"dependencies": {"express": "4.19.0"}}' > "$APP/package.json"
+          node packages/cli-shim/bin/stepstitch.js init \
+            --dir "$APP" --host http://127.0.0.1:8321 --app-id init-sample --json \
+            | tee /tmp/init.json
+          grep -q '"framework": "express"' /tmp/init.json
+          grep -q '"trace_id"' /tmp/init.json
+          test -f "$APP/stepstitch/ingest-proxy.mjs"
+          test -f "$APP/stepstitch/tracker-setup.js"
+          test -f "$APP/stepstitch/README.md"
+          # No secret value in any generated file or output.
+          ! grep -R "ci-ingest-token" "$APP" /tmp/init.json
+          ! grep -R "ci-admin-token" "$APP" /tmp/init.json
+          # The repro config landed on the host.
+          curl -sf -H "Authorization: Bearer ci-admin-token" \
+            http://127.0.0.1:8321/admin/config/repro | grep -q '"base_url"'
+          # The sample report is queryable.
+          curl -sf -H "Authorization: Bearer ci-admin-token" \
+            "http://127.0.0.1:8321/api/stepstitch/v1/sessions?limit=50" \
+            | grep -q '"init-sample"'
+          # Uninstall removes exactly what init wrote; the user's file survives.
+          node packages/cli-shim/bin/stepstitch.js init --dir "$APP" --uninstall
+          test ! -e "$APP/stepstitch"
+          test ! -e "$APP/.stepstitch-init.json"
+          test -f "$APP/package.json"
+
       - name: Stop the server
         if: always()
         shell: bash
