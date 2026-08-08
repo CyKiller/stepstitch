@@ -64,5 +64,7 @@ sanitized trace via `GET /stepstitch/v1/correlation/stepstitch:<trace_id>/summar
 - Capture is OFF until consent; honors GPC/DNT; org-wide kill switch for incident response.
 - Server-side scrubber drops NPI independent of the SDK; profiles may only *tighten* the
   boundary.
-- Crosswalk cites **SEC Reg S-P (2024)** and the **April-2026 interagency MRM guidance**
-  (superseding SR 11-7). See `COMPLIANCE-EVIDENCE.md`.
+- Crosswalk cites **SEC Reg S-P (2024)** and **NIST AI RMF**. The packet's model-risk
+  section is informational only — the April-2026 interagency MRM guidance (OCC Bulletin
+  2026-13) excludes generative/agentic AI from its scope, so StepStitch does not claim
+  its controls satisfy it. See `COMPLIANCE-EVIDENCE.md`.

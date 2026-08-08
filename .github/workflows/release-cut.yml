@@ -1,0 +1,72 @@
+name: release-cut (manual tag + GitHub release)
+
+# The ONLY way a StepStitch release tag comes into existence. release-please
+# maintains the version PR but never tags (skip-github-release); a human runs this
+# workflow to mint the tag + GitHub release, and the run summary records who.
+# Publication is still a second, separately-approved step: release.yml's publish
+# jobs sit behind the protected `release` environment, so even this tag cannot
+# ship artifacts until the environment approval is granted.
+#
+# Note the tag created here uses GITHUB_TOKEN, so it deliberately does NOT
+# auto-trigger release.yml (GitHub suppresses workflow-to-workflow triggers).
+# Publishing is always an explicit dispatch of release.yml with the version input.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to cut (e.g. 0.12.0). Must equal the version already on main."
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  cut:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+      - name: The requested version must be what main already says it is
+        run: |
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION#v}"
+          for probe in \
+            "node -p require('./package.json').version" \
+            "node -p require('./packages/cli-shim/package.json').version"; do
+            GOT="$($probe)"
+            if [ "$GOT" != "$VERSION" ]; then
+              echo "::error::main is at ${GOT}, not ${VERSION} — merge the release-please PR first."
+              exit 1
+            fi
+          done
+          grep -q "^version = \"${VERSION}\"" service/pyproject.toml || {
+            echo "::error::service/pyproject.toml disagrees with ${VERSION}"; exit 1; }
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null || \
+             git ls-remote --exit-code --tags origin "v${VERSION}" >/dev/null 2>&1; then
+            echo "::error::tag v${VERSION} already exists"; exit 1
+          fi
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+      - name: Create tag + GitHub release (notes from CHANGELOG)
+        run: |
+          SHA="$(git rev-parse HEAD)"
+          # Extract this version's CHANGELOG section for the release notes.
+          awk -v ver="$VERSION" '
+            $0 ~ "^#+ \\[?"ver"\\]?" {grab=1; next}
+            grab && /^#+ \[?[0-9]+\./ {exit}
+            grab {print}
+          ' CHANGELOG.md > /tmp/notes.md
+          [ -s /tmp/notes.md ] || echo "Release v${VERSION}" > /tmp/notes.md
+          gh release create "v${VERSION}" --target "$SHA" \
+            --title "v${VERSION}" --notes-file /tmp/notes.md
+          {
+            echo "## Release cut record"
+            echo "- **Version:** v${VERSION}"
+            echo "- **Commit:** ${SHA}"
+            echo "- **Cut by:** @${GITHUB_ACTOR}"
+            echo "- **Next step:** dispatch \`release (publish on tag)\` with version ${VERSION};"
+            echo "  publication waits for approval on the \`release\` environment."
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          GH_TOKEN: ${{ github.token }}

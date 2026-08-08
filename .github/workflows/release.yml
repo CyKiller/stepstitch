@@ -1,11 +1,13 @@
 name: release (publish on tag)
 
-# Triggered by the version tag release-please creates on merge. The `verify` job runs the
-# FULL CI gate set by calling .github/workflows/ci.yml as a reusable workflow (same jobs as
-# a PR — sdk/web/service/host/e2e-proof/compliance), so a release can never publish past a
-# gate that CI would fail. Only after those gates pass does it publish npm + PyPI + Docker
-# (GHCR, multi-arch) and attach SBOM + SRI to the release. Token-gated steps skip cleanly
-# when their secret is not configured, so a tag never hard-fails a half-configured project.
+# Runs for a version tag (cut manually via release-cut.yml — release-please no longer
+# tags) or a manual dispatch. The `verify` job runs the FULL CI gate set by calling
+# .github/workflows/ci.yml as a reusable workflow (same jobs as a PR — sdk/web/service/
+# host/e2e-proof/compliance), so a release can never publish past a gate that CI would
+# fail. The publish jobs additionally sit behind the protected `release` environment:
+# nothing reaches npm/PyPI/GHCR until CyKiller approves the parked run, no matter how
+# the workflow was triggered. Token-gated steps skip cleanly when their secret is not
+# configured, so a tag never hard-fails a half-configured project.
 on:
   push:
     tags: [ "v*.*.*" ]
@@ -36,6 +38,9 @@ jobs:
   npm:
     name: publish npm + release assets
     needs: verify
+    # Publication requires human approval on the protected `release` environment —
+    # a tag alone (however it was created) parks here until CyKiller approves.
+    environment: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -97,6 +102,7 @@ jobs:
   pypi:
     name: publish PyPI
     needs: verify
+    environment: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -187,6 +193,7 @@ jobs:
   docker:
     name: build + push images (GHCR, multi-arch)
     needs: verify
+    environment: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

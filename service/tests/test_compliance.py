@@ -43,16 +43,35 @@ def test_evidence_states_never_captured_categories():
     assert "Screenshots" in doc
 
 
-def test_fs_crosswalk_cites_reg_sp_and_2026_mrm():
+def test_fs_crosswalk_cites_reg_sp_not_mrm():
     doc = build_evidence()  # default = financial-services-enterprise
     assert "## Regulatory crosswalk" in doc
     assert "SEC Reg S-P (2024)" in doc
-    assert "supersedes SR 11-7" in doc
-    # The MRM section reframes the gates as validation evidence.
-    assert "## Model risk management evidence" in doc
+    # The 2026 interagency MRM guidance excludes generative/agentic AI from its
+    # scope and is non-enforceable (OCC Bulletin 2026-13) — it must never appear
+    # as a crosswalk column, i.e. as a regime StepStitch's controls satisfy.
+    assert "| Control | SEC Reg S-P (2024) | NIST AI RMF |" in doc
     assert "`test_repro_eval.py`" in doc
     # The FS profile must NOT advertise HIPAA as a controlling regime.
     assert "HIPAA" not in doc
+
+
+def test_model_risk_section_is_informational_not_applicability():
+    """The packet may describe model-risk principles but must not claim the 2026
+    interagency guidance applies to StepStitch or the agents it governs."""
+    doc = build_evidence()
+    # The old applicability section is gone.
+    assert "## Model risk management evidence" not in doc
+    assert "MRM role" not in doc
+    # The informational replacement states the scope exclusion in plain words.
+    assert "## Model-risk principles (informational)" in doc
+    assert "not within the scope" in doc
+    assert "does not claim" in doc
+    # Any mention of the guidance carries the exclusion, never an applicability
+    # framing: the gates are engineering controls, not "validation evidence
+    # under" the guidance.
+    assert "gates are the validation" not in doc
+    assert "Engineering-control role" in doc
 
 
 def test_healthcare_profile_crosswalk_cites_hipaa_not_reg_sp():

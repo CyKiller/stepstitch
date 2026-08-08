@@ -115,11 +115,12 @@ Open-core boundary is now real and **enforced**, not just declared:
 
 ### P4 — Governance/compliance pack  ✅ **SHIPPED**  *(the axis-2/3 moat — corrected frameworks)*
 The compliance evidence packet (`compliance.py` → `COMPLIANCE-EVIDENCE.md`) now carries a
-code-derived, profile-aware **regulatory crosswalk** + **MRM evidence** section:
-- **FS profile → SEC Reg S-P (2024) + the April-2026 interagency MRM guidance superseding SR 11-7** + NIST AI RMF. *(Not GLBA/NAIC — earlier mis-cite, corrected.)*
-- **`healthcare-strict` → HIPAA** + NIST AI RMF (Reg S-P/MRM columns dropped).
-- The release gates (golden path, scrubber, profile drift, repro-executes, **the P5 eval**, the import-linter contract, the evidence drift guard) are reframed as named MRM validation / ongoing-monitoring evidence.
-- **Acceptance (green):** `test_compliance.py` — `test_fs_crosswalk_cites_reg_sp_and_2026_mrm`, `test_healthcare_profile_crosswalk_cites_hipaa_not_reg_sp`, plus the existing drift guard (committed packet == live policy).
+code-derived, profile-aware **regulatory crosswalk** + an informational **model-risk
+principles** section:
+- **FS profile → SEC Reg S-P (2024) + NIST AI RMF.** *(Not GLBA/NAIC — earlier mis-cite, corrected. Not the April-2026 interagency MRM guidance either — OCC Bulletin 2026-13 excludes generative/agentic AI from its scope, is non-enforceable, and excludes deterministic rule-based software from its model definition; corrected 2026-08-08, same class of fix as the GLBA retraction.)*
+- **`healthcare-strict` → HIPAA** + NIST AI RMF (Reg S-P column dropped).
+- The release gates (golden path, scrubber, profile drift, repro-executes, **the P5 eval**, the import-linter contract, the evidence drift guard) are stated as named engineering controls an institution's own model-risk program may map to its internal principles — never as satisfying the 2026 guidance.
+- **Acceptance (green):** `test_compliance.py` — `test_fs_crosswalk_cites_reg_sp_not_mrm`, `test_model_risk_section_is_informational_not_applicability`, `test_healthcare_profile_crosswalk_cites_hipaa_not_reg_sp`, plus the existing drift guard (committed packet == live policy).
 
 ### P5 — Eval harness  ✅ **SHIPPED**  *(quality bar every adapter inherits)*
 `test_repro_eval.py` is a quality oracle over the compiler + scorer that fails on a bad

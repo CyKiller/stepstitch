@@ -169,8 +169,7 @@ export default function FinancialServicesPilotPage() {
             <p className="mt-3 text-[15px] leading-relaxed text-muted">
               Hand your reviewer the packet generated from the live scrub policy — it cannot drift
               from what the server actually enforces. It crosswalks the controls to SEC Reg S-P
-              (2024), the 2026 interagency model-risk guidance, and NIST AI RMF, and names the test
-              that backs each one.
+              (2024) and NIST AI RMF, and names the test that backs each one.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {["COMPLIANCE-EVIDENCE.md", "RELEASE.md", "INCIDENT-RESPONSE.md", "THREAT-MODEL.md"].map((g) => (

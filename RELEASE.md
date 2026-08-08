@@ -5,21 +5,32 @@ review before any third-party JS touches a customer-facing app; this runbook pro
 the artifacts that review signs against: a **reproducible build**, an **SBOM**, an
 **SRI hash**, and a **signed, provenance-bearing release**.
 
-## Automated release (preferred)
+## Release flow (human-approved at two points)
 
-Releases are automated end-to-end:
+Automation prepares everything; publication requires two deliberate human acts:
 
 1. **Commit** with [Conventional Commits](https://www.conventionalcommits.org/)
    (`feat:`, `fix:`, …). On push to `main`, **release-please** opens/updates a release PR
    that bumps the three version locations in lockstep — `package.json`, `src/tracker.ts`,
    `service/pyproject.toml` (each carries an `x-release-please-version` annotation) — and
    updates `CHANGELOG.md`.
-2. **Merge the release PR.** release-please creates the GitHub Release + `vX.Y.Z` tag.
-3. The tag triggers **`.github/workflows/release.yml`**, which runs all gates, then:
+2. **Merge the release PR.** This only writes versions + changelog. It does **not** tag
+   or release anything (`skip-github-release`).
+3. **Cut the release (human act #1).** Dispatch **`release-cut.yml`** with the version.
+   It refuses a version that doesn't match `main`, creates the `vX.Y.Z` tag + GitHub
+   Release from the CHANGELOG, and records who cut it in the run summary.
+4. **Approve publication (human act #2).** Dispatch **`.github/workflows/release.yml`**
+   (`gh workflow run release.yml --ref main -f version=X.Y.Z`). Its publish jobs sit
+   behind the protected **`release` environment** and park until CyKiller approves the
+   run in the GitHub UI — no matter how the workflow was triggered. Once approved it
+   runs all gates, then:
    - `npm publish --provenance` (`@stepstitch/tracker`),
    - `python -m build` + PyPI publish (`stepstitch-service`),
    - multi-arch Docker build + push to GHCR (`stepstitch-api`, `stepstitch-mcp`),
    - attaches `sbom.cdx.json` + the SRI hash to the release.
+
+A stray tag pushed by hand still parks at the environment approval — nothing can reach
+npm, PyPI, or GHCR without an explicit approval by CyKiller.
 
 **Required repository secrets** (publish steps skip cleanly if absent):
 `NPM_TOKEN`, `PYPI_API_TOKEN`. GHCR uses the built-in `GITHUB_TOKEN`. Optional:

@@ -5,6 +5,7 @@
       "release-type": "node",
       "package-name": "@stepstitch/tracker",
       "include-component-in-tag": false,
+      "skip-github-release": true,
       "extra-files": [
         "src/tracker.ts",
         "service/pyproject.toml",
