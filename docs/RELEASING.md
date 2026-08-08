@@ -18,12 +18,16 @@ process is not careful, which is exactly the opposite of what this project claim
 1. **Land everything.** All PRs merged, `main` green, `git log <last-tag>..main` contains
    everything you intend to ship.
 2. **Merge the release-please PR** (`--admin` is required; branch protection blocks the
-   bot). This writes the version into every tracked file and creates the tag.
-3. **Dispatch `release.yml`.** The tag alone does *not* fire it in this repo — dispatch by
-   hand. On the tag: `gh workflow run release.yml --ref vX.Y.Z`. If the release workflow
-   itself was just fixed, dispatch on `main` and name the version instead:
-   `gh workflow run release.yml --ref main -f version=X.Y.Z` — a tag dispatch runs the
-   workflow *as of that tag*, which is wrong when the fix is to the workflow.
+   bot). This writes the version into every tracked file. It does **not** create the tag
+   (`skip-github-release`).
+3. **Cut the tag:** `gh workflow run release-cut.yml -f version=X.Y.Z`. It verifies the
+   version matches `main`, creates the tag + GitHub Release, and records the actor.
+4. **Dispatch `release.yml`.** On the tag: `gh workflow run release.yml --ref vX.Y.Z`. If
+   the release workflow itself was just fixed, dispatch on `main` and name the version
+   instead: `gh workflow run release.yml --ref main -f version=X.Y.Z` — a tag dispatch
+   runs the workflow *as of that tag*, which is wrong when the fix is to the workflow.
+   The publish jobs park on the protected `release` environment until CyKiller approves
+   the run (Actions → the run → "Review deployments" → approve `release`).
 4. **Verify as a stranger, from the registries:**
 
    ```bash

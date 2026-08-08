@@ -2,7 +2,11 @@ name: release-please
 
 # Opens/maintains a release PR from Conventional Commits, bumping the three version
 # locations in lockstep (package.json + src/tracker.ts + service/pyproject.toml) and
-# generating CHANGELOG.md. Merging that PR creates the git tag, which triggers release.yml.
+# generating CHANGELOG.md. Merging that PR does NOT create a tag or GitHub release
+# (skip-github-release): cutting a release is a deliberate human act via the
+# release-cut workflow (manual dispatch), and publication additionally waits for
+# approval on the protected `release` environment in release.yml. Merging product
+# work can never publish anything.
 on:
   push:
     branches: [ main ]

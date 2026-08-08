@@ -41,8 +41,12 @@ ALWAYS_STRUCTURAL = (
 )
 
 # --- Regulatory crosswalk (code-derived; cites the frameworks a reviewer applies) ----
+# The April-2026 interagency MRM guidance (OCC Bulletin 2026-13) is deliberately NOT a
+# column: it excludes generative and agentic AI from its scope, sets no enforceable
+# requirements, and excludes deterministic rule-based software from its model
+# definition — so no StepStitch control can honestly be presented as satisfying it.
+# See _model_risk_section() for the informational framing that replaced it.
 _REGSP = "SEC Reg S-P (2024)"
-_MRM = "2026 interagency MRM (supersedes SR 11-7)"
 _HIPAA = "HIPAA"
 _NIST = "NIST AI RMF"
 
@@ -50,45 +54,40 @@ _NIST = "NIST AI RMF"
 _CROSSWALK = (
     ("Server-side scrub / NPI data-minimization (`scrubber.py`)", {
         _REGSP: "Safeguards Rule — protect customer NPI",
-        _MRM: "Sound, controlled data inputs",
         _HIPAA: "Minimum-necessary; no PHI stored",
         _NIST: "MAP/MEASURE — data governance",
     }),
     ("Split retention + 5-yr audit clock (`retention.py`)", {
         _REGSP: "Recordkeeping — incident records retained 5 yrs",
-        _MRM: "Auditability & traceability of model use",
         _HIPAA: "Retain access/audit records",
         _NIST: "GOVERN — documentation & records",
     }),
     ("Admin-only reads, audit on every read (`router.py`)", {
         _REGSP: "Access controls; incident-response program",
-        _MRM: "Traceability / effective challenge",
         _HIPAA: "Access controls & audit logging",
         _NIST: "GOVERN/MANAGE — accountability",
     }),
     ("Org-wide kill switch, fail-safe (`router.py`)", {
         _REGSP: "Incident-response containment",
-        _MRM: "Controls & human override",
         _HIPAA: "Contingency / incident response",
         _NIST: "MANAGE — incident response",
     }),
     ("Deterministic compiler + replayability + eval gate "
      "(`compiler.py`, `test_repro_eval.py`)", {
         _REGSP: "—",
-        _MRM: "Ongoing monitoring & output quality",
         _HIPAA: "—",
         _NIST: "MEASURE — validity & reliability",
     }),
     ("Draft-only, human-in-the-loop (`integrations/`, `copilot/action-policy.md`)", {
         _REGSP: "—",
-        _MRM: "Human oversight — outputs support, not replace, decisions",
         _HIPAA: "—",
         _NIST: "GOVERN — human-AI configuration",
     }),
 )
 
-# Release gates reframed as model-risk validation / ongoing-monitoring evidence.
-_MRM_GATES = (
+# Release gates as named engineering controls an institution's own model-risk
+# program may map to — stated as fact, never as satisfying the 2026 guidance.
+_CONTROL_GATES = (
     ("End-to-end golden path", "`test_golden_path.py`", "System validation"),
     ("Server-side scrub boundary", "`test_scrubber.py`", "Data-control validation"),
     ("Profile drift guard", "`test_profiles.py`", "Configuration control"),
@@ -108,7 +107,7 @@ def _frameworks_for(policy: ScrubPolicy) -> List[str]:
     """The framework columns that apply to a profile."""
     if policy.name == "healthcare-strict":
         return [_HIPAA, _NIST]
-    return [_REGSP, _MRM, _NIST]
+    return [_REGSP, _NIST]
 
 
 def _crosswalk_section(policy: ScrubPolicy) -> List[str]:
@@ -129,18 +128,27 @@ def _crosswalk_section(policy: ScrubPolicy) -> List[str]:
     return lines
 
 
-def _mrm_section() -> List[str]:
+def _model_risk_section() -> List[str]:
     lines = [
-        "## Model risk management evidence",
+        "## Model-risk principles (informational)",
         "",
-        "Under the **April-2026 interagency model risk management guidance (superseding "
-        "SR 11-7)**, StepStitch's release gates are the validation & ongoing-monitoring "
-        "evidence — each a named, runnable check:",
+        "The April-2026 interagency model risk management guidance (OCC Bulletin "
+        "2026-13, superseding SR 11-7) states that generative AI and agentic AI are "
+        "\"not within the scope of this guidance\", that it sets no enforceable or "
+        "prescriptive requirements, and that deterministic rule-based software is "
+        "excluded from its definition of a model. StepStitch's pipeline is "
+        "deterministic rule-based software, and the coding agents it governs are "
+        "agentic AI — so StepStitch does not claim any control here satisfies that "
+        "guidance.",
         "",
-        "| Gate | Check | MRM role |",
+        "Stated only as engineering fact: the release gates below are named, runnable "
+        "controls an institution's own model-risk program may map to its internal "
+        "principles (auditability, ongoing monitoring, human oversight):",
+        "",
+        "| Gate | Check | Engineering-control role |",
         "|---|---|---|",
     ]
-    for gate, check, role in _MRM_GATES:
+    for gate, check, role in _CONTROL_GATES:
         lines.append(f"| {gate} | {check} | {role} |")
     lines += [
         "",
@@ -217,7 +225,7 @@ def build_evidence(policy: ScrubPolicy = FINANCIAL_SERVICES_ENTERPRISE) -> str:
 
     lines.append("")
     lines += _crosswalk_section(policy)
-    lines += _mrm_section()
+    lines += _model_risk_section()
 
     lines += [
         "## Verification",

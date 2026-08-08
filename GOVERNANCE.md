@@ -30,8 +30,9 @@ boundary.
 
 - Versioning follows [Semantic Versioning](https://semver.org/) across the three artifacts
   (npm `@stepstitch/tracker`, PyPI `stepstitch-service`, Docker images), kept in lockstep.
-- Releases are automated via Conventional Commits + release-please; publishing happens on a
-  signed git tag. See [RELEASE.md](RELEASE.md).
+- Releases are prepared via Conventional Commits + release-please, but cutting the tag is a
+  manual dispatch (`release-cut.yml`) and publication requires approval on the protected
+  `release` environment — two human acts, recorded. See [RELEASE.md](RELEASE.md).
 - Every release must pass all CI gates (type-check, SDK + service tests, executable repro
   proof, compliance evidence drift guard, layering boundary).
 

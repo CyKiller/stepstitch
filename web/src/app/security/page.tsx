@@ -13,7 +13,7 @@ import { GITHUB_URL } from "@/lib/links";
 export const metadata: Metadata = {
   title: "Security & compliance — StepStitch",
   description:
-    "How StepStitch stays audit-ready: a two-layer privacy boundary, a never-captured list, deployment profiles, and a crosswalk to SEC Reg S-P, 2026 MRM guidance, and NIST AI RMF. Open source, so you can verify it.",
+    "How StepStitch stays audit-ready: a two-layer privacy boundary, a never-captured list, deployment profiles, and a crosswalk to SEC Reg S-P and NIST AI RMF. Open source, so you can verify it.",
 };
 
 const neverCaptured = [
@@ -29,7 +29,7 @@ const neverCaptured = [
 
 const crosswalk = [
   ["SEC Reg S-P (2024)", "Safeguards and recordkeeping. Incident records retained five years."],
-  ["2026 interagency MRM guidance", "Auditability, ongoing monitoring, and human oversight of model use (supersedes SR 11-7)."],
+  ["Internal model-risk principles", "Named, runnable gates for auditability, monitoring, and human oversight. The 2026 interagency MRM guidance excludes generative and agentic AI from its scope, so StepStitch does not claim it applies."],
   ["NIST AI RMF", "Data governance, documentation, accountability, incident response."],
 ];
 

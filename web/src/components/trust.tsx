@@ -8,8 +8,8 @@ const crosswalk = [
     note: "Safeguards and recordkeeping. Incident records retained five years.",
   },
   {
-    name: "2026 interagency MRM guidance",
-    note: "Auditability, ongoing monitoring, and human oversight of model use.",
+    name: "Internal model-risk principles",
+    note: "Named, runnable gates for auditability, monitoring, and human oversight. The 2026 interagency MRM guidance excludes generative and agentic AI from its scope, so StepStitch does not claim it applies.",
   },
   {
     name: "NIST AI RMF",

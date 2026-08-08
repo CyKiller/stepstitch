@@ -89,20 +89,22 @@ Every ingestion is scrubbed server-side before storage, independent of the SDK (
 
 The controls above mapped to the frameworks a regulated reviewer applies (columns selected for the `financial-services-enterprise` profile).
 
-| Control | SEC Reg S-P (2024) | 2026 interagency MRM (supersedes SR 11-7) | NIST AI RMF |
-|---|---|---|---|
-| Server-side scrub / NPI data-minimization (`scrubber.py`) | Safeguards Rule — protect customer NPI | Sound, controlled data inputs | MAP/MEASURE — data governance |
-| Split retention + 5-yr audit clock (`retention.py`) | Recordkeeping — incident records retained 5 yrs | Auditability & traceability of model use | GOVERN — documentation & records |
-| Admin-only reads, audit on every read (`router.py`) | Access controls; incident-response program | Traceability / effective challenge | GOVERN/MANAGE — accountability |
-| Org-wide kill switch, fail-safe (`router.py`) | Incident-response containment | Controls & human override | MANAGE — incident response |
-| Deterministic compiler + replayability + eval gate (`compiler.py`, `test_repro_eval.py`) | — | Ongoing monitoring & output quality | MEASURE — validity & reliability |
-| Draft-only, human-in-the-loop (`integrations/`, `copilot/action-policy.md`) | — | Human oversight — outputs support, not replace, decisions | GOVERN — human-AI configuration |
+| Control | SEC Reg S-P (2024) | NIST AI RMF |
+|---|---|---|
+| Server-side scrub / NPI data-minimization (`scrubber.py`) | Safeguards Rule — protect customer NPI | MAP/MEASURE — data governance |
+| Split retention + 5-yr audit clock (`retention.py`) | Recordkeeping — incident records retained 5 yrs | GOVERN — documentation & records |
+| Admin-only reads, audit on every read (`router.py`) | Access controls; incident-response program | GOVERN/MANAGE — accountability |
+| Org-wide kill switch, fail-safe (`router.py`) | Incident-response containment | MANAGE — incident response |
+| Deterministic compiler + replayability + eval gate (`compiler.py`, `test_repro_eval.py`) | — | MEASURE — validity & reliability |
+| Draft-only, human-in-the-loop (`integrations/`, `copilot/action-policy.md`) | — | GOVERN — human-AI configuration |
 
-## Model risk management evidence
+## Model-risk principles (informational)
 
-Under the **April-2026 interagency model risk management guidance (superseding SR 11-7)**, StepStitch's release gates are the validation & ongoing-monitoring evidence — each a named, runnable check:
+The April-2026 interagency model risk management guidance (OCC Bulletin 2026-13, superseding SR 11-7) states that generative AI and agentic AI are "not within the scope of this guidance", that it sets no enforceable or prescriptive requirements, and that deterministic rule-based software is excluded from its definition of a model. StepStitch's pipeline is deterministic rule-based software, and the coding agents it governs are agentic AI — so StepStitch does not claim any control here satisfies that guidance.
 
-| Gate | Check | MRM role |
+Stated only as engineering fact: the release gates below are named, runnable controls an institution's own model-risk program may map to its internal principles (auditability, ongoing monitoring, human oversight):
+
+| Gate | Check | Engineering-control role |
 |---|---|---|
 | End-to-end golden path | `test_golden_path.py` | System validation |
 | Server-side scrub boundary | `test_scrubber.py` | Data-control validation |
