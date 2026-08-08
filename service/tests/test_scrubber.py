@@ -31,7 +31,9 @@ from stepstitch_service.scrubber import (
     [
         ("My SSN is 123-45-6789 ok", "ssn", "[redacted:ssn]"),
         ("card 4111 1111 1111 1111 here", "card", "[redacted:card]"),
-        ("acct 1234567890123 done", "card", "[redacted:card]"),
+        # 13 digits but an invalid Luhn checksum: still redacted, labeled as the
+        # generic identifier it is — Luhn narrows the label, never the coverage.
+        ("acct 1234567890123 done", "number", "[redacted:number]"),
         ("call me at (555) 123-4567", "phone", "[redacted:phone]"),
         ("email jane.doe@example.com please", "email", "[redacted:email]"),
         ("born 04/12/1980 fyi", "date", "[redacted:date]"),

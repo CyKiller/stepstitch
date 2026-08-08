@@ -43,7 +43,12 @@ def test_shipped_financial_pack_holds():
     # The pack must actually cover the gate list, not just pass.
     names = " ".join(r.name for r in run.results)
     for shape in ("ssn", "name-and-address", "semantic-route", "semantic-selector",
-                  "email", "unmask", "account"):
+                  "email", "unmask", "account",
+                  # PCI account-data shapes (CHD + SAD): PAN with valid AND invalid
+                  # Luhn, expiry+CVV context, track-data and PIN-block shapes. The
+                  # strict schema refuses them; these fixtures prove that refusal.
+                  "pan-luhn-valid", "pan-luhn-invalid", "expiry-and-cvv",
+                  "track-data", "pin-block"):
         assert shape in names, f"fixture pack lost its {shape} coverage"
     # Every hostile fixture (everything but the clean control) ends neutralized.
     for r in run.results:
@@ -178,7 +183,7 @@ def test_cli_exit_codes(tmp_path, capsys):
     # 0: the shipped pack passes.
     assert cli_main(["policy", "verify", str(FIXTURES_PATH)]) == 0
     out = capsys.readouterr().out
-    assert "13/13 fixtures passed" in out
+    assert "19/19 fixtures passed" in out
 
     # 1: a failing pack (the leak case above).
     failing = tmp_path / "failing.json"
@@ -210,7 +215,7 @@ def test_cli_json_output_is_machine_readable(capsys):
     body = json.loads(capsys.readouterr().out)
     assert body["ok"] is True
     assert body["profile"] == "financial-services-strict"
-    assert len(body["results"]) == 13
+    assert len(body["results"]) == 19
 
 
 def test_profile_override_flag_wins(capsys):

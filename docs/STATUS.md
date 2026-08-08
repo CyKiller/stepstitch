@@ -12,7 +12,7 @@ pushed.
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **732** | `PYTHONPATH=service pytest service/tests/` |
+| Service (compiler, router, privacy, connectors) | **741** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **227** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **40** | `npx vitest run` |
 | Web (marketing site + copy claims) | **154** | `cd web && npx vitest run` |
@@ -48,10 +48,10 @@ repros-scoped token → verify.mjs with a verify-scoped token → freeze/verify-
 | Drop-in "Report a problem" widget (framework-agnostic, zero-dep) | `src/reporter.ts` | `tests/reporter.test.ts` |
 | Deterministic Playwright compiler | `service/.../compiler.py` | `test_compiler.py`, `scripts/prove-repro-executes.mjs` |
 | Decoupled router (host injects auth/DB) | `service/.../router.py` | `test_router_smoke.py` |
-| Server-side scrubber (NPI trust boundary) | `scrubber.py` | `test_scrubber.py`, `test_scrub_overrides.py` |
+| Server-side scrubber (NPI trust boundary); Luhn-labeled card detection (coverage never narrows) + host-injected advisory-detector seam (Presidio-ready, advisory never proof) | `scrubber.py` | `test_scrubber.py`, `test_scrub_overrides.py`, `test_pci_vectors.py` |
 | Replayability score | `replayability.py` | `test_replayability.py` |
 | Deployment profiles (incl. deny-by-default `financial-services-strict`) | `profiles.py` + `profiles/*.json` | `test_profiles.py` (incl. drift guard), `test_strict_policy.py` |
-| Tenant fixture validator — `stepstitch policy verify` runs hostile fixtures through the live scrub boundary, offline classifier router-parity-guarded | `policy_verify.py`, `cli.py`, `examples/policy/financial-fixtures.json` | `test_policy_verify.py` (incl. router parity + leak scan) |
+| Tenant fixture validator — `stepstitch policy verify` runs hostile fixtures through the live scrub boundary, offline classifier router-parity-guarded; pack covers PCI account-data shapes (PAN valid+invalid Luhn, expiry/CVV context, track-data, PIN-block) each refused with nothing stored | `policy_verify.py`, `cli.py`, `examples/policy/financial-fixtures.json` | `test_policy_verify.py` (incl. router parity + leak scan) |
 | Consent / GPC / DNT, kill switch, split retention | SDK + `router.py` + `retention.py` | `test_retention.py`, `test_retention_job.py` |
 | Reproduction-quality eval gate | quality oracle on compiler + scorer | `test_repro_eval.py` |
 | Project reproduction config (base URL, auth fixture, route/form values, API match) | `repro_config.py` | `test_repro_config.py`, `test_repro_config_host.py` |

@@ -172,6 +172,89 @@
       }
     },
     {
+      "name": "pan-luhn-valid-in-explanation",
+      "expect": "rejected",
+      "must_not_persist": ["4111 1111 1111 1111", "4111111111111111"],
+      "payload": {
+        "app_id": "tenant-app",
+        "explanation": "Customer card 4111 1111 1111 1111 was declined on the transfer screen",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "name": "pan-luhn-invalid-still-refused",
+      "expect": "rejected",
+      "must_not_persist": ["4111 1111 1111 1112"],
+      "payload": {
+        "app_id": "tenant-app",
+        "explanation": "Card 4111 1111 1111 1112 rejected at checkout",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "name": "expiry-and-cvv-context",
+      "expect": "rejected",
+      "must_not_persist": ["12/30", "CVV 000"],
+      "payload": {
+        "app_id": "tenant-app",
+        "explanation": "Entered exp 12/30 and CVV 000 but the payment form errored",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "name": "track-data-shaped-string",
+      "expect": "rejected",
+      "must_not_persist": ["%B4111111111111111^FAKE/CUSTOMER^30121010000000000000?"],
+      "payload": {
+        "app_id": "tenant-app",
+        "explanation": "Swipe read %B4111111111111111^FAKE/CUSTOMER^30121010000000000000? then failed",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "name": "pin-block-shaped-hex",
+      "expect": "rejected",
+      "must_not_persist": ["0123456789ABCDEF"],
+      "payload": {
+        "app_id": "tenant-app",
+        "explanation": "Terminal sent PIN block 0123456789ABCDEF before the timeout",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "name": "pan-in-route-segment",
+      "expect": "rejected",
+      "must_not_persist": ["4111111111111111"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "navigation", "route": "/cards/4111111111111111",
+           "label": "[masked]"}
+        ],
+        "metadata": {}
+      }
+    },
+    {
       "name": "clean-structural-payload",
       "expect": "accepted",
       "must_not_persist": [],
