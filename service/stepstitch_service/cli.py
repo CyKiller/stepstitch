@@ -736,6 +736,32 @@ def build_parser() -> argparse.ArgumentParser:
     policy_verify.add_argument("--json", action="store_true", dest="as_json",
                                help="emit machine-readable results")
 
+    init = sub.add_parser(
+        "init",
+        help="wire your application to StepStitch: proxy, tracker, sample report",
+        description="Guided first-run wiring. Detects the app framework, writes the "
+                    "same-origin ingest proxy and safe tracker wrapper under one "
+                    "stepstitch/ directory (never overwriting a file you edited), "
+                    "configures a synthetic reproduction base URL, and sends one "
+                    "sample report. `--uninstall` removes exactly what init wrote.",
+    )
+    init.add_argument("--dir", default=".",
+                      help="the application directory to wire (default: current)")
+    init.add_argument("--host", default=os.environ.get("STEPSTITCH_HOST", DEFAULT_HOST),
+                      help=f"the running StepStitch host (default {DEFAULT_HOST})")
+    init.add_argument("--app-url", default=None,
+                      help="where the application under test runs "
+                           "(default: STEPSTITCH_APP_BASE_URL or the framework's dev port)")
+    init.add_argument("--app-id", default="my-app",
+                      help="identifier traces carry for this app (default: my-app)")
+    init.add_argument("--framework", default="auto",
+                      choices=["auto", "next", "express", "browser"],
+                      help="skip detection and scaffold for this framework")
+    init.add_argument("--uninstall", action="store_true",
+                      help="remove exactly the files init wrote (edited files are kept)")
+    init.add_argument("--json", action="store_true", dest="as_json",
+                      help="emit machine-readable results")
+
     start = sub.add_parser(
         "start",
         help="run StepStitch Local: dashboard + SQLite store on 127.0.0.1, no setup",
@@ -786,6 +812,198 @@ def _policy_command(args: Any, parser: argparse.ArgumentParser) -> int:
     return 0 if run.ok else 1
 
 
+def run_init(
+    *,
+    directory: Path,
+    host: str,
+    app_url: Optional[str] = None,
+    app_id: str = "my-app",
+    framework: str = "auto",
+    env: Optional[Dict[str, str]] = None,
+    transport: Optional[Transport] = None,
+    uninstall: bool = False,
+) -> Tuple[int, List[str], Dict[str, Any]]:
+    """Guided first-run wiring: scaffold the proxy + tracker files, configure a
+    synthetic reproduction, and send one sample report — refusing to touch any
+    file the user has edited. Returns ``(exit_code, printable_lines, summary)``.
+
+    Never prints or writes a secret: generated files read the ingest token from
+    the server environment at runtime, and this function only checks whether the
+    env vars are set.
+    """
+    # Imported here to keep the module top stdlib-only-importable everywhere.
+    from stepstitch_service.scaffold import (
+        DEFAULT_APP_URLS,
+        MANIFEST_NAME,
+        detect_framework,
+        scaffold_files,
+    )
+
+    http = transport or _http
+    env = dict(env if env is not None else os.environ)
+    base = host.rstrip("/")
+    lines: List[str] = []
+    summary: Dict[str, Any] = {"written": [], "unchanged": [], "kept": [], "removed": []}
+    manifest_path = directory / MANIFEST_NAME
+
+    if not directory.is_dir():
+        return 2, [f"not a directory: {directory}"], summary
+
+    def _sha(text: str) -> str:
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    if uninstall:
+        if not manifest_path.is_file():
+            return 0, ["nothing to uninstall: no init manifest here"], summary
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for rel, recorded_sha in sorted(manifest.get("files", {}).items()):
+            path = directory / rel
+            if not path.is_file():
+                continue
+            if _sha(path.read_text(encoding="utf-8")) != recorded_sha:
+                summary["kept"].append(rel)
+                lines.append(f"kept {rel} — you edited it, so it is yours now")
+                continue
+            path.unlink()
+            summary["removed"].append(rel)
+            lines.append(f"removed {rel}")
+        manifest_path.unlink()
+        scaffold_dir = directory / "stepstitch"
+        if scaffold_dir.is_dir() and not any(scaffold_dir.iterdir()):
+            scaffold_dir.rmdir()
+        lines.append("uninstall complete")
+        return 0, lines, summary
+
+    if framework == "auto":
+        pkg = None
+        pkg_path = directory / "package.json"
+        if pkg_path.is_file():
+            try:
+                pkg = json.loads(pkg_path.read_text(encoding="utf-8"))
+            except ValueError:
+                lines.append("package.json is not valid JSON — treating as a browser app")
+        framework = detect_framework(pkg)
+    summary["framework"] = framework
+    lines.append(f"framework: {framework}")
+
+    try:
+        files = scaffold_files(framework=framework, app_id=app_id, host=base)
+    except ValueError as exc:
+        return 2, [str(exc)], summary
+
+    previous = {}
+    if manifest_path.is_file():
+        previous = json.loads(manifest_path.read_text(encoding="utf-8")).get("files", {})
+
+    manifest_files: Dict[str, str] = {}
+    for rel, content in sorted(files.items()):
+        path = directory / rel
+        desired_sha = _sha(content)
+        manifest_files[rel] = desired_sha
+        if path.is_file():
+            current_sha = _sha(path.read_text(encoding="utf-8"))
+            if current_sha == desired_sha:
+                summary["unchanged"].append(rel)
+                lines.append(f"unchanged {rel}")
+                continue
+            # Differs. Only ever overwrite bytes init itself wrote earlier — and an
+            # edited file leaves the manifest entirely, so a later --uninstall can
+            # never delete the user's edits.
+            if previous.get(rel) != current_sha:
+                summary["kept"].append(rel)
+                del manifest_files[rel]
+                lines.append(f"kept {rel} — you edited it, so init will not touch it")
+                continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        summary["written"].append(rel)
+        lines.append(f"wrote {rel}")
+
+    manifest_path.write_text(
+        json.dumps({"app_id": app_id, "framework": framework, "files": manifest_files},
+                   indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    status, _ = http(f"{base}/healthz", "GET", {}, None)
+    if status != 200:
+        lines.append(f"host not reachable at {base} — run `stepstitch start`, "
+                     "then rerun `stepstitch init` to finish the wiring")
+        lines.append("next: stepstitch doctor")
+        return 0, lines, summary
+
+    admin = env.get("STEPSTITCH_ADMIN_TOKEN")
+    resolved_app_url = app_url or env.get("STEPSTITCH_APP_BASE_URL") or DEFAULT_APP_URLS[framework]
+    if admin:
+        headers = {"Authorization": f"Bearer {admin}", "Content-Type": "application/json"}
+        status, current = http(f"{base}/admin/config/repro", "GET", headers, None)
+        existing = (current or {}).get("config", {}) if isinstance(current, dict) else {}
+        if existing.get("base_url"):
+            lines.append("reproduction config already set "
+                         f"(base_url {existing['base_url']}) — left as is")
+        else:
+            body = json.dumps({"config": {"base_url": resolved_app_url}}).encode("utf-8")
+            status, _ = http(f"{base}/admin/config/repro", "PUT", headers, body)
+            if status == 200:
+                summary["repro_base_url"] = resolved_app_url
+                lines.append(f"reproduction config: base_url set to {resolved_app_url}")
+            else:
+                lines.append(f"could not write reproduction config ({status}) — "
+                             "set it in the console's Governance tab")
+    else:
+        lines.append("STEPSTITCH_ADMIN_TOKEN not set — skipped reproduction config; "
+                     "`stepstitch start` printed the token")
+
+    ingest = env.get("STEPSTITCH_INGEST_TOKEN")
+    if ingest:
+        sample = {
+            "app_id": app_id,
+            "explanation": "Synthetic first report from stepstitch init",
+            "footsteps": [
+                {"timestamp": "t", "type": "navigation", "route": "/", "label": "[masked]"},
+                {"timestamp": "t", "type": "click", "route": "/",
+                 "target": '[data-testid="submit"]', "label": "[masked]"},
+                {"timestamp": "t", "type": "exception", "route": "/", "label": "[masked]",
+                 "metadata": {"error_type": "TypeError"}},
+            ],
+            "metadata": {},
+        }
+        status, payload = http(
+            f"{base}/api/stepstitch/v1/session", "POST",
+            {"Authorization": f"Bearer {ingest}", "Content-Type": "application/json"},
+            json.dumps(sample).encode("utf-8"),
+        )
+        trace_id = payload.get("trace_id") if isinstance(payload, dict) else None
+        if status == 200 and trace_id:
+            summary["trace_id"] = trace_id
+            lines.append(f"sample report ingested: {trace_id}")
+            lines.append(f"see it in the console: {base}/dashboard")
+        else:
+            lines.append(f"sample report was refused ({status}) — run `stepstitch doctor`")
+    else:
+        lines.append("STEPSTITCH_INGEST_TOKEN not set — skipped the sample report; "
+                     "`stepstitch start` printed the token")
+
+    lines.append("next: stepstitch doctor")
+    return 0, lines, summary
+
+
+def _init_command(args: Any) -> int:
+    code, lines, summary = run_init(
+        directory=Path(args.dir),
+        host=args.host,
+        app_url=args.app_url,
+        app_id=args.app_id,
+        framework=args.framework,
+        uninstall=args.uninstall,
+    )
+    if args.as_json:
+        print(json.dumps(summary, indent=2, sort_keys=True))
+    else:
+        print("\n".join(lines))
+    return code
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -812,6 +1030,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
     if args.command == "policy":
         return _policy_command(args, parser)
+    if args.command == "init":
+        return _init_command(args)
     if args.command != "doctor":
         parser.print_help()
         return 2
