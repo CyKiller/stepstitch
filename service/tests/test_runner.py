@@ -19,6 +19,7 @@ from stepstitch_service.runner import (
     NEEDS_SETUP,
     NOT_REPRODUCED,
     REPRODUCED,
+    BrowserIdentity,
     RunnerError,
     check_address_allowed,
     child_env,
@@ -53,9 +54,27 @@ def fake_runner(exit_codes, calls=None, raises=None):
     return run
 
 
+def fake_browser(present=True, build="chromium 151.0.7922.34 (playwright build 1234)",
+                 location="/fake-cache/ms-playwright/chromium_headless_shell-1234"):
+    """Stands in for the browser probe, which otherwise shells out to the real machine.
+
+    Without this the promise in this module's docstring — provable on ANY machine — is
+    false. The probe runs `npx playwright install --dry-run`, so on a machine that has npx
+    but no Chromium (npm install done, `npx playwright install` not: a normal developer
+    state, and the state of a clean CI container) every test below refused at the readiness
+    gate with NEEDS_SETUP and never reached the fake runner it exists to exercise.
+
+    Tests that are ABOUT the probe pass their own instead of relying on this default.
+    """
+    def probe(headless=True):
+        return BrowserIdentity(build=build, install_location=location, present=present)
+
+    return probe
+
+
 def _run(**overrides):
     params = dict(session_id="s-1", script=SCRIPT, base_url=BASE, readiness=READY,
-                  runner=fake_runner([0]))
+                  runner=fake_runner([0]), browser_probe=fake_browser())
     params.update(overrides)
     return run_reproduction(**params)
 
@@ -584,13 +603,16 @@ def test_a_genuinely_different_experiment_still_moves_the_digest(change, tmp_pat
     assert base.execution_envelope_sha256 != other.execution_envelope_sha256
 
 
-def test_the_browser_build_is_part_of_the_experiment(tmp_path, monkeypatch):
+def test_the_browser_build_is_part_of_the_experiment(tmp_path):
     # The reason the browser is pinned at all: an upgrade genuinely can change an outcome.
-    monkeypatch.setattr("stepstitch_service.runner.Path.exists", lambda self: True)
-    _fake_probe(monkeypatch)
-    before = _run(work_root=_root(tmp_path, "1"), runner=fake_runner([1]))
-    _fake_probe(monkeypatch, stdout=_DRY_RUN.replace("149.0.7827.55", "150.0.9000.1"))
-    after = _run(work_root=_root(tmp_path, "2"), runner=fake_runner([1]))
+    # (Stated through the probe seam; how a build string is PARSED out of the dry-run
+    # output is `_browser_identity`'s own concern, covered by its unit tests above.)
+    before = _run(work_root=_root(tmp_path, "1"), runner=fake_runner([1]),
+                  browser_probe=fake_browser(
+                      build="chromium 149.0.7827.55 (playwright build 1228)"))
+    after = _run(work_root=_root(tmp_path, "2"), runner=fake_runner([1]),
+                 browser_probe=fake_browser(
+                     build="chromium 150.0.9000.1 (playwright build 1228)"))
     assert before.execution_envelope_sha256 != after.execution_envelope_sha256
 
 
@@ -603,19 +625,21 @@ def test_the_scratch_directory_is_not_left_behind_when_the_envelope_is_refused(t
     assert set(tmp_path.iterdir()) == before, "a refused run created a directory"
 
 
-def test_a_missing_browser_is_refused_before_anything_is_launched(monkeypatch):
+def test_a_missing_browser_is_refused_before_anything_is_launched():
     """Pre-flight, not post-mortem. The condition is knowable before running, so the
     answer is NEEDS_SETUP with the exact fix — and the proof of "pre" is that the fake
-    runner was never called."""
-    from stepstitch_service.runner import BrowserIdentity
+    runner was never called.
 
-    monkeypatch.setattr("stepstitch_service.runner._browser_identity",
-                        lambda headless=True: BrowserIdentity(
-                            build="chromium 149.0.7827.55 (playwright build 1228)",
-                            install_location="/cache/chromium_headless_shell-1228",
-                            present=False))
+    Passes its own probe rather than monkeypatching the module global: this test is ABOUT
+    the absent-browser branch, so the absence has to be stated here, not arranged at a
+    distance where `_run`'s default would silently overrule it.
+    """
     calls = []
-    result = _run(runner=fake_runner([1], calls))
+    result = _run(runner=fake_runner([1], calls),
+                  browser_probe=fake_browser(
+                      present=False,
+                      build="chromium 149.0.7827.55 (playwright build 1228)",
+                      location="/cache/chromium_headless_shell-1228"))
     assert result.verdict == NEEDS_SETUP
     assert calls == [], "nothing may be spawned on a machine that cannot spawn it"
     blocker = next(b for b in result.blockers if b["id"] == "browser")
@@ -624,14 +648,44 @@ def test_a_missing_browser_is_refused_before_anything_is_launched(monkeypatch):
         "a digest for a run that never happened is noise"
 
 
-def test_an_unreadable_browser_probe_does_not_refuse_the_run(monkeypatch):
+def test_an_unreadable_browser_probe_does_not_refuse_the_run():
     """`None` is "could not ask", and it must never harden into "absent" — refusing runs
-    on unusual but working layouts is a worse failure than the one being guarded."""
-    from stepstitch_service.runner import BrowserIdentity
+    on unusual but working layouts is a worse failure than the one being guarded.
 
-    monkeypatch.setattr("stepstitch_service.runner._browser_identity",
-                        lambda headless=True: BrowserIdentity())
+    States its own unanswerable probe for the reason given in the test above.
+    """
     calls = []
-    result = _run(runner=fake_runner([1], calls))
+    result = _run(runner=fake_runner([1], calls),
+                  browser_probe=lambda headless=True: BrowserIdentity())
     assert result.verdict == REPRODUCED
     assert len(calls) == 1, "the run must proceed"
+
+
+def test_no_test_in_this_file_depends_on_a_browser_being_installed():
+    """The guard for the defect this seam exists to close.
+
+    This module's docstring promises its properties are "provable on any machine". That was
+    false for 21 tests: the browser probe shelled out to the real machine, so a host with
+    npx but no Chromium refused every run at the readiness gate before the fake runner was
+    reached. The suite passed anyway wherever a developer happened to have Chromium, which
+    is precisely how it survived to a release candidate.
+
+    Asserting the seam is wired is not enough — a future test calling `run_reproduction`
+    directly would reintroduce the dependence — so this enumerates the real surface: every
+    call into the runner from this file must route through `_run`, which supplies the probe.
+    Paired with the browser-free CI job, which runs this suite with Chromium absent.
+    """
+    import ast
+
+    tree = ast.parse(Path(__file__).read_text())
+    run_fn = next(node for node in tree.body
+                  if isinstance(node, ast.FunctionDef) and node.name == "_run")
+    # AST, not grep: comments, docstrings and this test's own error message all mention
+    # the function name, and matching those would make the guard fail over prose.
+    calls = [node.lineno for node in ast.walk(tree)
+             if isinstance(node, ast.Call)
+             and getattr(node.func, "id", "") == "run_reproduction"]
+    strays = [ln for ln in calls if not run_fn.lineno <= ln <= run_fn.end_lineno]
+    assert calls and not strays, (
+        "a test calls run_reproduction() outside the _run() helper, so it will probe the "
+        f"real machine for a browser and fail wherever Chromium is absent: lines {strays}")
