@@ -34,10 +34,11 @@ export function Hero() {
 
           <Reveal delay={0.1}>
             <p className="mt-5 max-w-[58ch] text-lg leading-relaxed text-muted">
-              When a customer hits a bug, your team reproduces it and proves the
-              fix — never recording their screen, keystrokes, or data. Self-hosted:
-              you hold the evidence, and it&apos;s scrubbed, signed, and
-              independently verifiable.
+              The AI gets a policy-constrained, structural account of the
+              failure — the shape of the bug, not the customer&apos;s screen,
+              typing, or page content. Then StepStitch reruns the same frozen
+              test and measures red-to-green itself. Self-hosted: you hold the
+              evidence and the keys.
             </p>
           </Reveal>
 

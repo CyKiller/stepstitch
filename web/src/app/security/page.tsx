@@ -169,6 +169,9 @@ export default function SecurityPage() {
             <Button href="/#contact" trailingIcon={null}>
               Request the compliance packet
             </Button>
+            <Button href="/verify" variant="secondary" trailingIcon={null}>
+              Verify it yourself
+            </Button>
             <Button href="/self-host" variant="secondary" trailingIcon={null}>
               Self-host it yourself
             </Button>

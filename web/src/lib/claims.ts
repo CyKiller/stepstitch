@@ -142,6 +142,38 @@ export const CLAIMS: Claim[] = [
     evidence: { path: "COMPLIANCE-EVIDENCE.md", test: "service/tests/test_compliance.py" },
   },
 
+  // --- Independent verification (the second pillar) ---------------------------
+  {
+    id: "attestation-self-verifiable",
+    text:
+      "The attestation is canonical JSON hashed with SHA-256 and signed with a key only your tenant holds — anyone can recompute the hash or run cosign verify-blob without asking us anything.",
+    kind: "measured",
+    evidence: {
+      path: "service/stepstitch_service/attestation.py",
+      test: "service/tests/test_attestation.py",
+    },
+  },
+  {
+    id: "agent-cannot-self-verify",
+    text:
+      "The credential handed to a coding agent cannot write a verdict: the verify scope sits outside the agent scope ladder, so the token that proposes a fix can never be the token that records it worked.",
+    kind: "architectural",
+    evidence: {
+      path: "service/stepstitch_service/host/agents.py",
+      test: "server/tests/test_agents.py",
+    },
+  },
+  {
+    id: "evidence-grade-uncounterfeitable",
+    text:
+      "Evidence grades are derived from how an outcome was obtained, never accepted from a caller — a payload claiming a signed grade is recorded as asserted.",
+    kind: "measured",
+    evidence: {
+      path: "service/stepstitch_service/evidence.py",
+      test: "service/tests/test_evidence.py",
+    },
+  },
+
   // --- Posture defaults (policy: configurable, but this is the default) -------
   {
     id: "consent-gated",

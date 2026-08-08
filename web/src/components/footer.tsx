@@ -32,6 +32,7 @@ const columns = [
   {
     title: "Trust",
     links: [
+      { href: "/verify", label: "Verify it yourself" },
       { href: "/security", label: "Security & compliance" },
       { href: "/privacy-vs-replay", label: "Privacy vs. replay" },
       {

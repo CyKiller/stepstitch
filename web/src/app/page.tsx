@@ -1,6 +1,7 @@
 import { Hero } from "@/components/hero";
 import { PlainExplainer } from "@/components/plain-explainer";
 import { Problem } from "@/components/problem";
+import { Pillars } from "@/components/pillars";
 import { HowItWorks } from "@/components/how-it-works";
 import { WorkflowSection } from "@/components/workflow-section";
 import { DemoSection } from "@/components/demo-section";
@@ -27,6 +28,7 @@ export default function Home() {
       <Hero />
       <PlainExplainer />
       <Problem />
+      <Pillars />
 
       {/* Tier 2 — Proof (engineering leader): proof lands while a skimmer is
           still reading, so CaseStudies sits high, not buried at the bottom. */}
