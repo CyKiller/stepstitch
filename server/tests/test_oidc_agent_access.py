@@ -1,13 +1,17 @@
-"""Agent tokens under OIDC: a capability gap, not a bypass.
+"""Agent tokens under OIDC: same scopes, same refusals as shared-token mode.
 
-STATUS.md notes agent-scope enforcement exists only in shared-admin-token mode. This file
-pins down what that means when a deployment runs OIDC (no shared admin token): the agent
-middleware and the ``/admin/agents`` routes are absent, and a stored, unrevoked ``ssa_``
-token — even one whose scope would allow the path in shared-token mode — is refused
-everywhere. No request gains access it would not otherwise have, so the correct
-classification is "agents unsupported under OIDC" (a capability gap), not a privilege
-bypass. If a future change ever lets an ``ssa_`` token through under OIDC, these tests
-fail and the classification must be revisited.
+Historically agents were unsupported under OIDC (a capability gap this file used
+to pin): the middleware's mechanism was header substitution to the shared admin
+token, which cannot exist in OIDC mode. The enforcement is now auth-mode-agnostic
+— the middleware resolves ``ssa_`` tokens, checks ``scope_allows``, and stamps
+``request.state.agent``; the admin dependency accepts the stamp in both modes.
+
+What must hold, and is pinned here:
+  - a registered, unrevoked agent gets exactly its scope's reads — no more
+  - a request outside the scope is refused 403 BY SCOPE, never translated
+  - an unregistered or revoked ``ssa_`` token stays a plain 401
+  - the verify scope still cannot be issued through any read tier
+  - operators manage agents via /admin/agents in OIDC mode too
 """
 import hashlib
 import json
@@ -32,14 +36,14 @@ AGENT_TOKEN = "ssa_test-token-registered-before-oidc-migration"
 
 
 class _DB:
-    """In-memory fake holding one trace and one registered, unrevoked agent."""
+    """In-memory fake holding one trace and one registered agent."""
 
-    def __init__(self):
+    def __init__(self, scope="summaries", revoked=False):
         self.traces = {}
         self.agent = {
             "id": "agent-1", "name": "repro-bot",
             "token_hash": hashlib.sha256(AGENT_TOKEN.encode("utf-8")).hexdigest(),
-            "scope": "summaries", "revoked": False,
+            "scope": scope, "revoked": revoked,
         }
 
     async def execute(self, query, params=()):
@@ -90,13 +94,13 @@ _PAYLOAD = {
 }
 
 
-def _oidc_client():
-    """An OIDC-mode app: no shared admin token, so no agent middleware, no agent routes."""
+def _oidc_client(scope="summaries", revoked=False):
+    """An OIDC-mode app: no shared admin token anywhere."""
     priv, jwks = _keypair()
     verifier = OidcVerifier(issuer=ISS, audience=AUD, jwks=jwks)
     get_user_id, require_admin = build_oidc_auth(
         verifier, admin_roles=["stepstitch-operator"], ingest_token="ing")
-    db = _DB()
+    db = _DB(scope=scope, revoked=revoked)
     app: FastAPI = build_app(
         get_user_id=get_user_id, require_admin=require_admin,
         execute=db.execute, fetchone=db.fetchone, fetchall=db.fetchall)
@@ -107,31 +111,62 @@ def _agent(tok=AGENT_TOKEN):
     return {"Authorization": f"Bearer {tok}"}
 
 
-def test_agent_token_gets_no_read_access_under_oidc():
-    client, priv = _oidc_client()
-    tid = client.post(f"{_PFX}/session", json=_PAYLOAD,
-                      headers={"Authorization": "Bearer ing"}).json()["trace_id"]
-    # Sanity: the trace is readable by a real operator...
+def _ingest_trace(client):
+    return client.post(f"{_PFX}/session", json=_PAYLOAD,
+                       headers={"Authorization": "Bearer ing"}).json()["trace_id"]
+
+
+def test_a_scoped_agent_reads_exactly_its_tier_under_oidc():
+    client, priv = _oidc_client(scope="summaries")
+    tid = _ingest_trace(client)
+    # The operator path is untouched...
     ok = client.get(f"{_PFX}/session/{tid}/summary",
                     headers={"Authorization": "Bearer " + _operator_token(priv)})
     assert ok.status_code == 200
-    # ...but the registered agent token — scope 'summaries', unrevoked — is a plain 401:
-    # it is not a JWT, and no middleware exists to translate it.
+    # ...and the registered summaries-scope agent now reads the summary too.
     r = client.get(f"{_PFX}/session/{tid}/summary", headers=_agent())
-    assert r.status_code == 401
+    assert r.status_code == 200
+    # But a repros-tier read is beyond its scope: refused BY SCOPE, not by auth mode.
+    deeper = client.get(f"{_PFX}/session/{tid}/playwright", headers=_agent())
+    assert deeper.status_code == 403
+    assert "scope" in deeper.json()["detail"]
 
 
-def test_agent_token_cannot_ingest_under_oidc():
+def test_agent_token_still_cannot_ingest_under_oidc():
     client, _ = _oidc_client()
     r = client.post(f"{_PFX}/session", json=_PAYLOAD, headers=_agent())
+    # Refused by scope (no read tier may write) — a 403 naming the scope, exactly as
+    # shared-token mode refuses it. Never a silent translation to ingest.
+    assert r.status_code == 403
+    assert "scope" in r.json()["detail"]
+
+
+def test_an_unregistered_or_revoked_token_stays_a_plain_401():
+    client, _ = _oidc_client()
+    tid = _ingest_trace(client)
+    r = client.get(f"{_PFX}/session/{tid}/summary",
+                   headers=_agent("ssa_never-registered-token"))
+    assert r.status_code == 401
+
+    revoked_client, _ = _oidc_client(revoked=True)
+    tid = _ingest_trace(revoked_client)
+    r = revoked_client.get(f"{_PFX}/session/{tid}/summary", headers=_agent())
     assert r.status_code == 401
 
 
-def test_agent_management_routes_do_not_exist_under_oidc():
+def test_admin_routes_are_never_agent_accessible():
+    """The middleware only stamps service-prefix requests: an agent token on an
+    /admin route is not a JWT, so it dies in the OIDC verifier as before."""
+    client, _ = _oidc_client(scope="verify")
+    assert client.get("/admin/status", headers=_agent()).status_code == 401
+    assert client.get("/admin/agents", headers=_agent()).status_code == 401
+
+
+def test_operators_manage_agents_under_oidc():
     client, priv = _oidc_client()
     operator = {"Authorization": "Bearer " + _operator_token(priv)}
-    # Even a legitimate operator cannot register agents: the routes are only built in
-    # shared-admin-token mode, so agents are unsupported — not silently unscoped.
-    assert client.post("/admin/agents", json={"name": "x", "scope": "read"},
-                       headers=operator).status_code == 404
-    assert client.get("/admin/agents", headers=operator).status_code == 404
+    created = client.post("/admin/agents", json={"name": "ci", "scope": "verify"},
+                          headers=operator)
+    assert created.status_code == 200
+    assert created.json()["token"].startswith("ssa_")
+    assert client.get("/admin/agents", headers=operator).status_code == 200
