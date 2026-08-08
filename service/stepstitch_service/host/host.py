@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import json
 import logging
 import os
@@ -18,7 +19,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
@@ -191,6 +192,28 @@ def build_app(
             # on a separate 5-year clock (Reg S-P) — see contracts/stepstitch.md.
             logger.info("stepstitch.audit action=%s actor=%s detail=%s",
                         action, actor, detail)
+
+    # --- Agent-aware admin dependency (auth-mode-agnostic) ----------------------------
+    # The scope middleware (bottom of this function) resolves `ssa_` tokens and, when the
+    # scope allows the request, stamps `request.state.agent`. This wrapper lets that stamp
+    # satisfy the admin dependency in BOTH auth modes — shared-token AND OIDC — so agent
+    # support no longer depends on holding a shared admin token to impersonate. `/admin/*`
+    # routes are unaffected: the middleware only ever stamps service-prefix requests.
+    _inner_require_admin = require_admin
+
+    async def _require_admin_or_agent(
+        request: Request, authorization: Optional[str] = Header(default=None)
+    ) -> Any:
+        agent = getattr(request.state, "agent", None)
+        if agent is not None:
+            return {"user_id": f"agent:{agent['name']}", "agent_id": agent["id"],
+                    "scope": agent["scope"]}
+        result = _inner_require_admin(authorization)
+        if inspect.isawaitable(result):
+            result = await result
+        return result
+
+    require_admin = _require_admin_or_agent
 
     base_policy = load_profile(profile)
 
@@ -812,69 +835,65 @@ def build_app(
             return payload
 
     # --- Agent connections (named, scoped tokens) -------------------------------------
-    # Only available in shared-admin-token mode (the host must have an admin token to
-    # translate an allowed agent request into). When enabled, a registered agent's token
-    # is scope-checked here; allowed requests run as admin for that one call, disallowed
-    # ones are refused 403 — the service router and its auth never change.
-    if admin_token:
+    # Auth-mode-agnostic: a registered agent's `ssa_` token is scope-checked here in BOTH
+    # shared-token and OIDC modes. An allowed request is stamped onto request.state and
+    # satisfies the admin dependency via the wrapper at the top of this function; a
+    # disallowed one is refused 403. The operator's own auth never changes, and the
+    # middleware never stamps anything outside the service prefix.
+    @app.middleware("http")
+    async def _enforce_agent_scope(request, call_next):
+        path = request.url.path
+        if path.startswith(_SERVICE_PREFIX):
+            token = _bearer(request.headers.get("authorization"))
+            if (token and token.startswith("ssa_")
+                    and token != admin_token and token != ingest_token):
+                agent = await resolve_agent(fetchone, token)
+                if agent is not None:
+                    if scope_allows(agent["scope"], request.method, path):
+                        request.state.agent = agent
+                        await audit("stepstitch.agent_access", agent["name"], {
+                            "agent_id": agent["id"], "scope": agent["scope"],
+                            "method": request.method, "path": path,
+                        })
+                    else:
+                        await audit("stepstitch.agent_denied", agent["name"], {
+                            "agent_id": agent["id"], "scope": agent["scope"],
+                            "method": request.method, "path": path,
+                        })
+                        return JSONResponse(
+                            status_code=403,
+                            content={"detail": (
+                                f"agent scope '{agent['scope']}' is not permitted to "
+                                f"access {request.method} {path}"
+                            )},
+                        )
+        return await call_next(request)
 
-        @app.middleware("http")
-        async def _enforce_agent_scope(request, call_next):
-            path = request.url.path
-            if path.startswith(_SERVICE_PREFIX):
-                token = _bearer(request.headers.get("authorization"))
-                if token and token != admin_token and token != ingest_token:
-                    agent = await resolve_agent(fetchone, token)
-                    if agent is not None:
-                        if scope_allows(agent["scope"], request.method, path):
-                            # Translate to admin access for this single request.
-                            request.scope["headers"] = [
-                                (k, v) for (k, v) in request.scope["headers"]
-                                if k != b"authorization"
-                            ] + [(b"authorization", f"Bearer {admin_token}".encode())]
-                            await audit("stepstitch.agent_access", agent["name"], {
-                                "agent_id": agent["id"], "scope": agent["scope"],
-                                "method": request.method, "path": path,
-                            })
-                        else:
-                            await audit("stepstitch.agent_denied", agent["name"], {
-                                "agent_id": agent["id"], "scope": agent["scope"],
-                                "method": request.method, "path": path,
-                            })
-                            return JSONResponse(
-                                status_code=403,
-                                content={"detail": (
-                                    f"agent scope '{agent['scope']}' is not permitted to "
-                                    f"access {request.method} {path}"
-                                )},
-                            )
-            return await call_next(request)
+    @app.post("/admin/agents")
+    async def create_agent(req: AgentRegistration,
+                           admin: Any = Depends(require_admin)) -> dict:
+        try:
+            agent_id, token = await register_agent(
+                execute, name=req.name, scope=req.scope, actor=_actor_name(admin),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        await audit("stepstitch.agent_register", _actor_name(admin),
+                    {"agent_id": agent_id, "scope": req.scope})
+        return {
+            "status": "ok", "id": agent_id, "name": req.name.strip(),
+            "scope": req.scope, "token": token,
+            "note": "Copy this token now — it is shown only once and stored only as a hash.",
+        }
 
-        @app.post("/admin/agents")
-        async def create_agent(req: AgentRegistration,
-                               admin: Any = Depends(require_admin)) -> dict:
-            try:
-                agent_id, token = await register_agent(
-                    execute, name=req.name, scope=req.scope, actor=_actor_name(admin),
-                )
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc))
-            await audit("stepstitch.agent_register", _actor_name(admin),
-                        {"agent_id": agent_id, "scope": req.scope})
-            return {
-                "status": "ok", "id": agent_id, "name": req.name.strip(),
-                "scope": req.scope, "token": token,
-                "note": "Copy this token now — it is shown only once and stored only as a hash.",
-            }
+    @app.get("/admin/agents")
+    async def get_agents(admin: Any = Depends(require_admin)) -> dict:
+        return {"status": "ok", "agents": await list_agents(fetchall)}
 
-        @app.get("/admin/agents")
-        async def get_agents(admin: Any = Depends(require_admin)) -> dict:
-            return {"status": "ok", "agents": await list_agents(fetchall)}
-
-        @app.post("/admin/agents/{agent_id}/revoke")
-        async def revoke(agent_id: str, admin: Any = Depends(require_admin)) -> dict:
-            await revoke_agent(execute, agent_id)
-            await audit("stepstitch.agent_revoke", _actor_name(admin), {"agent_id": agent_id})
-            return {"status": "ok", "id": agent_id, "revoked": True}
+    @app.post("/admin/agents/{agent_id}/revoke")
+    async def revoke(agent_id: str, admin: Any = Depends(require_admin)) -> dict:
+        await revoke_agent(execute, agent_id)
+        await audit("stepstitch.agent_revoke", _actor_name(admin), {"agent_id": agent_id})
+        return {"status": "ok", "id": agent_id, "revoked": True}
 
     return app

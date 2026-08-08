@@ -13,7 +13,7 @@ pushed.
 | Suite | Tests | Command |
 |---|---|---|
 | Service (compiler, router, privacy, connectors) | **732** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **225** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Host (auth, dashboard, real Postgres) | **227** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **40** | `npx vitest run` |
 | Web (marketing site + copy claims) | **154** | `cd web && npx vitest run` |
 
@@ -164,12 +164,12 @@ the draft-only default and the scrub boundary are unchanged.
   real (see above), but it can only do so if the pre-fix ref still builds and boots via
   `npm run stepstitch:app` / `STEPSTITCH_APP_CMD`. When it does not, the workflow records
   nothing rather than guessing — correct, but it means old traces can be unverifiable.
-- **Agents are unsupported under OIDC — a capability gap, not a bypass.** Agent-scope
-  enforcement lives in the host middleware, which is active only when an admin token is
-  configured. Under OIDC there is no middleware and no `/admin/agents` routes, and a
-  stored, unrevoked `ssa_` token is refused (401) on every route — proven by
-  `test_oidc_agent_access.py`, which fails if any future change lets an agent token
-  through. OIDC deployments post verdicts with an OIDC admin identity instead.
+- ~~**Agents are unsupported under OIDC.**~~ **Closed.** Agent-scope enforcement is now
+  auth-mode-agnostic: the middleware resolves `ssa_` tokens and stamps the request after
+  a `scope_allows` check, and the admin dependency accepts the stamp in both shared-token
+  and OIDC modes — no admin-token impersonation anywhere. A scoped agent gets exactly its
+  tier, out-of-scope requests are 403 by scope, unregistered/revoked tokens stay 401, and
+  operators manage `/admin/agents` under OIDC too — proven by `test_oidc_agent_access.py`.
 
 ## Definition of 100%
 
