@@ -83,6 +83,45 @@ _PII_PATTERNS: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (
 )
 
 
+def luhn_valid(digits: str) -> bool:
+    """Luhn checksum over a digit string. Labeling only — an invalid checksum
+    never reduces redaction, it only reclassifies card -> number."""
+    if not digits.isdigit() or len(digits) < 13:
+        return False
+    total = 0
+    for index, char in enumerate(reversed(digits)):
+        value = int(char)
+        if index % 2 == 1:
+            value *= 2
+            if value > 9:
+                value -= 9
+        total += value
+    return total % 10 == 0
+
+
+# --- Advisory detectors (host-injected; defense-in-depth, never proof) -----------
+#
+# A detector is code the HOST registers at build time (like sign_blob or the draft
+# adapters) — never something operator config can carry, because config must stay
+# data. Each detector takes the (already regex-scrubbed) text and returns literal
+# substrings it believes are sensitive; every returned literal is redacted and the
+# scrub report labels the kind ``advisory:<name>``. By construction a detector can
+# only ADD redaction. This is the seam a Presidio/NER adapter plugs into; its
+# output is detection — advisory signal — never proof of absence, and the strict
+# schema remains the privacy boundary.
+_ADVISORY_DETECTORS: List[Tuple[str, Any]] = []
+
+
+def register_advisory_detector(name: str, detector: Any) -> None:
+    """Register a host-injected detector: ``detector(text) -> iterable of literals``."""
+    _ADVISORY_DETECTORS.append((str(name), detector))
+
+
+def clear_advisory_detectors() -> None:
+    """Test seam — the registry is process-global."""
+    _ADVISORY_DETECTORS.clear()
+
+
 def redact_text(
     text: Optional[str],
     extra: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (),
@@ -98,15 +137,42 @@ def redact_text(
     if text is None:
         return None, []
     kinds: List[str] = []
+
+    def _fired(kind: str) -> None:
+        if kind not in kinds:
+            kinds.append(kind)
+
     out = text
     for kind, pattern in _PII_PATTERNS:
+        if kind == "card":
+            # Luhn is labeling precision, not a coverage decision: a 13-19 digit
+            # run that fails the checksum is still redacted, as a generic number.
+            def _card(match: "re.Match[str]") -> str:
+                digits = re.sub(r"\D", "", match.group(0))
+                label = "card" if luhn_valid(digits) else "number"
+                _fired(label)
+                return f"[redacted:{label}]"
+
+            replaced = pattern.sub(_card, out)
+            out = replaced
+            continue
         if pattern.search(out):
             out = pattern.sub(f"[redacted:{kind}]", out)
-            kinds.append(kind)
+            _fired(kind)
     for kind, pattern in extra:
         if pattern.search(out):
             out = pattern.sub(f"[redacted:{kind}]", out)
-            kinds.append(kind)
+            _fired(kind)
+    for name, detector in _ADVISORY_DETECTORS:
+        try:
+            literals = [str(v) for v in (detector(out) or []) if str(v)]
+        except Exception:
+            # A broken detector must never break ingestion — advisory means advisory.
+            continue
+        for literal in literals:
+            if literal in out:
+                out = out.replace(literal, f"[redacted:advisory:{name}]")
+                _fired(f"advisory:{name}")
     return out, kinds
 
 
