@@ -115,3 +115,91 @@ def test_the_stranger_install_polls_the_identity_version():
         "installable polls a version derived from the workflow ref; it must verify the "
         "version the identity job resolved"
     )
+
+
+# --- the CI evidence must describe the commit being published -----------------------------
+#
+# Second finding, same audit. The identity job pinned every PUBLISH job to the tag's
+# commit, but `verify` still ran the reusable ci.yml against the workflow's own ref — on a
+# dispatch from main, main's CURRENT HEAD. Cut v0.12.0 at X, land Y on main, dispatch:
+# identity and the publish jobs correctly use X while every green CI check describes Y.
+# The release ships evidence about code it did not publish. The invariant is end to end:
+# requested version -> peeled tag commit -> manifests -> release CI source -> artifacts.
+
+CI = REPO / ".github" / "workflows" / "ci.yml"
+PINNED_REF = "${{ inputs.source_sha || github.sha }}"
+
+
+def _ci() -> dict:
+    return yaml.safe_load(CI.read_text(encoding="utf-8"))
+
+
+def test_verify_depends_on_identity_and_tests_the_identity_sha():
+    verify = _doc()["jobs"]["verify"]
+    needs = verify.get("needs", [])
+    needs = [needs] if isinstance(needs, str) else list(needs)
+    assert "identity" in needs, (
+        "verify does not depend on identity: the CI gate can run against a different "
+        "commit than the one being published"
+    )
+    source = str(verify.get("with", {}).get("source_sha", ""))
+    assert source == "${{ needs.identity.outputs.sha }}", (
+        f"verify passes source_sha {source!r}: unless it is exactly the identity sha, the "
+        "release's CI evidence describes the workflow's own ref — main's HEAD on a "
+        "dispatch — not the tagged commit being published"
+    )
+
+
+def test_ci_declares_the_source_sha_input_for_release_calls():
+    on = _ci().get("on") or _ci().get(True)  # PyYAML 1.1 parses bare `on:` as boolean True
+    call = (on or {}).get("workflow_call") or {}
+    inputs = (call or {}).get("inputs") or {}
+    spec = inputs.get("source_sha")
+    assert spec is not None, (
+        "ci.yml declares no source_sha workflow_call input, so release.yml cannot point "
+        "the CI gate at the tagged commit"
+    )
+    assert spec.get("type") == "string" and not spec.get("required", False), (
+        "source_sha must be an optional string: push/PR runs supply nothing and must "
+        "fall back to the triggering commit"
+    )
+
+
+def test_every_ci_job_checks_out_the_pinned_source():
+    """Enumerated, not sampled — the coverage cannot silently shrink.
+
+    Iterating every job and every checkout means a future job or checkout added without
+    the pin fails here by construction; requiring at least one checkout per job means a
+    job cannot drift out of coverage by dropping checkout entirely while still claiming
+    to gate the release.
+    """
+    jobs = _ci()["jobs"]
+    # ci.yml is the release gate via workflow_call; gutting it to a stub would let the
+    # invariant "pass" vacuously. 10 = its job count when this guard landed.
+    assert len(jobs) >= 10, f"ci.yml has only {len(jobs)} jobs — the release gate shrank"
+    for name, job in jobs.items():
+        checkouts = [s for s in job.get("steps", [])
+                     if "actions/checkout" in str(s.get("uses", ""))]
+        assert checkouts, (
+            f"ci.yml job {name!r} has no checkout step: it cannot be testing the "
+            "release source at all"
+        )
+        for step in checkouts:
+            ref = str(step.get("with", {}).get("ref", ""))
+            assert ref == PINNED_REF, (
+                f"ci.yml job {name!r} checkout ref is {ref!r}, not {PINNED_REF!r}: on a "
+                "release run it would test the workflow's ref instead of the tagged commit"
+            )
+
+
+def test_no_verification_path_derives_its_source_from_a_free_floating_ref():
+    """`github.ref_name`/`github.head_ref` in ci.yml run scripts, or a verify-level
+    source that is not the identity output, would reintroduce the X-published-Y-tested
+    split under a different name."""
+    for name, job in _ci()["jobs"].items():
+        scripts = " ".join(s.get("run", "") for s in job.get("steps", []) or [])
+        for floating in ("github.ref_name", "github.head_ref"):
+            assert floating not in scripts, (
+                f"ci.yml job {name!r} reads {floating}: a release-gate job must know its "
+                "source only through the pinned checkout"
+            )
