@@ -57,6 +57,16 @@ test.describe("public demo console", () => {
     await expect(page.locator("h1")).toContainText(FIXED_SHAPE_HEADING)
   })
 
+  test("the workflow stripe is the dominant status: state plus one next action", async ({ page }) => {
+    await page.getByRole("button", { name: FIXED_SHAPE_HEADING }).first().click()
+    const stripe = page.locator(".workflow-stripe")
+    await expect(stripe).toBeVisible()
+    // The fixed demo trace has measured red -> green, so the furthest step is lit
+    // and the next action honestly says there is nothing left to do.
+    await expect(stripe.locator(".workflow-step.current")).toContainText(/confirmed_fixed|Confirmed fixed/)
+    await expect(stripe).toContainText(/Next:|next_action/)
+  })
+
   test("the fixed failure shows a measured red then green", async ({ page }) => {
     await page.goto("/dashboard")
     await page.getByRole("button", { name: FIXED_SHAPE_HEADING }).first().click()
