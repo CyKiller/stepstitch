@@ -9,6 +9,15 @@ on:
   # Callable as a unit so release.yml can run the full gate set via one reusable
   # `uses: ./.github/workflows/ci.yml` — no gate duplication, no drift by construction.
   workflow_call:
+    inputs:
+      # The commit every job tests. release.yml passes the peeled tag commit resolved by
+      # its identity job, so the release gate's evidence describes the exact source being
+      # published — not whatever the workflow's own ref (main, on a dispatch) has moved
+      # to. Optional: push/PR/dispatch runs supply nothing and every checkout falls back
+      # to the triggering commit, which is the pre-existing behavior.
+      source_sha:
+        required: false
+        type: string
 
 jobs:
   sdk:
@@ -17,6 +26,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # On push/PR runs `inputs` is empty and this is the triggering commit — the
+          # default behavior, stated. On a release run (workflow_call from release.yml)
+          # it is the peeled tag commit, so the CI evidence describes the exact source
+          # being published. Guarded by test_release_workflow_identity.py.
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # vitest 4 (rolldown) needs node:util styleText, added in Node 20.12. The published
@@ -46,6 +61,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # On push/PR runs `inputs` is empty and this is the triggering commit — the
+          # default behavior, stated. On a release run (workflow_call from release.yml)
+          # it is the peeled tag commit, so the CI evidence describes the exact source
+          # being published. Guarded by test_release_workflow_identity.py.
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "20"
@@ -75,6 +96,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # On push/PR runs `inputs` is empty and this is the triggering commit — the
+          # default behavior, stated. On a release run (workflow_call from release.yml)
+          # it is the peeled tag commit, so the CI evidence describes the exact source
+          # being published. Guarded by test_release_workflow_identity.py.
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -106,6 +133,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # On push/PR runs `inputs` is empty and this is the triggering commit — the
+          # default behavior, stated. On a release run (workflow_call from release.yml)
+          # it is the peeled tag commit, so the CI evidence describes the exact source
+          # being published. Guarded by test_release_workflow_identity.py.
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "20"
@@ -149,6 +182,12 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # On push/PR runs `inputs` is empty and this is the triggering commit — the
+          # default behavior, stated. On a release run (workflow_call from release.yml)
+          # it is the peeled tag commit, so the CI evidence describes the exact source
+          # being published. Guarded by test_release_workflow_identity.py.
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -194,6 +233,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # On push/PR runs `inputs` is empty and this is the triggering commit — the
+          # default behavior, stated. On a release run (workflow_call from release.yml)
+          # it is the peeled tag commit, so the CI evidence describes the exact source
+          # being published. Guarded by test_release_workflow_identity.py.
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # Node 20 for consistency with the sdk/web jobs (vitest 4 needs >=20.12).
@@ -247,6 +292,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # On push/PR runs `inputs` is empty and this is the triggering commit — the
+          # default behavior, stated. On a release run (workflow_call from release.yml)
+          # it is the peeled tag commit, so the CI evidence describes the exact source
+          # being published. Guarded by test_release_workflow_identity.py.
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "20"
@@ -288,6 +339,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # On push/PR runs `inputs` is empty and this is the triggering commit — the
+          # default behavior, stated. On a release run (workflow_call from release.yml)
+          # it is the peeled tag commit, so the CI evidence describes the exact source
+          # being published. Guarded by test_release_workflow_identity.py.
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "20"
@@ -317,6 +374,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # On push/PR runs `inputs` is empty and this is the triggering commit — the
+          # default behavior, stated. On a release run (workflow_call from release.yml)
+          # it is the peeled tag commit, so the CI evidence describes the exact source
+          # being published. Guarded by test_release_workflow_identity.py.
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "20"
@@ -351,6 +414,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # On push/PR runs `inputs` is empty and this is the triggering commit — the
+          # default behavior, stated. On a release run (workflow_call from release.yml)
+          # it is the peeled tag commit, so the CI evidence describes the exact source
+          # being published. Guarded by test_release_workflow_identity.py.
+          ref: ${{ inputs.source_sha || github.sha }}
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"

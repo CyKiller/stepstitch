@@ -9,14 +9,18 @@ name: release (publish on tag)
 # the workflow was triggered. Token-gated steps skip cleanly when their secret is not
 # configured, so a tag never hard-fails a half-configured project.
 #
-# Identity invariant (guarded by service/tests/test_release_workflow_identity.py): the
-# `identity` job resolves the requested version to the TAG'S peeled commit and proves
-# every version manifest at that commit agrees; every publish job checks out exactly that
-# commit and re-asserts it. Before this, a dispatch from main checked out main's HEAD —
-# so anything merged after the tag would have published under the tagged version, and
-# environment approval could not have told the difference. The workflow DEFINITION still
-# runs from main on a dispatch (deliberate: a fix to this file must apply to the run
-# shipping it); only the source being built is pinned.
+# Identity invariant (guarded by service/tests/test_release_workflow_identity.py):
+# requested version -> peeled tag commit -> version manifests -> release CI source ->
+# every published artifact. The `identity` job resolves the requested version to the
+# TAG'S peeled commit and proves every version manifest at that commit agrees; `verify`
+# runs the full CI gate AGAINST that commit (source_sha into the reusable ci.yml); and
+# every publish job checks out exactly that commit and re-asserts it. Before this, a
+# dispatch from main checked out — and its CI gate tested — main's HEAD, so anything
+# merged after the tag would have published under the tagged version with green evidence
+# describing a different commit, and environment approval could not have told the
+# difference. The workflow DEFINITION still runs from main on a dispatch (deliberate: a
+# fix to this file must apply to the run shipping it); the source tested and built is
+# pinned to the tag.
 on:
   push:
     tags: [ "v*.*.*" ]
@@ -41,8 +45,16 @@ jobs:
   # "what must pass" — adding/removing a gate in ci.yml automatically applies here too, so
   # release gates can never drift from PR gates. CI's jobs use no secrets (the host job's
   # Postgres is a self-contained service container), so `secrets: inherit` is not needed.
+  #
+  # verify TESTS the same commit the publish jobs BUILD: it waits for identity and hands
+  # every CI job the peeled tag commit as source_sha. Without this, a dispatch from main
+  # ran the gates against main's current HEAD — green evidence about commit Y attached to
+  # a release publishing commit X.
   verify:
+    needs: identity
     uses: ./.github/workflows/ci.yml
+    with:
+      source_sha: ${{ needs.identity.outputs.sha }}
 
   identity:
     name: requested version == tag == source
