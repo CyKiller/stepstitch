@@ -129,3 +129,22 @@ def test_asserted_and_measured_grades_stay_distinguishable():
 def test_state_vocabulary_is_pinned():
     # A drift guard: the console, the docs and this module must agree on the names.
     assert EXECUTION_STATES == ("draft", "ready", "reproduced", "confirmed_fixed")
+
+
+def test_every_state_carries_one_next_action():
+    """Phase 4: one state, one next action — derived here, never invented by a UI."""
+    draft = execution_summary([BLOCKER])
+    assert draft["execution_state"] == STATE_DRAFT
+    assert "Application base URL" in draft["next_action"]
+
+    ready = execution_summary([READY_ITEM])
+    assert ready["execution_state"] == "ready"
+    assert "run" in ready["next_action"].lower()
+
+    reproduced = execution_summary([READY_ITEM], frozen={"red_verdict": "reproduced"})
+    assert reproduced["execution_state"] == "reproduced"
+    assert "agent" in reproduced["next_action"].lower()
+
+    fixed = execution_summary([READY_ITEM], verifications=[{"verdict": "confirmed_fixed"}])
+    assert fixed["execution_state"] == "confirmed_fixed"
+    assert "nothing" in fixed["next_action"].lower()

@@ -28,8 +28,9 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
 from stepstitch_service.evidence import ASSERTED
+from stepstitch_service.execution import execution_summary
 from stepstitch_service.profiles import load_profile
-from stepstitch_service.repro_config import ReproConfig
+from stepstitch_service.repro_config import ReproConfig, readiness
 
 from .dashboard import DASHBOARD_HTML
 from .fonts import GEIST_SANS_WOFF2_B64
@@ -263,6 +264,25 @@ def build_demo_app(dataset: Optional[Dict[str, Any]] = None) -> FastAPI:
         cfg = await _repro_config()
         return {"status": "ok", "config": cfg.as_dict(), "env_base_url": DEMO_BASE_URL,
                 "default_base_url": DEMO_BASE_URL, "readiness": []}
+
+    @app.get("/admin/session/{trace_id}/execution")
+    async def demo_execution(trace_id: str) -> dict:
+        # The same projection the real host serves (execution_summary over the
+        # trace's readiness + verification rows), so the console's unified
+        # status header renders — and stays honest — in the demo too.
+        trace = next((t for t in store.traces if t["id"] == trace_id), None)
+        if trace is None:
+            return JSONResponse(status_code=404, content={"detail": "Trace not found"})
+        cfg = await _repro_config()
+        footsteps = json.loads(trace["footsteps"])
+        rows = [v for v in store.verifications if v.get("trace_id") == trace_id]
+        summary = execution_summary(
+            readiness(cfg, footsteps, fallback_base_url=DEMO_BASE_URL),
+            verifications=rows,
+        )
+        return {"status": "ok", "trace_id": trace_id, "demo": True,
+                "profile": profile.name, "customer_data_status": "not_verified",
+                **summary}
 
     @app.get("/admin/agents")
     async def demo_agents() -> dict:

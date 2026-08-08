@@ -318,6 +318,12 @@ DASHBOARD_HTML = r"""<!doctype html>
   }
   .next .lab { font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:3px; }
   /* The primary act on a failure: get the reproduction out of the browser and into CI. */
+  .workflow-stripe { margin-top:14px; padding:12px 14px; border:1px solid var(--line-strong); border-radius:var(--r-lg); background:var(--surface); display:flex; flex-direction:column; gap:6px; }
+  .workflow-steps { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .workflow-step { font-size:12px; padding:3px 10px; border-radius:999px; border:1px solid var(--line); color:var(--muted); }
+  .workflow-step.done { border-color:var(--ok); color:var(--ok); }
+  .workflow-step.current { border-color:var(--accent); color:var(--accent); font-weight:600; }
+  .workflow-next { font-size:13.5px; }
   .primary-actions { margin-top:20px; padding:13px 14px 4px; border:1px solid var(--line-strong); border-radius:var(--r-lg); background:var(--surface); }
   .primary-actions .lab { font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); margin-bottom:9px; }
   .primary-actions .row-actions { margin-bottom:9px; }
@@ -1882,6 +1888,43 @@ DASHBOARD_HTML = r"""<!doctype html>
     confirmed_fixed: { label: "Confirmed fixed", plain: "Measured red, then measured green" }
   };
 
+  // Phase 4: the single dominant status. One state, one next action, one
+  // explanation — rendered above the fold on every trace, in both registers.
+  // The vocabulary is execution.py's, never a fifth invention of this file.
+  function workflowStripe(exec) {
+    var steps = ["draft", "ready", "reproduced", "confirmed_fixed"];
+    var stripe = el("div", { class: "workflow-stripe", role: "group",
+                             "aria-label": "Execution progress" });
+    var state = exec && exec.execution_state;
+    if (!state) {
+      stripe.appendChild(el("span", { class: "muted",
+        text: tech ? "execution_state unavailable in this view"
+                   : "Execution progress is not available in this view." }));
+      return stripe;
+    }
+    var reached = steps.indexOf(state);
+    stripe.appendChild(el("div", { class: "workflow-steps" },
+      steps.map(function (s, i) {
+        var known = EXECUTION_LABELS[s] || { label: s };
+        var cls = "workflow-step" +
+          (i < reached ? " done" : (i === reached ? " current" : ""));
+        return el("span", { class: cls, text: tech ? s : known.label });
+      })));
+    stripe.appendChild(el("div", { class: "muted", text: exec.meaning || "" }));
+    if (exec.next_action) {
+      stripe.appendChild(el("div", { class: "workflow-next" }, [
+        el("strong", { text: tech ? "next_action " : "Next: " }),
+        el("span", { text: exec.next_action })
+      ]));
+    }
+    if ((exec.blockers || []).length) {
+      stripe.appendChild(el("div", { class: "muted",
+        text: (tech ? "blockers: " : "Waiting on: ") +
+          exec.blockers.map(function (b) { return b.title || b.id; }).join(", ") }));
+    }
+    return stripe;
+  }
+
   function executionBox(exec) {
     if (!exec || !exec.execution_state) return null;
     var known = EXECUTION_LABELS[exec.execution_state] ||
@@ -1957,6 +2000,10 @@ DASHBOARD_HTML = r"""<!doctype html>
                          text: confidenceBand(rep.score) })
       ])
     ]));
+
+    // The unified execution status: how far this actually got, and the one next
+    // action — before any tab, in front of every other vocabulary.
+    root.appendChild(workflowStripe(trace.execution));
 
     // What this stage means, taught once.
     var stageNote = teach("stage_" + shape.stage, stageMeta.teach);

@@ -192,3 +192,15 @@ def test_the_dataset_says_it_is_synthetic():
     dataset = load_dataset()
     assert "Synthetic" in dataset["note"]
     assert "No real user data" in dataset["note"]
+
+
+def test_demo_serves_the_execution_projection(client):
+    """The unified status header needs /admin/session/{id}/execution; the demo
+    serves the same projection the real host computes, from fixture data."""
+    traces = client.get("/api/stepstitch/v1/sessions?limit=10").json()["sessions"]
+    fixed = next(t for t in traces if t["trace_id"] == "trc_demo_transfer_fixed")
+    body = client.get(f"/admin/session/{fixed['trace_id']}/execution").json()
+    assert body["execution_state"] == "confirmed_fixed"
+    assert body["next_action"]
+    assert body["customer_data_status"] == "not_verified"
+    assert client.get("/admin/session/nope/execution").status_code == 404

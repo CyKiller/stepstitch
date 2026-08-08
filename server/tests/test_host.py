@@ -413,3 +413,17 @@ def test_downloads_are_fetched_with_auth_not_linked():
     assert "function downloadBtn(" in page
     assert "URL.createObjectURL" in page
     assert "headers: hdr()" in page
+
+
+def test_the_unified_workflow_stripe_is_the_dominant_status():
+    """Phase 4: one state, one next action, one explanation — rendered above every
+    tab from execution.py's vocabulary, never a fifth invention of the console."""
+    client, _ = _client()
+    page = client.get("/dashboard").text
+    assert "workflow-stripe" in page
+    assert "Execution progress" in page          # the aria-label
+    assert "next_action" in page                 # the endpoint's own field name
+    assert "workflowStripe(trace.execution)" in page
+    # Both registers, and an honest fallback when the projection is unavailable.
+    assert "Next: " in page
+    assert "not available in this view" in page

@@ -101,9 +101,21 @@ def execution_summary(
     state = derive_execution_state(readiness_items, frozen=frozen, verifications=rows)
     blockers = blocking_items(readiness_items)
     grades = [r.get("evidence_grade") for r in rows if r.get("evidence_grade")]
+    if state == STATE_DRAFT:
+        first = blockers[0] if blockers else {}
+        next_action = (f"Resolve the blocking setup: {first.get('title', 'see blockers')}"
+                       + (f" ({first.get('detail')})" if first.get("detail") else ""))
+    elif state == STATE_READY:
+        next_action = "Run the reproduction so the failure is measured, not assumed."
+    elif state == STATE_REPRODUCED:
+        next_action = ("Hand the agent packet to your assistant; StepStitch will verify "
+                       "any fix against the same frozen test.")
+    else:
+        next_action = "Nothing — the fix is proven, and this test now guards the route."
     return {
         "execution_state": state,
         "meaning": STATE_MEANING[state],
+        "next_action": next_action,
         "blockers": [
             {"id": b.get("id"), "title": b.get("title"), "detail": b.get("detail")}
             for b in blockers
