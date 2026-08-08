@@ -23,7 +23,7 @@ import json
 import pathlib
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
@@ -272,7 +272,7 @@ def build_demo_app(dataset: Optional[Dict[str, Any]] = None) -> FastAPI:
         # status header renders — and stays honest — in the demo too.
         trace = next((t for t in store.traces if t["id"] == trace_id), None)
         if trace is None:
-            return JSONResponse(status_code=404, content={"detail": "Trace not found"})
+            raise HTTPException(status_code=404, detail="Trace not found")
         cfg = await _repro_config()
         footsteps = json.loads(trace["footsteps"])
         rows = [v for v in store.verifications if v.get("trace_id") == trace_id]
