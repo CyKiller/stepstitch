@@ -74,7 +74,8 @@
     "test:runner-proof": "node scripts/prove-runner-executes.mjs",
     "test:agent-loop": "python3 scripts/demo_agent_loop.py",
     "test:benchmark": "python3 scripts/benchmark_problems.py",
-    "test:diagnostics-inert": "node scripts/prove-diagnostics-are-inert.mjs"
+    "test:diagnostics-inert": "node scripts/prove-diagnostics-are-inert.mjs",
+    "test:repro-corpus": "node scripts/prove-repro-corpus.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.62.0",
