@@ -44,8 +44,22 @@ if (!TOKEN) {
 
 const work = join(HERE, ".verify-run")
 
+/**
+ * fetch, minus connection pooling. Every request here is one-shot with a Playwright run
+ * (seconds of idle time) between it and the next, which is exactly the pattern that
+ * breaks keep-alive reuse: Node's fetch pools the socket, the server's idle timeout
+ * (uvicorn's default is 5s) closes it while the reproduction runs, and the NEXT request
+ * reuses the dead socket — `fetch failed / read ECONNRESET` on the final /verify POST,
+ * after both runs measured correctly. `Connection: close` makes every request open a
+ * fresh socket, which removes the race rather than retrying past it: the measured
+ * outcomes are never re-run, so the report must simply be deliverable.
+ */
+function fetchOnce(url, init = {}) {
+  return fetch(url, { ...init, headers: { ...(init.headers || {}), Connection: "close" } })
+}
+
 async function setBug(active) {
-  const res = await fetch(`${APP}/__bug`, {
+  const res = await fetchOnce(`${APP}/__bug`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ active }),
@@ -55,7 +69,7 @@ async function setBug(active) {
 }
 
 async function fetchReproduction() {
-  const res = await fetch(`${HOST}/api/stepstitch/v1/session/${TRACE_ID}/playwright`, {
+  const res = await fetchOnce(`${HOST}/api/stepstitch/v1/session/${TRACE_ID}/playwright`, {
     headers: { Authorization: `Bearer ${TOKEN}` },
   })
   if (!res.ok) {
@@ -101,7 +115,7 @@ async function main() {
   const postPassed = runReproduction("post-fix")
 
   console.log("\nReporting the measured outcomes to StepStitch…")
-  const res = await fetch(`${HOST}/api/stepstitch/v1/session/${TRACE_ID}/verify`, {
+  const res = await fetchOnce(`${HOST}/api/stepstitch/v1/session/${TRACE_ID}/verify`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN}` },
     body: JSON.stringify({

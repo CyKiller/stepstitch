@@ -278,7 +278,17 @@ def main() -> int:
                      TRACE_ID=trace_id, TINY_TRANSFER_URL=app_url),
             capture_output=True, text=True, timeout=600,
         )
-        print("   " + "\n   ".join((verify.stdout or "").strip().splitlines()[-6:]))
+        if verify.returncode != 0:
+            # The quiet tail below is for the success path. verify.mjs reports its real
+            # failure reasons on stderr (thrown fetch errors, the wrong-verdict message),
+            # and swallowing that once cost a two-CI-run blind flake hunt: the log ended
+            # at "Reporting the measured outcomes…" with the ECONNRESET invisible.
+            print("   ---- verify.mjs stdout ----")
+            print("   " + "\n   ".join((verify.stdout or "(empty)").strip().splitlines()))
+            print("   ---- verify.mjs stderr ----")
+            print("   " + "\n   ".join((verify.stderr or "(empty)").strip().splitlines()))
+        else:
+            print("   " + "\n   ".join((verify.stdout or "").strip().splitlines()[-6:]))
         check(verify.returncode == 0, "verify.mjs measured red then green")
 
         step(9, "freeze / verify-fix: the measured-grade path, asserted from the raw row")
