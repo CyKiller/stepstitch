@@ -4,15 +4,16 @@ This is the acceptance ledger. "Done" means backed by code **and** proven by a n
 test or gate that exists in this repository — a row with no runnable proof does not
 belong here. The single end-to-end acceptance test is `service/tests/test_golden_path.py`.
 
-**Current release: 0.11.0** <!-- x-release-please-version --> — published to npm, PyPI and
-GHCR (multi-arch), with the full CI gate re-run as the release gate before any artifact is
-pushed.
+**Current version: 0.11.0** <!-- x-release-please-version --> — the version this tree
+declares. A version's artifacts exist only once the manually-approved release run has
+published them to npm, PyPI and GHCR (multi-arch); merging the release PR alone publishes
+nothing. The full CI gate is re-run as the release gate before any artifact is pushed.
 
 ## Gates
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **741** | `PYTHONPATH=service pytest service/tests/` |
+| Service (compiler, router, privacy, connectors) | **748** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **227** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **40** | `npx vitest run` |
 | Web (marketing site + copy claims) | **154** | `cd web && npx vitest run` |

@@ -100,6 +100,35 @@ jobs:
           pip install pip-audit
           pip-audit -r <(pip freeze) || true
 
+  service-browser-free:
+    name: Service (unit tests must not probe this machine)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+          cache: "npm"
+      # npm ci is the POINT of this job, not setup: it puts the playwright package on the
+      # machine so the runner's `npx --no-install playwright` probe ANSWERS — and the empty
+      # PLAYWRIGHT_BROWSERS_PATH makes the answer "browser absent" (present=False). That is
+      # the state that sent 21 fake-execution runner tests into NEEDS_SETUP before they
+      # reached the code they test — a state no other job occupies: the service job has no
+      # node_modules (probe can't answer, runs proceed) and the e2e job installs Chromium.
+      # A machine's browser inventory must never change a unit-test verdict.
+      - run: npm ci
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install service with test + mcp extras
+        run: pip install "./service[test,mcp]"
+      - name: Run service tests with the browser cache empty
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/deliberately-empty-browser-cache
+        run: pytest service/tests -q
+
   host:
     name: Host (auth + dashboard + real Postgres)
     runs-on: ubuntu-latest

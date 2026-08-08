@@ -50,9 +50,13 @@ def test_it_cites_a_meaningful_number_of_proofs():
 
 
 def test_stated_release_matches_package_json():
+    # "Current version", deliberately not "Current release": the ledger names the version
+    # this TREE declares, which is true the moment the release PR merges — "released"
+    # only becomes true after the separately-approved publish run, and the ledger must
+    # not get ahead of it.
     version = json.loads((REPO / "package.json").read_text())["version"]
-    assert f"Current release: {version}" in _doc(), (
-        f"STATUS.md does not state the current release ({version}); "
+    assert f"Current version: {version}" in _doc(), (
+        f"STATUS.md does not state the current version ({version}); "
         "release-please bumps package.json but cannot edit prose."
     )
 

@@ -506,6 +506,12 @@ def run_reproduction(
     project_dir: Optional[Path] = None,
     should_cancel: Optional[Callable[[], bool]] = None,
     runner: Optional[Callable[..., subprocess.CompletedProcess]] = None,
+    # Same kind of seam as `runner`, and for the same reason. The browser probe shells out
+    # to the real machine, so without a seam every test that fakes execution still depends
+    # on whether THIS machine happens to have Chromium installed — and a machine with npx
+    # but no browser (npm install run, `npx playwright install` not) sent 21 fake-execution
+    # tests into the NEEDS_SETUP return below, never reaching the code they exist to test.
+    browser_probe: Optional[Callable[..., BrowserIdentity]] = None,
 ) -> ReproductionResult:
     """Execute ``script`` up to ``runs`` times and report what was observed.
 
@@ -535,7 +541,8 @@ def run_reproduction(
     # then leak (check_envelope used to fire after mkdtemp and outside the try/finally), and
     # nothing is spawned on a machine that cannot spawn it.
     spec = _config_spec(base_url, timeout * 1000, screenshots, diagnostics=diagnostics)
-    identity = _browser_identity(headless=bool(spec["use"].get("headless", True)))
+    probe = browser_probe or _browser_identity
+    identity = probe(headless=bool(spec["use"].get("headless", True)))
 
     # The observers are stripped from what gets hashed, for the reason argued at length in
     # ExecutionEnvelope.hashed_payload: red traces, green does not, and hashing that

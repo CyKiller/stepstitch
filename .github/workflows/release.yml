@@ -8,6 +8,15 @@ name: release (publish on tag)
 # nothing reaches npm/PyPI/GHCR until CyKiller approves the parked run, no matter how
 # the workflow was triggered. Token-gated steps skip cleanly when their secret is not
 # configured, so a tag never hard-fails a half-configured project.
+#
+# Identity invariant (guarded by service/tests/test_release_workflow_identity.py): the
+# `identity` job resolves the requested version to the TAG'S peeled commit and proves
+# every version manifest at that commit agrees; every publish job checks out exactly that
+# commit and re-asserts it. Before this, a dispatch from main checked out main's HEAD —
+# so anything merged after the tag would have published under the tagged version, and
+# environment approval could not have told the difference. The workflow DEFINITION still
+# runs from main on a dispatch (deliberate: a fix to this file must apply to the run
+# shipping it); only the source being built is pinned.
 on:
   push:
     tags: [ "v*.*.*" ]
@@ -35,15 +44,63 @@ jobs:
   verify:
     uses: ./.github/workflows/ci.yml
 
+  identity:
+    name: requested version == tag == source
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pin.outputs.version }}
+      sha: ${{ steps.pin.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0   # the tag and its history, not just the triggering ref
+      - name: Resolve the version to the tag's commit and hold it to its manifests
+        id: pin
+        run: |
+          RAW="${{ inputs.version || github.ref_name }}"
+          VERSION="${RAW#v}"
+          # Peel (^{commit}): the tag's TARGET commit, whether the tag is lightweight or
+          # annotated — never the tag object itself, and never whatever HEAD happens to be.
+          SHA="$(git rev-parse -q --verify "refs/tags/v${VERSION}^{commit}")" || {
+            echo "::error::tag v${VERSION} does not exist — cut it with release-cut.yml first."
+            exit 1
+          }
+          git checkout --quiet "$SHA"
+          for probe in \
+            "node -p require('./package.json').version" \
+            "node -p require('./packages/cli-shim/package.json').version"; do
+            GOT="$($probe)"
+            if [ "$GOT" != "$VERSION" ]; then
+              echo "::error::at tag v${VERSION} (${SHA}) a manifest says ${GOT} — refusing to publish a version the source does not declare."
+              exit 1
+            fi
+          done
+          grep -q "^version = \"${VERSION}\"" service/pyproject.toml || {
+            echo "::error::service/pyproject.toml at tag v${VERSION} disagrees with ${VERSION}"
+            exit 1
+          }
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Release identity"
+            echo "- **Version:** ${VERSION}"
+            echo "- **Tag commit:** ${SHA}"
+            echo "- All publish jobs build exactly this commit."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   npm:
     name: publish npm + release assets
-    needs: verify
+    needs: [verify, identity]
     # Publication requires human approval on the protected `release` environment —
     # a tag alone (however it was created) parks here until CyKiller approves.
     environment: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.identity.outputs.sha }}
+      - name: This checkout is the tagged commit, not the workflow's ref
+        run: test "$(git rev-parse HEAD)" = "${{ needs.identity.outputs.sha }}"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # Node 20 for consistency with CI (publish job runs tsc-only `npm run release`).
@@ -66,7 +123,8 @@ jobs:
         # Idempotent: skip cleanly if this version is already on npm so a re-run
         # of an existing tag does not hard-fail with E403 "cannot publish over".
         run: |
-          VERSION="$(node -p "require('./package.json').version")"
+          VERSION="${{ needs.identity.outputs.version }}"
+          test "$(node -p "require('./package.json').version")" = "$VERSION"
           if npm view "@stepstitch/tracker@${VERSION}" version >/dev/null 2>&1; then
             echo "npm: @stepstitch/tracker@${VERSION} already published — skipping."
           else
@@ -83,7 +141,8 @@ jobs:
         # guard as the tracker: re-running a tag must not hard-fail.
         working-directory: packages/cli-shim
         run: |
-          VERSION="$(node -p "require('./package.json').version")"
+          VERSION="${{ needs.identity.outputs.version }}"
+          test "$(node -p "require('./package.json').version")" = "$VERSION"
           if npm view "stepstitch@${VERSION}" version >/dev/null 2>&1; then
             echo "npm: stepstitch@${VERSION} already published — skipping."
           else
@@ -94,18 +153,24 @@ jobs:
 
       - name: Attach SBOM + SRI to the GitHub release
         run: |
-          RAW="${{ inputs.version || github.ref_name }}"
-          gh release upload "v${RAW#v}" sbom.cdx.json dist/index.js.sri --clobber
+          gh release upload "v${{ needs.identity.outputs.version }}" \
+            sbom.cdx.json dist/index.js.sri --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
   pypi:
     name: publish PyPI
-    needs: verify
+    needs: [verify, identity]
     environment: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.identity.outputs.sha }}
+      - name: This checkout is the tagged commit, not the workflow's ref
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ needs.identity.outputs.sha }}"
+          grep -q "^version = \"${{ needs.identity.outputs.version }}\"" service/pyproject.toml
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.11" }
       - run: pip install build
@@ -123,7 +188,7 @@ jobs:
 
   installable:
     name: a stranger can install what we just published
-    needs: [npm, pypi]
+    needs: [npm, pypi, identity]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -146,8 +211,7 @@ jobs:
       # a check that cries wolf is a check people learn to skip.
       - name: Wait for both registries to serve the new version
         run: |
-          RAW="${{ inputs.version || github.ref_name }}"
-          VERSION="${RAW#v}"
+          VERSION="${{ needs.identity.outputs.version }}"
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
           wait_for () {   # $1 human name, $2 url, $3 jq-ish grep for the version
             for i in $(seq 1 60); do
@@ -192,18 +256,21 @@ jobs:
 
   docker:
     name: build + push images (GHCR, multi-arch)
-    needs: verify
+    needs: [verify, identity]
     environment: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.identity.outputs.sha }}
+      - name: This checkout is the tagged commit, not the workflow's ref
+        run: test "$(git rev-parse HEAD)" = "${{ needs.identity.outputs.sha }}"
       - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
       - name: Compute version + lowercase owner
         id: meta
         run: |
-          RAW="${{ inputs.version || github.ref_name }}"
-          echo "version=${RAW#v}" >> "$GITHUB_OUTPUT"
+          echo "version=${{ needs.identity.outputs.version }}" >> "$GITHUB_OUTPUT"
           echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4
         with:
