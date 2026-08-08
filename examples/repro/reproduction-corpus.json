@@ -1,0 +1,526 @@
+{
+  "$comment": "Reproduction Success benchmark corpus. Every entry is a synthetic trace in the exact shape the compiler and scorer consume, with the outcome the product MUST produce for it: the execution state, the replayability warning codes, whether the entry is eligible to run, and \u2014 when it is not \u2014 the single named reason the operator sees. Entries with a `runtime` block are additionally executed against a real page in real Chromium by scripts/prove-repro-corpus.mjs, which requires the generated test to fail for the INTENDED reason (the generated assertion's own message, naming the reported failure, must appear in the failing transcript), not merely fail. `script_sha256` pins byte-determinism of the generated test across machines; refresh with scripts/refresh_repro_corpus.py after a deliberate compiler change. Categories cover the plan's full taxonomy; setup-failure and browser-failure entries carry real never-ran transcripts and must classify as toolchain errors (inconclusive), never as a reproduced bug.",
+  "version": 1,
+  "base_url": "http://app.corpus.test",
+  "entries": [
+    {
+      "name": "strong-api-500",
+      "category": "reproducible",
+      "eligible": true,
+      "expect": {
+        "state": "ready",
+        "warnings": [],
+        "script_sha256": "6dec3af2143fcd300b8c1b010b763487e72f72f92a2840d2e3d2f9c7c35f615e"
+      },
+      "footsteps": [
+        {
+          "type": "navigation",
+          "route": "/",
+          "label": "[masked]"
+        },
+        {
+          "type": "click",
+          "route": "/",
+          "target": "[data-testid=\"submit\"]",
+          "label": "[masked]"
+        },
+        {
+          "type": "api_error",
+          "route": "/",
+          "label": "[masked]",
+          "metadata": {
+            "status": 500,
+            "endpoint": "/api/pay"
+          }
+        }
+      ],
+      "runtime": {
+        "kind": "api",
+        "status": 500,
+        "red": true,
+        "transcript_contains": "no server error from /api/pay"
+      }
+    },
+    {
+      "name": "strong-exception-typeerror",
+      "category": "reproducible",
+      "eligible": true,
+      "expect": {
+        "state": "ready",
+        "warnings": [],
+        "script_sha256": "d27302fe66b8a0cc3e0f5a583cb355724ea16e5ff16e8b55fcce39a3623cbebd"
+      },
+      "footsteps": [
+        {
+          "type": "navigation",
+          "route": "/",
+          "label": "[masked]"
+        },
+        {
+          "type": "click",
+          "route": "/",
+          "target": "[data-testid=\"submit\"]",
+          "label": "[masked]"
+        },
+        {
+          "type": "exception",
+          "route": "/",
+          "label": "[masked]",
+          "metadata": {
+            "error_type": "TypeError"
+          }
+        }
+      ],
+      "runtime": {
+        "kind": "exception",
+        "onclick": "throw new TypeError('amount is not a function')",
+        "red": true,
+        "transcript_contains": "the reported TypeError must not reproduce"
+      }
+    },
+    {
+      "name": "fixed-app-control",
+      "category": "reproducible",
+      "eligible": true,
+      "expect": {
+        "state": "ready",
+        "warnings": [],
+        "script_sha256": "50d96886fbe6eb415e265f367f754d1b79a10d5f6324836b7acd71a8572b3522"
+      },
+      "footsteps": [
+        {
+          "type": "navigation",
+          "route": "/",
+          "label": "[masked]"
+        },
+        {
+          "type": "click",
+          "route": "/",
+          "target": "[data-testid=\"submit\"]",
+          "label": "[masked]"
+        },
+        {
+          "type": "exception",
+          "route": "/",
+          "label": "[masked]",
+          "metadata": {
+            "error_type": "TypeError"
+          }
+        }
+      ],
+      "runtime": {
+        "kind": "ok",
+        "red": false,
+        "$comment": "The page is healthy: the generated test must pass. A corpus that cannot go green would count any failure as success."
+      }
+    },
+    {
+      "name": "api-403-forbidden",
+      "category": "api-failure",
+      "eligible": true,
+      "expect": {
+        "state": "ready",
+        "warnings": [],
+        "script_sha256": "3e5b751c1980872a30fc0b0c91483f11232b344b437b24dd35add221a8bb608a"
+      },
+      "footsteps": [
+        {
+          "type": "navigation",
+          "route": "/",
+          "label": "[masked]"
+        },
+        {
+          "type": "click",
+          "route": "/",
+          "target": "[data-testid=\"submit\"]",
+          "label": "[masked]"
+        },
+        {
+          "type": "api_error",
+          "route": "/",
+          "label": "[masked]",
+          "metadata": {
+            "status": 403,
+            "endpoint": "/api/pay"
+          }
+        }
+      ],
+      "runtime": {
+        "kind": "api",
+        "status": 403,
+        "red": true,
+        "transcript_contains": "/api/pay must not return 403"
+      }
+    },
+    {
+      "name": "api-504-timeout-shape",
+      "category": "api-failure",
+      "eligible": true,
+      "expect": {
+        "state": "ready",
+        "warnings": [],
+        "script_sha256": "242deedba2811939254a3486ea09c783751d9e728f111e84bb583e8c98aad651"
+      },
+      "footsteps": [
+        {
+          "type": "navigation",
+          "route": "/pay",
+          "label": "[masked]"
+        },
+        {
+          "type": "click",
+          "route": "/pay",
+          "target": "[data-testid=\"submit\"]",
+          "label": "[masked]"
+        },
+        {
+          "type": "api_error",
+          "route": "/pay",
+          "label": "[masked]",
+          "metadata": {
+            "status": 504,
+            "endpoint": "/api/pay",
+            "method": "POST"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic-route-configured",
+      "category": "dynamic-route",
+      "eligible": true,
+      "config": {
+        "route_params": {
+          "id": "1001"
+        }
+      },
+      "expect": {
+        "state": "ready",
+        "warnings": [
+          "templated_route_needs_fixture"
+        ],
+        "script_sha256": "105308a1df8bc9ff8808c310e0c24608c3a9146f047a4a52082b2b2864d90f95"
+      },
+      "footsteps": [
+        {
+          "type": "navigation",
+          "route": "/accounts/:id",
+          "label": "[masked]"
+        },
+        {
+          "type": "click",
+          "route": "/accounts/:id",
+          "target": "[data-testid=\"detail\"]",
+          "label": "[masked]"
+        },
+        {
+          "type": "api_error",
+          "route": "/accounts/:id",
+          "label": "[masked]",
+          "metadata": {
+            "status": 500,
+            "endpoint": "/api/accounts/:id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "dynamic-route-unconfigured",
+      "category": "dynamic-route",
+      "eligible": false,
+      "reason": "route_params",
+      "expect": {
+        "state": "draft",
+        "warnings": [
+          "templated_route_needs_fixture"
+        ],
+        "script_sha256": "7558c5f3fe30312a371a9add33e874473b840b82192c6a15c129f32f5d6cd0af"
+      },
+      "footsteps": [
+        {
+          "type": "navigation",
+          "route": "/accounts/:id",
+          "label": "[masked]"
+        },
+        {
+          "type": "click",
+          "route": "/accounts/:id",
+          "target": "[data-testid=\"detail\"]",
+          "label": "[masked]"
+        },
+        {
+          "type": "api_error",
+          "route": "/accounts/:id",
+          "label": "[masked]",
+          "metadata": {
+            "status": 500,
+            "endpoint": "/api/accounts/:id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "auth-required-advisory",
+      "category": "auth-required",
+      "eligible": true,
+      "config": {
+        "auth": {
+          "fixture": "tests/auth.setup.ts",
+          "env_vars": [
+            "E2E_USER_EMAIL"
+          ]
+        }
+      },
+      "expect": {
+        "state": "ready",
+        "warnings": [],
+        "script_sha256": "575a1a5f13591e464a39a7e68bca57ca060033a9b4c34d6b77967a30f14809fe"
+      },
+      "footsteps": [
+        {
+          "type": "navigation",
+          "route": "/portfolio",
+          "label": "[masked]"
+        },
+        {
+          "type": "click",
+          "route": "/portfolio",
+          "target": "[data-testid=\"refresh\"]",
+          "label": "[masked]"
+        },
+        {
+          "type": "api_error",
+          "route": "/portfolio",
+          "label": "[masked]",
+          "metadata": {
+            "status": 500,
+            "endpoint": "/api/portfolio"
+          }
+        }
+      ]
+    },
+    {
+      "name": "text-input-synthetic-value",
+      "category": "form-values",
+      "eligible": true,
+      "expect": {
+        "state": "ready",
+        "warnings": [],
+        "script_sha256": "bc0035e65a78f7ef0a5c99c503c1550378049b62fc223178ea6bece01d481308"
+      },
+      "footsteps": [
+        {
+          "type": "navigation",
+          "route": "/signup",
+          "label": "[masked]"
+        },
+        {
+          "type": "input",
+          "route": "/signup",
+          "target": "[data-testid=\"email-input\"]",
+          "label": "[masked]"
+        },
+        {
+          "type": "click",
+          "route": "/signup",
+          "target": "[data-testid=\"submit\"]",
+          "label": "[masked]"
+        },
+        {
+          "type": "api_error",
+          "route": "/signup",
+          "label": "[masked]",
+          "metadata": {
+            "status": 422,
+            "endpoint": "/api/signup"
+          }
+        }
+      ]
+    },
+    {
+      "name": "password-input-unconfigured",
+      "category": "form-values",
+      "eligible": false,
+      "reason": "input_values",
+      "expect": {
+        "state": "draft",
+        "warnings": [
+          "unstable_selector"
+        ],
+        "script_sha256": "1e21c97ae0575c42e9774aeb9a24726d1fb5730f707a836fd6756bfa58d43322"
+      },
+      "footsteps": [
+        {
+          "type": "navigation",
+          "route": "/login",
+          "label": "[masked]"
+        },
+        {
+          "type": "input",
+          "route": "/login",
+          "target": "input[type=\"password\"]",
+          "label": "[masked]"
+        },
+        {
+          "type": "click",
+          "route": "/login",
+          "target": "[data-testid=\"submit\"]",
+          "label": "[masked]"
+        },
+        {
+          "type": "api_error",
+          "route": "/login",
+          "label": "[masked]",
+          "metadata": {
+            "status": 500,
+            "endpoint": "/api/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "unstable-selector-still-runs",
+      "category": "unstable-selector",
+      "eligible": true,
+      "expect": {
+        "state": "ready",
+        "warnings": [
+          "unstable_selector"
+        ],
+        "script_sha256": "836d26c4405a237ce938804a68b6bd5c247e29ce7be102c84fe4755da3b7b201"
+      },
+      "footsteps": [
+        {
+          "type": "navigation",
+          "route": "/",
+          "label": "[masked]"
+        },
+        {
+          "type": "click",
+          "route": "/",
+          "target": "main > div > button:nth-child(1)",
+          "label": "[masked]"
+        },
+        {
+          "type": "exception",
+          "route": "/",
+          "label": "[masked]",
+          "metadata": {
+            "error_type": "RangeError"
+          }
+        }
+      ],
+      "runtime": {
+        "kind": "exception",
+        "onclick": "throw new RangeError('index out of range')",
+        "red": true,
+        "transcript_contains": "the reported RangeError must not reproduce"
+      }
+    },
+    {
+      "name": "unsupported-step-type",
+      "category": "unsupported-action",
+      "eligible": false,
+      "reason": "unknown_step_type",
+      "expect": {
+        "state": "ready",
+        "warnings": [
+          "unknown_step_type"
+        ],
+        "script_sha256": "20a70dda20e09d2ea8576dd1d230f0cca8aee962beb6c224db391dfd2e6416aa"
+      },
+      "footsteps": [
+        {
+          "type": "navigation",
+          "route": "/",
+          "label": "[masked]"
+        },
+        {
+          "type": "hover",
+          "route": "/",
+          "target": "[data-testid=\"menu\"]",
+          "label": "[masked]"
+        },
+        {
+          "type": "click",
+          "route": "/",
+          "target": "[data-testid=\"submit\"]",
+          "label": "[masked]"
+        },
+        {
+          "type": "exception",
+          "route": "/",
+          "label": "[masked]",
+          "metadata": {
+            "error_type": "TypeError"
+          }
+        }
+      ]
+    },
+    {
+      "name": "navigation-only-no-terminal",
+      "category": "missing-terminal-action",
+      "eligible": false,
+      "reason": "no_terminal_action",
+      "expect": {
+        "state": "ready",
+        "warnings": [
+          "no_terminal_action"
+        ],
+        "script_sha256": "d5e6bf658887865d6fe29c354a37f474b482b18f117bf6a9a3b9ec95b85b484a"
+      },
+      "footsteps": [
+        {
+          "type": "navigation",
+          "route": "/dashboard",
+          "label": "[masked]"
+        },
+        {
+          "type": "navigation",
+          "route": "/reports",
+          "label": "[masked]"
+        }
+      ]
+    },
+    {
+      "name": "empty-trace",
+      "category": "non-reproducible",
+      "eligible": false,
+      "reason": "empty_trace",
+      "expect": {
+        "state": "ready",
+        "warnings": [
+          "empty_trace"
+        ],
+        "script_sha256": "3716f15c516019986ae96cf8e34bcdd12788f857938c2e6b5d7de0b0bffd902b"
+      },
+      "footsteps": []
+    },
+    {
+      "name": "browser-binary-missing",
+      "category": "browser-failure",
+      "eligible": false,
+      "reason": "toolchain_error",
+      "transcript": "browserType.launch: Executable doesn't exist at /home/ci/.cache/ms-playwright/chromium-1105/chrome-linux/chrome\nRun `npx playwright install` to download browsers.\n  1 failed",
+      "expect": {
+        "state": null,
+        "warnings": [],
+        "script_sha256": ""
+      },
+      "footsteps": []
+    },
+    {
+      "name": "module-resolution-broken",
+      "category": "setup-failure",
+      "eligible": false,
+      "reason": "toolchain_error",
+      "transcript": "Error: Cannot find module '@playwright/test'\nRequire stack:\n- /work/repro.spec.ts",
+      "expect": {
+        "state": null,
+        "warnings": [],
+        "script_sha256": ""
+      },
+      "footsteps": []
+    }
+  ]
+}

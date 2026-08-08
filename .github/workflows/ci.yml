@@ -204,6 +204,13 @@ jobs:
       # shape, on and off.
       - name: Prove diagnostics are inert
         run: npm run test:diagnostics-inert
+      # The Reproduction Success gate: the compiler's own output must fail for the
+      # INTENDED reason (the generated assertion's message naming the reported failure)
+      # against real pages in real Chromium — and the healthy control must stay green,
+      # or the corpus would count any breakage as success. Offline halves of the gate
+      # (ready rate, refusal naming, byte-determinism) live in test_repro_corpus.py.
+      - name: Reproduction Success corpus (intended-red in real Chromium)
+        run: npm run test:repro-corpus
 
   demo-console:
     name: Demo console (renders in a real browser)
