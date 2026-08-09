@@ -4,7 +4,7 @@ This is the acceptance ledger. "Done" means backed by code **and** proven by a n
 test or gate that exists in this repository — a row with no runnable proof does not
 belong here. The single end-to-end acceptance test is `service/tests/test_golden_path.py`.
 
-**Current version: 0.11.0** <!-- x-release-please-version --> — the version this tree
+**Current version: 0.12.0** <!-- x-release-please-version --> — the version this tree
 declares. A version's artifacts exist only once the manually-approved release run has
 published them to npm, PyPI and GHCR (multi-arch); merging the release PR alone publishes
 nothing. The full CI gate is re-run as the release gate before any artifact is pushed.
