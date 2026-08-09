@@ -80,7 +80,7 @@
   "devDependencies": {
     "@playwright/test": "1.62.0",
     "@types/node": "20.19.9",
-    "jsdom": "^24.1.0",
+    "jsdom": "^30.0.1",
     "typescript": "^5.4.0",
     "vitest": "^4.1.10"
   },
