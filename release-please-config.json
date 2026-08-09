@@ -9,6 +9,7 @@
       "extra-files": [
         "src/tracker.ts",
         "service/pyproject.toml",
+        "service/stepstitch_service/github_bridge/workflow.py",
         "web/src/lib/version.ts",
         "docs/STATUS.md",
         {

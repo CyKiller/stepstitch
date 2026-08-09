@@ -186,18 +186,30 @@ jobs:
 #
 # The check is deliberately OFFLINE: it needs no secret, no StepStitch host, and no trust
 # in whoever produced the PR. The PR carries its proof (fixproof.json, exported by
-# `stepstitch proof export` after verification); the gate recomputes the statement hash
-# and holds the proof to the repo's own policy — including that the proof's subject is
-# EXACTLY the PR head commit, so a proof about some other code cannot ride in.
+# `stepstitch proof export` after verification); the gate cryptographically verifies the
+# proof's signature against the trusted keys in the repo's policy and holds it to every
+# other requirement — including that the proof's subject is EXACTLY the PR head commit,
+# so a proof about some other code cannot ride in.
 #
-# `github.event.pull_request.head.sha`, not `github.sha`: on pull_request events
-# github.sha is the ephemeral MERGE commit, which no exported proof can ever name.
+# Three trust-audit hardenings, each load-bearing:
+#   - the policy (keys + requirements) is read from the PROTECTED BASE COMMIT, never
+#     from the PR's checkout — a PR that weakens proof-policy.json in its own diff is
+#     still judged by the policy of the branch it wants to enter;
+#   - actions are pinned by commit SHA and the verifier by exact version — a floating
+#     dependency inside a trust gate is a moving trust boundary;
+#   - `github.event.pull_request.head.sha`, not `github.sha`: on pull_request events
+#     github.sha is the ephemeral MERGE commit, which no exported proof can ever name.
+_GATE_VERSION = "0.11.0"  # x-release-please-version
+
 STEPSTITCH_FIXPROOF_GATE_WORKFLOW = r"""name: stepstitch fixproof gate
 
 on:
   pull_request:
 
-permissions: {}
+# Read-only by construction: checking out the PR and reading the base branch's policy
+# need `contents: read`; nothing in this gate ever writes.
+permissions:
+  contents: read
 
 jobs:
   fixproof:
@@ -205,14 +217,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The PR head itself — the commit the proof must be about.
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Load the trusted policy from the protected base branch
+        # The PR's own proof-policy.json is attacker-editable in the same diff. The
+        # trusted keys and requirements must come from the branch the PR wants to
+        # enter, so no PR can weaken the policy that judges it.
+        run: |
+          git fetch --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+          git show "${{ github.event.pull_request.base.sha }}:proof-policy.json" \
+            > "${{ runner.temp }}/trusted-proof-policy.json"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.11" }
-      - name: Install the verifier
-        run: pip install stepstitch-service
+      - name: Install the pinned verifier
+        run: pip install stepstitch-service==__STEPSTITCH_VERSION__
       - name: Verify the proof against this PR's head
         run: |
           stepstitch proof verify fixproof.json \
-            --policy proof-policy.json \
+            --policy "${{ runner.temp }}/trusted-proof-policy.json" \
             --head-sha "${{ github.event.pull_request.head.sha }}"
-"""
+""".replace("__STEPSTITCH_VERSION__", _GATE_VERSION)

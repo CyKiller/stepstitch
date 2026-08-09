@@ -58,5 +58,9 @@
     }
   },
   "statement_sha256": "sha256:55fc89f7c8f381a78fd85cb826f5b27f2e088ae5564cbbecd888938c5ab41e79",
-  "signature": null
+  "signature": {
+    "algorithm": "ed25519",
+    "key_id": "stepstitch-demo",
+    "signature": "68b648e2eaccf2c4df0849c2f67d8a518a3dcd36e408c49500c8e6307e9f2f100094e7684cb3ac34f896f60d9f41a56244f987547ee03cd2013b7f78a7a13609"
+  }
 }

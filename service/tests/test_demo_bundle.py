@@ -156,20 +156,69 @@ def fixproof():
     return json.loads(PROOF_PATH.read_text(encoding="utf-8"))
 
 
-def test_the_committed_proof_verifies_offline_with_the_shipped_policy(fixproof):
-    """The exact experience the /verify page promises a visitor: two downloaded files and
-    the CLI, nothing else."""
+def test_the_committed_proof_verifies_offline_with_the_demo_policy(fixproof):
+    """The exact experience the /verify page promises a visitor: two downloaded files
+    and the CLI, nothing else — and the verification now includes a REAL ed25519
+    signature check against the demo key the policy names."""
     from stepstitch_service.fixproof import verify_fixproof
 
-    policy = json.loads(POLICY_SOURCE.read_text(encoding="utf-8"))
+    policy = json.loads(POLICY_WEB_COPY.read_text(encoding="utf-8"))
     result = verify_fixproof(fixproof, policy)
     assert result.ok, [c for c in result.checks if not c["passed"]]
+    signature = next(c for c in result.checks if c["check"] == "require_signature")
+    assert "ed25519" in signature["detail"]
 
 
-def test_the_proof_copies_and_policy_copies_match_their_sources(fixproof):
+def test_a_tampered_demo_proof_is_refused_by_the_demo_policy(fixproof):
+    """The visitor's second command — change any byte, verification refuses."""
+    from stepstitch_service.evidence import TamperError
+    from stepstitch_service.fixproof import verify_fixproof
+
+    policy = json.loads(POLICY_WEB_COPY.read_text(encoding="utf-8"))
+    tampered = json.loads(json.dumps(fixproof))
+    tampered["statement"]["predicate"]["results"]["pre_passed"] = True
+    with pytest.raises(TamperError):
+        verify_fixproof(tampered, policy)
+
+
+def test_the_proof_copies_match_and_the_policies_deliberately_differ(fixproof):
+    """The web policy is generated (it must actually verify, so it trusts the
+    public-by-design demo key); the customer template deliberately refuses to run until
+    a real key replaces its placeholder. Same requirements, different trust anchors —
+    and the customer template must never be the weaker of the two."""
     assert fixproof == json.loads(PROOF_WEB_COPY.read_text(encoding="utf-8"))
-    assert (POLICY_WEB_COPY.read_text(encoding="utf-8")
-            == POLICY_SOURCE.read_text(encoding="utf-8"))
+    web = json.loads(POLICY_WEB_COPY.read_text(encoding="utf-8"))
+    template = json.loads(POLICY_SOURCE.read_text(encoding="utf-8"))
+    for key in ("require_grade", "require_pre_red", "require_post_green",
+                "require_signature", "allowed_verifier_kinds"):
+        assert web[key] == template[key], f"{key} drifted between demo and template"
+    # The template requires EVERY binding; the demo omits only the envelope digest
+    # (the committed measurement is byte-stable; a real envelope digest would move
+    # with CI's browser version).
+    assert template["require_bindings"] is True
+    assert set(web["require_bindings"]) == {
+        "subject.gitCommit", "base_commit", "failure.fingerprint",
+        "failure.red_signature", "frozen_test.sha256", "privacy.policy_sha256",
+        "privacy.structural_result",
+    }
+    # And the demo policy pins the demo commit, so the committed proof cannot be
+    # replayed as evidence about any real code.
+    assert web["expected_head_sha"] == "beefc0de" * 5
+
+
+def test_the_demo_policy_matches_its_generator(fixproof):
+    """web/public/proof-policy.json is a build artifact of demo_red_to_green.py; the
+    committed copy must equal what the generator produces today."""
+    import importlib.util
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        "demo_red_to_green",
+        Path(REPO_ROOT) / "scripts" / "demo_red_to_green.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    committed = json.loads(POLICY_WEB_COPY.read_text(encoding="utf-8"))
+    assert committed == module.build_demo_proof_policy()
 
 
 def test_the_proof_agrees_with_the_bundle_it_was_built_from(bundle, fixproof):

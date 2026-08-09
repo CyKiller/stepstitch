@@ -280,10 +280,23 @@ def test_a_matching_head_sha_passes_case_insensitively():
     assert _verify(_document(), head_sha=FIXED.upper()).ok
 
 
+def _signature_policy():
+    """require_signature with a real trust anchor — the only shape it works in now."""
+    import hashlib
+
+    from stepstitch_service import _ed25519
+
+    seed = hashlib.sha256(b"test_fixproof signature key").digest()
+    policy = dict(BASE_POLICY, require_signature=True,
+                  trusted_keys={"test-host":
+                                "ed25519:" + _ed25519.public_key(seed).hex()})
+    return seed, policy
+
+
 def test_missing_signature_fails_only_when_required():
     doc = _document()
     assert _verify(doc).ok
-    policy = dict(BASE_POLICY, require_signature=True)
+    _, policy = _signature_policy()
     result = _verify(doc, policy)
     assert not result.ok
     assert any(c["check"] == "require_signature" and not c["passed"]
@@ -291,8 +304,21 @@ def test_missing_signature_fails_only_when_required():
 
 
 def test_a_signed_proof_passes_the_signature_requirement():
-    doc = wrap(_statement(), signature="MEUCIQfakebase64signature==")
-    assert _verify(doc, dict(BASE_POLICY, require_signature=True)).ok
+    """Signed means CRYPTOGRAPHICALLY signed by a policy-trusted key. The fake string
+    this test used to accept is the trust-audit exploit; it must fail now, and the
+    full attack matrix lives in test_fixproof_adversarial.py."""
+    from stepstitch_service.fixproof import sign_statement
+
+    seed, policy = _signature_policy()
+    statement = _statement()
+    signed = wrap(statement, sign_statement(statement, seed=seed, key_id="test-host"))
+    assert _verify(signed, policy).ok
+
+    faked = wrap(statement, "MEUCIQfakebase64signature==")
+    result = _verify(faked, policy)
+    assert not result.ok
+    assert any(c["check"] == "require_signature" and not c["passed"]
+               for c in result.checks)
 
 
 def test_an_unlisted_verifier_kind_fails():

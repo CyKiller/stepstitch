@@ -203,6 +203,16 @@ export const CLAIMS: Claim[] = [
       test: "service/tests/test_fixproof.py",
     },
   },
+  {
+    id: "fixproof-signature-verified",
+    text:
+      "The signature check is cryptographic, not cosmetic: an Ed25519 signature verified against keys your policy names — a fabricated document with a recomputed hash, a fake signature string, and a valid signature by an untrusted key are each refused, and each refusal is a permanent test.",
+    kind: "measured",
+    evidence: {
+      path: "service/stepstitch_service/fixproof.py",
+      test: "service/tests/test_fixproof_adversarial.py",
+    },
+  },
 
   // --- Posture defaults (policy: configurable, but this is the default) -------
   {

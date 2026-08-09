@@ -47,23 +47,55 @@ fix PR:
 stepstitch proof export <trace-id> --out fixproof.json
 ```
 
-Copy `STEPSTITCH_FIXPROOF_GATE_WORKFLOW` (`stepstitch_service.github_bridge.workflow`)
-into `.github/workflows/stepstitch-fixproof-gate.yml`, add a `proof-policy.json` (start
-from `examples/proof/proof-policy.json`), then mark the `fixproof` job a **required
-status check** in branch protection (Settings → Branches → require status checks). That
-last step is a repository setting — no workflow can grant itself required status.
+Set it up once:
+
+1. **Generate the trust anchor.** On the machine that runs your StepStitch host:
+   `stepstitch proof keygen` writes a private Ed25519 seed (never printed, never
+   committed) and prints the public key. Point `STEPSTITCH_SIGNING_KEY` at the seed
+   file — every exported proof is now signed.
+2. **Configure the policy.** Start from `examples/proof/proof-policy.json`, paste the
+   printed public key into `trusted_keys`, and name your verifier identities in
+   `allowed_verifier_identities`. The template deliberately **refuses to run**
+   (exit 2, unusable) until the placeholder key is replaced — a gate you forgot to
+   configure must never read as green.
+3. **Install the gate.** Copy `STEPSTITCH_FIXPROOF_GATE_WORKFLOW`
+   (`stepstitch_service.github_bridge.workflow`) into
+   `.github/workflows/stepstitch-fixproof-gate.yml`, then mark the `fixproof` job a
+   **required status check** in branch protection (Settings → Branches → require
+   status checks). That last step is a repository setting — no workflow can grant
+   itself required status.
 
 The gate is deliberately offline: **no secrets, no StepStitch host, no trust in the PR
-author**. It recomputes the statement hash and holds the proof to your policy, including
-that the proof's subject commit is exactly the PR head — so the merge is refused when:
+author**. Internal consistency is not enough — a fabricated document with a correctly
+recomputed hash is still refused, because the signature is verified cryptographically
+(Ed25519 over the canonical statement bytes) against the keys **your** policy names.
+Three hardenings make the trust chain end-to-end:
 
-- the proof references a different commit than the PR head;
+- the policy (trusted keys and requirements) is loaded from the **protected base
+  branch**, so a PR that weakens `proof-policy.json` in its own diff is still judged
+  by the policy of the branch it wants to enter;
+- the workflow pins its actions by commit SHA and the verifier by exact version — no
+  floating dependency inside the trust boundary;
+- the proof's subject commit must be exactly the PR head.
+
+So the merge is refused when:
+
+- the document carries no signature, an opaque signature string, forged signature
+  bytes, or a valid signature by any key the policy does not trust;
+- the proof references a different commit than the PR head (including a genuine proof
+  replayed from another PR);
+- a load-bearing binding is missing — base commit, failure fingerprint, red signature,
+  frozen-test digest, execution-envelope digest, privacy-policy digest, structural
+  result (`require_bindings`);
 - the original version did not measurably fail, or the fixed version did not pass;
-- the frozen test or execution envelope digests are altered;
 - the evidence grade is caller-asserted where the policy demands measured;
 - the privacy requirements (e.g. `schema_status`) are not met;
-- the verifier kind is not on the policy's allowlist;
+- the verifier kind or identity is not on the policy's allowlist;
 - any byte of the statement was changed after export.
+
+Every one of those refusals is a permanent acceptance test
+(`service/tests/test_fixproof_adversarial.py` — the six attacks from the trust audit,
+each proven refused).
 
 Verification is `stepstitch proof verify fixproof.json --policy proof-policy.json
 --head-sha <sha>` — the same command works on a laptop with no network. The proof claims

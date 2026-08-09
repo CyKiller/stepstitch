@@ -60,11 +60,32 @@ def test_a_tampered_proof_exits_1(tmp_path, capsys):
 
 
 def test_a_policy_rejection_exits_1_and_names_the_check(tmp_path, capsys):
+    """An unsigned proof against a policy that requires a trusted signature: the proof
+    is rejected (1), and the failing check is named. (require_signature WITHOUT any
+    trusted key is a different outcome — an unusable policy, exit 2, tested below.)"""
+    import hashlib
+
+    from stepstitch_service import _ed25519
+
     proof = _write(tmp_path, "fixproof.json", _document())
-    policy = _write(tmp_path, "policy.json", dict(POLICY, require_signature=True))
+    pub = "ed25519:" + _ed25519.public_key(
+        hashlib.sha256(b"proof-cli test key").digest()).hex()
+    policy = _write(tmp_path, "policy.json",
+                    dict(POLICY, require_signature=True,
+                         trusted_keys={"host": pub}))
     assert main(["proof", "verify", proof, "--policy", policy]) == 1
     out = capsys.readouterr().out
     assert "FAIL" in out and "require_signature" in out
+
+
+def test_an_unconfigured_signature_requirement_is_unusable_not_a_rejection(
+        tmp_path, capsys):
+    """require_signature true with no trusted_keys = the gate was never configured.
+    That must exit 2 (unusable), never 1 — and never 0."""
+    proof = _write(tmp_path, "fixproof.json", _document())
+    policy = _write(tmp_path, "policy.json", dict(POLICY, require_signature=True))
+    assert main(["proof", "verify", proof, "--policy", policy]) == 2
+    assert "trusted_keys" in capsys.readouterr().out
 
 
 def test_a_head_sha_mismatch_exits_1(tmp_path):
@@ -141,6 +162,57 @@ def test_export_reports_an_unreachable_host_as_a_finding(tmp_path, capsys):
     assert "STEPSTITCH_ADMIN_TOKEN" in capsys.readouterr().out
 
 
+# --- keygen: the trust anchor's origin story ----------------------------------------------
+
+
+def test_keygen_writes_a_private_seed_and_prints_only_the_public_key(tmp_path, capsys):
+    from stepstitch_service import _ed25519
+
+    out = tmp_path / "signing.key"
+    assert main(["proof", "keygen", "--out", str(out),
+                 "--key-id", "acme-host"]) == 0
+    seed_hex = out.read_text(encoding="utf-8").strip()
+    assert len(seed_hex) == 64
+    assert (out.stat().st_mode & 0o777) == 0o600
+    printed = capsys.readouterr().out
+    public = "ed25519:" + _ed25519.public_key(bytes.fromhex(seed_hex)).hex()
+    assert public in printed, "the public key must be printed to paste into the policy"
+    assert seed_hex not in printed, "the private seed must never reach the terminal"
+    assert "acme-host" in printed and "trusted_keys" in printed
+
+
+def test_keygen_refuses_to_overwrite_an_existing_key(tmp_path, capsys):
+    out = tmp_path / "signing.key"
+    out.write_text("do not clobber me", encoding="utf-8")
+    assert main(["proof", "keygen", "--out", str(out)]) == 2
+    assert out.read_text(encoding="utf-8") == "do not clobber me"
+    assert "refusing" in capsys.readouterr().out
+
+
+def test_the_keygen_key_signs_proofs_the_hardened_policy_accepts(tmp_path):
+    """The whole customer path, end to end: keygen -> host signer loads the file ->
+    signature object on the document -> offline verify against the printed public key."""
+    from stepstitch_service import _ed25519
+    from stepstitch_service.attestation import canonical_bytes
+    from stepstitch_service.host.signing import (load_signing_seed,
+                                                 make_ed25519_signer)
+
+    out = tmp_path / "signing.key"
+    assert main(["proof", "keygen", "--out", str(out)]) == 0
+    seed = load_signing_seed(str(out))
+    assert seed is not None
+
+    doc = _document()
+    doc["signature"] = make_ed25519_signer(seed, "kid")(
+        canonical_bytes(doc["statement"]))
+    proof = _write(tmp_path, "fixproof.json", doc)
+    public = "ed25519:" + _ed25519.public_key(seed).hex()
+    policy = _write(tmp_path, "policy.json",
+                    dict(POLICY, require_signature=True,
+                         trusted_keys={"kid": public}))
+    assert main(["proof", "verify", proof, "--policy", policy]) == 0
+
+
 def test_every_recommended_command_parses():
     """House rule: anything the tool suggests must itself parse."""
     parser = build_parser()
@@ -149,3 +221,5 @@ def test_every_recommended_command_parses():
     parser.parse_args(["proof", "verify", "fixproof.json", "--policy", "p.json"])
     parser.parse_args(["proof", "verify", "fixproof.json", "--policy", "p.json",
                        "--head-sha", FIXED, "--json"])
+    parser.parse_args(["proof", "keygen"])
+    parser.parse_args(["proof", "keygen", "--out", "k.key", "--key-id", "host-1"])
