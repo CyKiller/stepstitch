@@ -37,8 +37,11 @@ import sys
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-EXPECTED_HEAD = "0009"
+EXPECTED_HEAD = "0010"
 ENVELOPE_COLUMNS = ("execution_envelope_sha256", "execution_envelope_json")
+# 0010's FixProof bindings — asserted post-replay like the envelope columns, so the
+# proof checks the migration DID something, not merely that the version stamp moved.
+FIXPROOF_COLUMNS = ("base_commit", "fixed_commit", "verified_by")
 REPO = Path(__file__).resolve().parent.parent
 
 # Lowercase letters, digits, underscores; well under Postgres's 63-byte identifier limit.
@@ -168,6 +171,15 @@ def main() -> None:
                 if missing:
                     raise ProofFailure(f"frozen-envelope columns missing: {missing}")
                 print("  ok   both frozen-envelope columns present")
+
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'stepstitch_verifications'")
+                columns = {row[0] for row in cur.fetchall()}
+                missing = [c for c in FIXPROOF_COLUMNS if c not in columns]
+                if missing:
+                    raise ProofFailure(f"fixproof binding columns missing: {missing}")
+                print("  ok   all three fixproof binding columns present")
 
             # Replaying a second time must change nothing and break nothing.
             upgrade("alembic upgrade head a second time (idempotency)")
