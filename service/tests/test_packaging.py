@@ -32,3 +32,25 @@ def test_the_packaged_license_is_the_repository_license_byte_for_byte():
         "service/LICENSE drifted from the repository LICENSE — re-copy it; the wheel "
         "must carry exactly the license the project is under"
     )
+
+
+def test_the_pinned_python_version_satisfies_requires_python():
+    """service/.python-version pinned 3.9.7 while requires-python said >=3.10 — a
+    clean `uv sync` failed before a single test could run, and no suite noticed
+    because every suite was already running under a compatible interpreter. The pin
+    and the floor must agree, forever."""
+    import re
+
+    from packaging.specifiers import SpecifierSet
+    from packaging.version import Version
+
+    pinned = (SERVICE / ".python-version").read_text(encoding="utf-8").strip()
+    pyproject = (SERVICE / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r'requires-python\s*=\s*"([^"]+)"', pyproject)
+    assert match, "requires-python missing from pyproject.toml"
+    floor = SpecifierSet(match.group(1))
+    assert Version(pinned) in floor, (
+        f"service/.python-version pins {pinned}, which does not satisfy "
+        f"requires-python {floor} — `uv sync` refuses this project. "
+        "Update the pin (`uv python pin`) to a version inside the floor."
+    )
