@@ -284,3 +284,67 @@ def test_router_rejects_with_422_under_strict_policy():
     assert r.status_code == 422
     assert db.inserted is None  # nothing was stored
     assert any(a[0] == "stepstitch.scrub_reject" for a in db.audits)
+
+
+# --- policy_sha256: the policy's content, pinned --------------------------------------
+
+
+def test_policy_digest_is_stable_across_construction_order():
+    from stepstitch_service.scrubber import policy_sha256
+
+    a = derive_policy(approved_testids=frozenset(["send", "amount", "consent"]))
+    b = derive_policy(approved_testids=frozenset(["consent", "send", "amount"]))
+    assert policy_sha256(a) == policy_sha256(b)
+    assert policy_sha256(a).startswith("sha256:")
+
+
+def test_every_policy_knob_changes_the_digest():
+    """Enumerated from the dataclass itself: a knob added later that did not move the
+    digest would mean two different policies could share a digest — the exact lie the
+    digest exists to prevent. Fails the moment a new field is added without a case here.
+    """
+    import dataclasses
+
+    from stepstitch_service.scrubber import policy_sha256
+
+    base = FINANCIAL_SERVICES_ENTERPRISE
+    changed = {
+        "name": "renamed",
+        "free_text": "disabled",
+        "max_text_len": 281,
+        "metadata_allowlist": base.metadata_allowlist | {"extra_meta"},
+        "footstep_metadata_allowlist": base.footstep_metadata_allowlist | {"extra_step"},
+        "forbidden_keys": base.forbidden_keys | {"extra_forbidden"},
+        "reject_on_forbidden": True,
+        "extra_redactions": (("acct", r"ACCT-\d+"),),
+        "extra_forbidden_keys": frozenset(["ssn9"]),
+        "selector_policy": "approved_testids",
+        "approved_testids": frozenset(["send-transfer"]),
+        "route_policy": "operator_templates",
+        "route_templates": ("/transfer",),
+        "enforce_masked_labels": True,
+    }
+    field_names = {f.name for f in dataclasses.fields(base)}
+    assert field_names == set(changed), (
+        f"a ScrubPolicy knob has no digest-change case: {sorted(field_names ^ set(changed))}"
+    )
+    reference = policy_sha256(base)
+    for knob, value in changed.items():
+        assert policy_sha256(derive_policy(**{knob: value})) != reference, (
+            f"changing {knob!r} did not change the policy digest"
+        )
+
+
+def test_operator_overrides_change_the_digest():
+    from stepstitch_service.scrubber import apply_scrub_overrides, policy_sha256
+
+    base = FINANCIAL_SERVICES_ENTERPRISE
+    tightened = apply_scrub_overrides(base, {"extra_forbidden_keys": ["internal_note"]})
+    assert policy_sha256(tightened) != policy_sha256(base)
+
+
+def test_the_scrub_report_carries_the_policy_digest():
+    from stepstitch_service.scrubber import policy_sha256
+
+    _, report = scrub_trace_payload({"explanation": "Submit did nothing", "footsteps": []})
+    assert report["policy_sha256"] == policy_sha256(FINANCIAL_SERVICES_ENTERPRISE)

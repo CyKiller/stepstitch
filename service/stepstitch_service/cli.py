@@ -762,6 +762,52 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--json", action="store_true", dest="as_json",
                       help="emit machine-readable results")
 
+    proof = sub.add_parser(
+        "proof",
+        help="export or independently verify a FixProof (proof-carrying fix)",
+        description="FixProof tooling. `export` fetches the in-toto statement a host "
+                    "built from its recorded evidence; `verify` checks a proof file "
+                    "OFFLINE against a proof policy — no host, no account, no trust "
+                    "in whoever handed you the file.",
+    )
+    proof_sub = proof.add_subparsers(dest="proof_command")
+    proof_export = proof_sub.add_parser(
+        "export",
+        help="fetch a trace's FixProof from a running host and write it to a file",
+        description="Exports the proof the host built from what it recorded: fixed/base "
+                    "commit, frozen-test and envelope digests, measured pre/post "
+                    "results, privacy policy digest, verifier identity. Refused (409) "
+                    "when the evidence never named a fixed commit or was never frozen.",
+    )
+    proof_export.add_argument("trace_id", help="the trace whose proof to export")
+    proof_export.add_argument("--format", default="in-toto", choices=["in-toto"],
+                              help="statement format (in-toto is the only one, named "
+                                   "so a future format is an explicit choice)")
+    proof_export.add_argument("--host",
+                              default=os.environ.get("STEPSTITCH_HOST", DEFAULT_HOST),
+                              help=f"the running StepStitch host (default {DEFAULT_HOST})")
+    proof_export.add_argument("--out", default="fixproof.json",
+                              help="where to write the proof (default fixproof.json)")
+    proof_export.add_argument("--json", action="store_true", dest="as_json",
+                              help="also print the document to stdout")
+    proof_verify = proof_sub.add_parser(
+        "verify",
+        help="verify a FixProof file offline against a proof policy",
+        description="Recomputes the statement hash and evaluates every policy "
+                    "requirement (grade floor, red-before-green, verifier allowlist, "
+                    "privacy requirements, head commit). Exit 0 = the proof is intact "
+                    "and satisfies the policy; 1 = tampered or a requirement failed; "
+                    "2 = unusable input.",
+    )
+    proof_verify.add_argument("proof_file", help="path to the fixproof.json to check")
+    proof_verify.add_argument("--policy", required=True,
+                              help="path to the proof policy JSON")
+    proof_verify.add_argument("--head-sha", default=None, dest="head_sha",
+                              help="the commit being merged (e.g. the PR head); the "
+                                   "proof's subject must be exactly this commit")
+    proof_verify.add_argument("--json", action="store_true", dest="as_json",
+                              help="emit machine-readable results")
+
     start = sub.add_parser(
         "start",
         help="run StepStitch Local: dashboard + SQLite store on 127.0.0.1, no setup",
@@ -810,6 +856,85 @@ def _policy_command(args: Any, parser: argparse.ArgumentParser) -> int:
     else:
         print(render_report(run))
     return 0 if run.ok else 1
+
+
+def _proof_command(args: Any, parser: argparse.ArgumentParser,
+                   transport: Optional[Transport] = None) -> int:
+    command = getattr(args, "proof_command", None)
+    if command == "export":
+        return _proof_export(args, transport=transport)
+    if command == "verify":
+        return _proof_verify(args)
+    parser.print_help()
+    return 2
+
+
+def _proof_export(args: Any, transport: Optional[Transport] = None) -> int:
+    send = transport or _http
+    base = args.host.rstrip("/")
+    admin = os.environ.get("STEPSTITCH_ADMIN_TOKEN")
+    headers = {"Authorization": f"Bearer {admin}"} if admin else {}
+    status, payload = send(
+        f"{base}/api/stepstitch/v1/session/{args.trace_id}/fixproof",
+        "GET", headers, None)
+    if status == 409 and isinstance(payload, dict):
+        # The host's refusal is the useful message: it names the missing binding.
+        print(f"proof refused: {payload.get('detail', 'missing prerequisite')}")
+        return 1
+    if status != 200 or not isinstance(payload, dict) or "fixproof" not in payload:
+        print(f"could not export the proof: HTTP {status} from {base}. "
+              "Is the host running, and is STEPSTITCH_ADMIN_TOKEN set?")
+        return 1
+    document = payload["fixproof"]
+    out = Path(args.out)
+    out.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote {out} (statement {payload.get('statement_sha256', '?')}, "
+          f"{'signed' if payload.get('signed') else 'hash-verifiable, unsigned'})")
+    if args.as_json:
+        print(json.dumps(document, indent=2))
+    return 0
+
+
+def _proof_verify(args: Any) -> int:
+    # Imported here, not at module top: fixproof is stdlib-only, but this module's top
+    # must stay importable with nothing installed so `doctor` can diagnose a broken env.
+    from stepstitch_service.evidence import TamperError
+    from stepstitch_service.fixproof import verify_fixproof
+
+    def _load(path_str: str, label: str) -> Any:
+        try:
+            return json.loads(Path(path_str).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            print(f"{label} not found: {path_str}")
+            return None
+        except json.JSONDecodeError as exc:
+            print(f"{label} is not valid JSON: {exc}")
+            return None
+
+    document = _load(args.proof_file, "proof file")
+    if document is None:
+        return 2
+    policy = _load(args.policy, "policy file")
+    if policy is None:
+        return 2
+    try:
+        result = verify_fixproof(document, policy, head_sha=args.head_sha)
+    except TamperError as exc:
+        print(f"TAMPERED: {exc}")
+        return 1
+    except ValueError as exc:
+        print(f"unusable policy: {exc}")
+        return 2
+    if args.as_json:
+        print(json.dumps(result.as_dict(), indent=2))
+    else:
+        for check in result.checks:
+            mark = "PASS" if check["passed"] else "FAIL"
+            print(f"  {mark}  {check['check']} — {check['detail']}")
+        verdict = "proof verified" if result.ok else "proof REJECTED by policy"
+        print(f"{verdict} ({sum(c['passed'] for c in result.checks)}/"
+              f"{len(result.checks)} checks passed)")
+    return 0 if result.ok else 1
 
 
 def run_init(
@@ -1030,6 +1155,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
     if args.command == "policy":
         return _policy_command(args, parser)
+    if args.command == "proof":
+        return _proof_command(args, parser)
     if args.command == "init":
         return _init_command(args)
     if args.command != "doctor":

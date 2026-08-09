@@ -134,6 +134,12 @@ class VerifyPayload(BaseModel):
     post_passed: Optional[bool] = None
     fix_ref: Optional[str] = None
     run_url: Optional[str] = None
+    # FixProof bindings: WHICH code the two measurements are about. Optional — a caller
+    # that has no repository can still report — but never coerced: a value that is not a
+    # full 40-hex commit id is refused, because a proof subject built from "main" or an
+    # abbreviated SHA would name nothing verifiable.
+    base_commit: Optional[str] = None
+    fixed_commit: Optional[str] = None
 
     @field_validator("run_url")
     @classmethod
@@ -147,6 +153,18 @@ class VerifyPayload(BaseModel):
             return None
         if not re.match(r"^https?://", v, re.IGNORECASE):
             raise ValueError("run_url must be an http(s) URL")
+        return v
+
+    @field_validator("base_commit", "fixed_commit")
+    @classmethod
+    def _full_commit_or_nothing(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip().lower()
+        if not v:
+            return None
+        if not re.fullmatch(r"[0-9a-f]{40}", v):
+            raise ValueError("commit must be a full 40-hex git commit id")
         return v
 
 
@@ -851,22 +869,26 @@ def create_stepstitch_router(
         fp_json = json.dumps(fix_fingerprint(summary.as_dict(), footsteps))
         await execute(
             "INSERT INTO stepstitch_verifications (id, trace_id, pre_passed, post_passed, "
-            "verdict, fix_ref, run_url, fingerprint, evidence_grade, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "verdict, fix_ref, run_url, fingerprint, evidence_grade, base_commit, "
+            "fixed_commit, verified_by, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 str(uuid.uuid4()), trace_id, payload.pre_passed, payload.post_passed,
                 verdict, payload.fix_ref, payload.run_url, fp_json,
                 derive_grade(measured_by_stepstitch=False),
+                payload.base_commit, payload.fixed_commit, _actor_id(admin),
                 datetime.now(timezone.utc),
             ),
         )
         await _audit("stepstitch.verify", _actor_id(admin), {
             "trace_id": trace_id, "verdict": verdict, "fix_ref": payload.fix_ref,
+            "fixed_commit": payload.fixed_commit,
         })
         return {
             "status": "ok", "trace_id": trace_id, "verdict": verdict,
             "pre_passed": payload.pre_passed, "post_passed": payload.post_passed,
             "fix_ref": payload.fix_ref,
+            "base_commit": payload.base_commit, "fixed_commit": payload.fixed_commit,
             "evidence_grade": derive_grade(measured_by_stepstitch=False),
             "evidence_detail": GRADE_MEANING[ASSERTED],
         }
@@ -1036,6 +1058,132 @@ def create_stepstitch_router(
         filename = _safe_filename(trace_id, "-attestation.json")
         return JSONResponse(
             content=payload,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    async def _fixproof_payload(trace_id: str, admin: Any) -> Dict[str, Any]:
+        # FixProof: the in-toto statement binding THIS fix to THIS measured evidence.
+        # Built only from what was actually recorded — a row that never captured a
+        # fixed commit, or a trace that was never frozen, gets a refusal, not a proof
+        # with fabricated bindings. Offline verification is `stepstitch proof verify`.
+        from .fixproof import build_fixproof_statement
+        from .fixproof import statement_sha256 as fixproof_sha256
+        from .fixproof import wrap as wrap_fixproof
+
+        row = await fetchone(
+            "SELECT footsteps, project_id, trace_metadata FROM stepstitch_traces "
+            "WHERE id = ?", (trace_id,))
+        if not row:
+            raise HTTPException(status_code=404, detail="Trace not found")
+        meta = _loads(row[2]) or {}
+        scrub = (meta.get("_scrub") or {}) if isinstance(meta, dict) else {}
+        sdk_build = meta.get("sdk_build") if isinstance(meta, dict) else None
+
+        # Defensive column shape, same reasoning as verify_fix: a host that has not
+        # migrated to 0010 yet answers the narrow query, and the answer is honest —
+        # it has no commit-bearing verification to build a proof from.
+        try:
+            vrow = await fetchone(
+                "SELECT pre_passed, post_passed, verdict, fix_ref, evidence_grade, "
+                "base_commit, fixed_commit, verified_by, fingerprint "
+                "FROM stepstitch_verifications WHERE trace_id = ? "
+                "AND fixed_commit IS NOT NULL ORDER BY created_at DESC LIMIT 1",
+                (trace_id,))
+        except Exception:
+            vrow = None
+        if not vrow:
+            raise HTTPException(
+                status_code=409,
+                detail="no verification for this trace names the fixed commit. Report "
+                       "the verification with a full 40-hex fixed_commit (CI: include "
+                       "fixed_commit in the /verify payload; local: pass fixed_commit "
+                       "to verify-fix), then export the proof again.")
+
+        frozen = await fetchone(
+            "SELECT sha256, red_verdict, red_signature, frozen_at, frozen_by, "
+            "execution_envelope_sha256, execution_envelope_json "
+            "FROM stepstitch_frozen_repros WHERE trace_id = ?", (trace_id,))
+        if not frozen:
+            raise HTTPException(
+                status_code=409,
+                detail="nothing is frozen for this trace, so there is no frozen-test "
+                       "digest to bind. Freeze the reproduction first, verify the fix, "
+                       "then export the proof.")
+        envelope_version = None
+        if frozen[6]:
+            try:
+                envelope_version = json.loads(frozen[6]).get("envelope_schema_version")
+            except (ValueError, TypeError):
+                envelope_version = None
+
+        base_commit = vrow[5]
+        fixed_commit = vrow[6]
+        statement = build_fixproof_statement(
+            trace_id=trace_id,
+            subject_name=str(row[1] or "application-under-test"),
+            fixed_commit=fixed_commit,
+            base_commit=base_commit,
+            fingerprint=_loads(vrow[8]) if vrow[8] else None,
+            red_signature=frozen[2] or "",
+            red_verdict=frozen[1],
+            frozen_test_sha256=frozen[0],
+            frozen_at=str(frozen[3]) if frozen[3] is not None else None,
+            frozen_by=frozen[4],
+            envelope_sha256=frozen[5],
+            envelope_schema_version=envelope_version,
+            pre_passed=bool(vrow[0]),
+            post_passed=None if vrow[1] is None else bool(vrow[1]),
+            verdict=vrow[2],
+            fix_ref=vrow[3],
+            # base == fixed is a legitimate shape (a state change at one commit, like
+            # the TinyTransfer fixture toggle) but it must SAY so, not imply two commits.
+            fix_mechanism=("in-place change at a single commit"
+                           if base_commit == fixed_commit else None),
+            policy=str(scrub.get("policy") or "unknown"),
+            policy_sha256=scrub.get("policy_sha256"),
+            scrub_status=scrub.get("scrub_status"),
+            schema_status=scrub.get("schema_status"),
+            verifier_identity=str(vrow[7] or "unknown"),
+            evidence_grade=vrow[4] or ASSERTED,
+            issued_at=datetime.now(timezone.utc).isoformat(),
+            sdk_build=sdk_build,
+        )
+        signature = None
+        if sign_blob is not None:
+            try:
+                result = sign_blob(canonical_bytes(statement))
+                signature = await result if inspect.isawaitable(result) else result
+            except Exception:
+                logger.exception("stepstitch fixproof signing failed")
+                signature = None
+        document = wrap_fixproof(statement, signature)
+        await _audit("stepstitch.fixproof", _actor_id(admin),
+                     {"trace_id": trace_id, "fixed_commit": fixed_commit,
+                      "signed": signature is not None})
+        return {
+            "status": "ok", "trace_id": trace_id,
+            "fixproof": document,
+            "statement_sha256": fixproof_sha256(statement),
+            "signed": signature is not None,
+        }
+
+    @router.get("/session/{trace_id}/fixproof")
+    async def get_fixproof(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> Dict[str, Any]:
+        return await _fixproof_payload(trace_id, admin)
+
+    @router.get("/session/{trace_id}/fixproof/download")
+    async def download_fixproof(
+        trace_id: str,
+        admin: Any = Depends(require_admin),
+    ) -> JSONResponse:
+        """The proof as a file: the artifact a PR carries and a merge gate verifies."""
+        payload = await _fixproof_payload(trace_id, admin)
+        filename = _safe_filename(trace_id, "-fixproof.json")
+        return JSONResponse(
+            content=payload["fixproof"],
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 

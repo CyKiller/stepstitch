@@ -61,6 +61,12 @@ _RULES: Tuple[Tuple[str, str, frozenset], ...] = (
     # facts, so they sit with the summaries.
     ("GET", rf"^{_PFX}/session/[^/]+/similar-fixes$", _from_tier("summaries")),
     ("GET", rf"^{_PFX}/session/[^/]+/attestation$", _from_tier("summaries")),
+    # The FixProof statement is the same class of artifact as the attestation: digests,
+    # statuses, and identities — never reproduction code or raw values. 'verify' joins
+    # because CI is exactly the caller that exports the proof it just earned; download
+    # is the same document with a filename, so the same rule covers it.
+    ("GET", rf"^{_PFX}/session/[^/]+/fixproof(/download)?$",
+     _from_tier("summaries", "verify")),
     # CI needs the reproduction it is about to run, so 'verify' joins the repro readers.
     ("GET", rf"^{_PFX}/session/[^/]+/playwright$", _from_tier("repros", "verify")),
     # These describe or reduce the reproduction itself — fragility scores its selectors,

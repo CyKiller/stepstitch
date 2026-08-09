@@ -21,7 +21,7 @@ from typing import Any, Awaitable, Callable, List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
 from stepstitch_service.compiler import DEFAULT_BASE_URL
@@ -76,6 +76,24 @@ class ReproduceRequest(BaseModel):
 
     runs: int = 1
     timeout_seconds: int = 120
+    # FixProof bindings: WHICH code this measured verification is about. Optional — a
+    # console click has no repository context — but never coerced: anything short of a
+    # full 40-hex commit id is refused, because a proof subject built from a branch name
+    # or an abbreviation names nothing verifiable.
+    base_commit: Optional[str] = None
+    fixed_commit: Optional[str] = None
+
+    @field_validator("base_commit", "fixed_commit")
+    @classmethod
+    def _full_commit_or_nothing(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip().lower()
+        if not v:
+            return None
+        if not re.fullmatch(r"[0-9a-f]{40}", v):
+            raise ValueError("commit must be a full 40-hex git commit id")
+        return v
 
 
 class ReproConfigBody(BaseModel):
@@ -818,12 +836,16 @@ def build_app(
                 await execute(
                     "INSERT INTO stepstitch_verifications (id, trace_id, pre_passed, "
                     "post_passed, verdict, fix_ref, run_url, fingerprint, evidence_grade, "
-                    "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "base_commit, fixed_commit, verified_by, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (str(uuid.uuid4()), trace_id, False, True, "confirmed_fixed",
                      None, None, fp_json,
                      # measured_by_stepstitch=True: both runs happened here, under the
                      # frozen script, with no caller asked to vouch for either.
                      derive_grade(measured_by_stepstitch=True),
+                     # The commits are the caller's claim about WHICH code was under test
+                     # (validated 40-hex); the measurement itself stays StepStitch's own.
+                     req.base_commit, req.fixed_commit, _actor_name(admin),
                      datetime.now(timezone.utc)),
                 )
 

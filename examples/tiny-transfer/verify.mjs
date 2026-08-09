@@ -115,15 +115,21 @@ async function main() {
   const postPassed = runReproduction("post-fix")
 
   console.log("\nReporting the measured outcomes to StepStitch…")
+  // FixProof bindings: which code the two measurements are about. CI passes full 40-hex
+  // commit ids (`git rev-parse HEAD`); when unset (a local run outside any repo) they
+  // are simply omitted — the report still lands, and only proof EXPORT requires them.
+  const body = {
+    pre_passed: prePassed,
+    post_passed: postPassed,
+    fix_ref: "tiny-transfer-apply-fix",
+    run_url: "https://example.test/ci/tiny-transfer/1",
+  }
+  if (process.env.BASE_COMMIT) body.base_commit = process.env.BASE_COMMIT
+  if (process.env.FIX_COMMIT) body.fixed_commit = process.env.FIX_COMMIT
   const res = await fetchOnce(`${HOST}/api/stepstitch/v1/session/${TRACE_ID}/verify`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN}` },
-    body: JSON.stringify({
-      pre_passed: prePassed,
-      post_passed: postPassed,
-      fix_ref: "tiny-transfer-apply-fix",
-      run_url: "https://example.test/ci/tiny-transfer/1",
-    }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(`/verify returned HTTP ${res.status}: ${await res.text()}`)
   const { verdict } = await res.json()

@@ -1,0 +1,10 @@
+{
+  "_comment": "The proof policy a merge gate enforces: `stepstitch proof verify fixproof.json --policy proof-policy.json --head-sha <PR head>`. Every requirement here is checked OFFLINE against the proof document alone. require_grade 'measured' means StepStitch itself ran the frozen reproduction red-then-green; an outcome a CI job merely asserted never passes this floor. require_signature stays false until you configure STEPSTITCH_SIGNING_KEY — flip it once your host signs with your own key.",
+  "require_grade": "measured",
+  "require_pre_red": true,
+  "require_post_green": true,
+  "require_signature": false,
+  "allowed_verifier_kinds": ["measured-by-host"],
+  "require_privacy": {},
+  "expected_head_sha": null
+}

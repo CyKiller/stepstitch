@@ -16,8 +16,11 @@ Contract: see ``contracts/stepstitch.md`` (Ingestion API → server-side scrubbe
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from dataclasses import dataclass, replace
+from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional, Tuple
 
 # --- Route templating (Python mirror of redaction.ts routeTemplate) ----------
@@ -568,6 +571,12 @@ def scrub_trace_payload(
         "scrub_status": "scrubbed" if ordered else "clean",
         "scrubbed_fields": ordered,
         "policy": policy.name,
+        # The policy a name cannot pin down: two tenants can both run a profile called
+        # "financial-services-strict" with different operator allowlists. The digest is
+        # the policy's actual configuration, so a FixProof (or an auditor) can say "this
+        # evidence was scrubbed under EXACTLY these rules" — not "under a rule set that
+        # shared a label with these rules".
+        "policy_sha256": policy_sha256(policy),
     }
     if policy.strict_schema_active:
         # An explicit, honest status: the strict schema checks ran and the stored
@@ -585,6 +594,28 @@ def scrub_trace_payload(
 def derive_policy(base: ScrubPolicy = FINANCIAL_SERVICES_ENTERPRISE, **changes: Any) -> ScrubPolicy:
     """Return a copy of ``base`` with the given fields overridden."""
     return replace(base, **changes)
+
+
+def policy_sha256(policy: ScrubPolicy) -> str:
+    """A content digest of the policy's full configuration, ``sha256:``-prefixed.
+
+    Every dataclass field participates — enumerated via ``dataclasses.fields`` so a knob
+    added later is hashed by construction, never silently outside the digest (the guard
+    test parametrizes over the same enumeration). Unordered collections are sorted and
+    tuples-of-tuples listified so the digest depends on the policy's CONTENT, not on the
+    construction order of a frozenset or the JSON quirks of a tuple.
+    """
+    canonical: Dict[str, Any] = {}
+    for f in dataclass_fields(policy):
+        value = getattr(policy, f.name)
+        if isinstance(value, frozenset):
+            canonical[f.name] = sorted(value)
+        elif isinstance(value, tuple):
+            canonical[f.name] = [list(v) if isinstance(v, tuple) else v for v in value]
+        else:
+            canonical[f.name] = value
+    payload = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
+    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def apply_scrub_overrides(base: ScrubPolicy, cfg: Dict[str, Any]) -> ScrubPolicy:

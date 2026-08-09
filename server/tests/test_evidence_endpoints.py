@@ -198,3 +198,80 @@ def test_verification_does_not_consult_our_own_database(tmp_path):
         assert r.json()["evidence_grade"] == MEASURED
     finally:
         conn.close()
+
+
+# --- FixProof bindings: which code, and who said so -------------------------------------
+
+FIXED_SHA = "b" * 40
+BASE_SHA = "a" * 40
+
+
+def test_a_verification_records_which_code_and_who_reported_it(tmp_path):
+    """The row must be able to answer "this verdict is about THAT commit, reported by
+    THAT identity" — a FixProof subject cannot be built from free-text fix_ref."""
+    client, conn, trace = _client(tmp_path)
+    try:
+        body = client.post(f"{_PFX}/session/{trace}/verify",
+                           json={"pre_passed": False, "post_passed": True,
+                                 "base_commit": BASE_SHA, "fixed_commit": FIXED_SHA},
+                           headers=_admin()).json()
+        assert body["base_commit"] == BASE_SHA
+        assert body["fixed_commit"] == FIXED_SHA
+        row = conn.execute(
+            "SELECT base_commit, fixed_commit, verified_by "
+            "FROM stepstitch_verifications WHERE trace_id = ?", (trace,)).fetchone()
+        assert row == (BASE_SHA, FIXED_SHA, "admin")
+    finally:
+        conn.close()
+
+
+def test_a_commit_that_is_not_a_full_sha_is_refused_not_coerced(tmp_path):
+    """"main", an abbreviation, or a 39-hex near-miss names nothing verifiable — storing
+    it would let a proof subject point at thin air."""
+    client, conn, trace = _client(tmp_path)
+    try:
+        for bad in ("main", "abc123", "B" * 39, "g" * 40):
+            r = client.post(f"{_PFX}/session/{trace}/verify",
+                            json={"pre_passed": False, "post_passed": True,
+                                  "fixed_commit": bad}, headers=_admin())
+            assert r.status_code == 422, f"{bad!r} was accepted"
+        assert conn.execute(
+            "SELECT COUNT(*) FROM stepstitch_verifications WHERE trace_id = ?",
+            (trace,)).fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_an_uppercase_full_sha_is_normalized_not_refused(tmp_path):
+    """git prints lowercase but humans paste what they copied; case is not identity."""
+    client, conn, trace = _client(tmp_path)
+    try:
+        r = client.post(f"{_PFX}/session/{trace}/verify",
+                        json={"pre_passed": False, "post_passed": True,
+                              "fixed_commit": FIXED_SHA.upper()}, headers=_admin())
+        assert r.status_code == 200
+        assert r.json()["fixed_commit"] == FIXED_SHA
+    finally:
+        conn.close()
+
+
+def test_a_measured_verification_records_commits_and_verifier(tmp_path):
+    client, conn, trace = _client(tmp_path)
+    try:
+        with patch("stepstitch_service.runner.run_reproduction",
+                   return_value=_repro("reproduced", transcript=RED)):
+            sha = client.post(f"/admin/session/{trace}/freeze", json={},
+                              headers=_admin()).json()["script_sha256"]
+        with patch("stepstitch_service.runner.run_reproduction",
+                   return_value=_repro("not_reproduced", sha=sha)):
+            body = client.post(f"/admin/session/{trace}/verify-fix",
+                               json={"base_commit": BASE_SHA,
+                                     "fixed_commit": FIXED_SHA},
+                               headers=_admin()).json()
+        assert body["verdict"] == "fixed"
+        row = conn.execute(
+            "SELECT base_commit, fixed_commit, verified_by, evidence_grade "
+            "FROM stepstitch_verifications WHERE trace_id = ?", (trace,)).fetchone()
+        assert row == (BASE_SHA, FIXED_SHA, "admin", MEASURED)
+    finally:
+        conn.close()
