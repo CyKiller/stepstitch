@@ -13,10 +13,10 @@ nothing. The full CI gate is re-run as the release gate before any artifact is p
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **752** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **227** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Service (compiler, router, privacy, connectors) | **860** | `PYTHONPATH=service pytest service/tests/` |
+| Host (auth, dashboard, real Postgres) | **240** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **40** | `npx vitest run` |
-| Web (marketing site + copy claims) | **154** | `cd web && npx vitest run` |
+| Web (marketing site + copy claims) | **157** | `cd web && npx vitest run` |
 
 Counts are the number pytest/vitest **collect**, and every row is enforced: each suite
 verifies its own row — `test_status_ledger.py` (Service), `test_status_ledger_host.py`
@@ -67,6 +67,7 @@ repros-scoped token → verify.mjs with a verify-scoped token → freeze/verify-
 | doctor knows local mode and reproduction prerequisites (node, playwright) | `stepstitch_service/cli.py` | `test_doctor.py` |
 | Runnable example proving the privacy claims + red→green | `examples/tiny-transfer/` | CI job `tiny-transfer` (13 Playwright tests over the captured payload) |
 | **The whole financial chain with no mocks** — real browser → real SDK → same-origin proxy → strict scrubber → the **stored SQLite row** (not the outbound payload) → real MCP stdio with a `repros` token → `verify.mjs` with a `verify` token → freeze/verify-fix, ending in `confirmed_fixed` + `evidence_grade='measured'` read raw from the row; a hostile semantic POST measured at 422 with nothing stored | `scripts/live_financial_loop.py`, `examples/tiny-transfer/live-report.mjs` | CI job `tiny-transfer-live` |
+| **Proof-carrying fixes (FixProof v2)** — an in-toto statement binding fixed/base commit, failure fingerprint, frozen-test + execution-envelope digests, measured pre/post results, privacy-policy digest and verifier identity; `stepstitch proof export` / `proof verify` (offline, 0/1/2); every statement leaf mutation-tested from an enumerated surface; a no-secrets PR-head-bound merge-gate template; the live loop exports the real proof, verifies it offline against the repo HEAD and proves a tampered copy refused — in the same run | `fixproof.py`, `cli.py`, `router.py`, `github_bridge/workflow.py` | `test_fixproof.py`, `test_proof_cli.py`, `test_fixproof_endpoint.py`, `test_demo_bundle.py`, CI job `tiny-transfer-live` (steps 10–12) |
 | Public demo console — real UI, synthetic data, no credentials, read-only | `stepstitch_service/host/demo.py`, `scripts/build_demo_dataset.py` | `test_demo_app.py`, CI job `demo-console` (13 browser tests) |
 | Deep-linkable failures (`#/shape/…`) | `stepstitch_service/host/dashboard.py` | `test_host.py`, `dashboard-demo.spec.ts` |
 | Execution state — `draft` / `ready` / `reproduced` / `confirmed_fixed`, so a compiled draft that cannot run is never mistaken for one that was measured; the console names every missing prerequisite (base URL, route params, form values, auth fixture, browser, strict allowlists) instead of one boolean, and shows whether red and green **actually ran**, the evidence grade, the profile, `schema_status`, `customer_data_status`, and the replayability reasons | `execution.py`, `host.py` `/admin/session/{id}/execution` + `/admin/status`, `dashboard.py` | `test_execution_state.py` (every combination), `test_execution_endpoint.py` |

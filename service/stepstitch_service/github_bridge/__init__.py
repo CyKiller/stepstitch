@@ -14,7 +14,7 @@ from .content import (
     regression_test_path,
     repro_labels,
 )
-from .workflow import STEPSTITCH_REPRO_WORKFLOW
+from .workflow import STEPSTITCH_FIXPROOF_GATE_WORKFLOW, STEPSTITCH_REPRO_WORKFLOW
 
 # Reference HTTP client needs the optional [github] extra (httpx); import lazily.
 try:  # pragma: no cover - exercised via the [github] extra
@@ -36,4 +36,5 @@ __all__ = [
     "regression_test_path",
     "repro_labels",
     "STEPSTITCH_REPRO_WORKFLOW",
+    "STEPSTITCH_FIXPROOF_GATE_WORKFLOW",
 ]

@@ -270,12 +270,20 @@ def main() -> int:
                       {"name": "live-loop-ci", "scope": "verify"})
         verify_token = minted.get("token", "")
         check(bool(verify_token), "verify-scoped token minted")
+        # The commit both verification paths are ABOUT: this checkout's HEAD. Resolved
+        # once, used by verify.mjs (asserted path) and verify-fix (measured path) alike.
+        head_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=str(REPO),
+            capture_output=True, text=True, timeout=30,
+        ).stdout.strip()
+        check(len(head_sha) == 40, f"repo HEAD resolved: {head_sha[:12]}…")
         verify = subprocess.run(
             ["node", "verify.mjs"],
             cwd=str(EXAMPLE),
             env=dict(os.environ, STEPSTITCH_HOST=host,
                      STEPSTITCH_VERIFY_TOKEN=verify_token,
-                     TRACE_ID=trace_id, TINY_TRANSFER_URL=app_url),
+                     TRACE_ID=trace_id, TINY_TRANSFER_URL=app_url,
+                     BASE_COMMIT=head_sha, FIX_COMMIT=head_sha),
             capture_output=True, text=True, timeout=600,
         )
         if verify.returncode != 0:
@@ -292,7 +300,10 @@ def main() -> int:
         check(verify.returncode == 0, "verify.mjs measured red then green")
 
         step(9, "freeze / verify-fix: the measured-grade path, asserted from the raw row")
-        # verify.mjs left the bug re-armed, so the freeze measures a genuine red.
+        # verify.mjs left the bug re-armed, so the freeze measures a genuine red. The
+        # bug and fix are fixture states at ONE commit (head_sha, resolved in step 8),
+        # and the exported proof says so explicitly (fix_mechanism) rather than
+        # implying two commits exist.
         frozen = call(f"{host}/admin/session/{trace_id}/freeze", "POST",
                       {"runs": 1, "timeout_seconds": 120})
         check(frozen.get("ready_for_agent") is True,
@@ -300,23 +311,69 @@ def main() -> int:
         fixed_state = call(f"{app_url}/__bug", "POST", {"active": False}, token="")
         check(fixed_state.get("active") is False, "the fix is applied")
         verdict = call(f"{host}/admin/session/{trace_id}/verify-fix", "POST",
-                       {"runs": 1, "timeout_seconds": 120})
+                       {"runs": 1, "timeout_seconds": 120,
+                        "base_commit": head_sha, "fixed_commit": head_sha})
         check(verdict.get("verdict") == "fixed",
               f"frozen bytes rerun: {verdict.get('verdict')}")
         vrow = conn.execute(
-            "SELECT pre_passed, post_passed, verdict, evidence_grade "
-            "FROM stepstitch_verifications WHERE trace_id = ? "
+            "SELECT pre_passed, post_passed, verdict, evidence_grade, fixed_commit, "
+            "verified_by FROM stepstitch_verifications WHERE trace_id = ? "
             "AND evidence_grade = 'measured' ORDER BY created_at DESC LIMIT 1",
             (trace_id,),
         ).fetchone()
         check(vrow is not None, "a measured verification row exists")
-        pre, post, v, grade = vrow
+        pre, post, v, grade, fixed_commit, verified_by = vrow
         check(not pre and bool(post) and v == "confirmed_fixed" and grade == "measured",
               f"raw row: pre={pre} post={post} verdict={v} grade={grade}")
+        check(fixed_commit == head_sha and bool(verified_by),
+              f"raw row binds the commit ({str(fixed_commit)[:12]}…) and the verifier")
         conn.close()
 
-        print("\nBrowser -> proxy -> strict scrubber -> database -> MCP -> red-to-green, "
-              "with every claim asserted\nagainst the stored bytes. No mocks were involved.")
+        step(10, "the proof: `stepstitch proof export` writes the in-toto statement")
+        proof_path = os.environ.get("FIXPROOF_OUT") or str(Path(work) / "fixproof.json")
+        exported = subprocess.run(
+            [sys.executable, "-m", "stepstitch_service.cli", "proof", "export",
+             trace_id, "--host", host, "--out", proof_path],
+            env=dict(os.environ, STEPSTITCH_ADMIN_TOKEN=ADMIN),
+            capture_output=True, text=True, timeout=120,
+        )
+        if exported.returncode != 0:
+            print("   ---- proof export output ----")
+            print("   " + "\n   ".join(
+                ((exported.stdout or "") + (exported.stderr or "")).strip().splitlines()))
+        check(exported.returncode == 0, f"proof exported to {proof_path}")
+
+        step(11, "the gate: `stepstitch proof verify` accepts it for THIS commit, offline")
+        gate = subprocess.run(
+            [sys.executable, "-m", "stepstitch_service.cli", "proof", "verify",
+             proof_path, "--policy", str(REPO / "examples" / "proof" / "proof-policy.json"),
+             "--head-sha", head_sha],
+            capture_output=True, text=True, timeout=60,
+        )
+        if gate.returncode != 0:
+            print("   ---- proof verify output ----")
+            print("   " + "\n   ".join(
+                ((gate.stdout or "") + (gate.stderr or "")).strip().splitlines()))
+        check(gate.returncode == 0, "offline verification passed (measured floor, head bound)")
+
+        step(12, "the gate proven red: a tampered copy must be rejected in this same run")
+        tampered_path = str(Path(work) / "fixproof-tampered.json")
+        doc = json.loads(Path(proof_path).read_text(encoding="utf-8"))
+        doc["statement"]["predicate"]["results"]["pre_passed"] = True
+        Path(tampered_path).write_text(json.dumps(doc), encoding="utf-8")
+        tampered = subprocess.run(
+            [sys.executable, "-m", "stepstitch_service.cli", "proof", "verify",
+             tampered_path, "--policy",
+             str(REPO / "examples" / "proof" / "proof-policy.json"),
+             "--head-sha", head_sha],
+            capture_output=True, text=True, timeout=60,
+        )
+        check(tampered.returncode == 1,
+              f"tampered proof rejected (exit {tampered.returncode})")
+
+        print("\nBrowser -> proxy -> strict scrubber -> database -> MCP -> red-to-green "
+              "-> proof-carrying fix,\nwith every claim asserted against the stored bytes "
+              "and the proof verified offline. No mocks were involved.")
         return 0
     finally:
         for proc in (app, stepstitch):

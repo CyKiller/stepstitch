@@ -173,6 +173,36 @@ export const CLAIMS: Claim[] = [
       test: "service/tests/test_evidence.py",
     },
   },
+  {
+    id: "fixproof-offline-verifiable",
+    text:
+      "A FixProof is an in-toto statement whose hash is reproducible from the document alone — stepstitch proof verify checks it offline against your policy, with no host, no account, and no trust in whoever handed it over.",
+    kind: "measured",
+    evidence: {
+      path: "service/stepstitch_service/fixproof.py",
+      test: "service/tests/test_proof_cli.py",
+    },
+  },
+  {
+    id: "fixproof-mutation-covered",
+    text:
+      "Every leaf of the proof statement is mutation-tested: altering, deleting, or inserting any field makes offline verification refuse the document, and the mutation surface is enumerated from the statement itself so it cannot silently shrink.",
+    kind: "measured",
+    evidence: {
+      path: "service/stepstitch_service/fixproof.py",
+      test: "service/tests/test_fixproof.py",
+    },
+  },
+  {
+    id: "fixproof-no-raw-values",
+    text:
+      "The proof binds digests, statuses, and identities — a proof built from a hostile ingest is scanned against the canary values and none of them appear in the exported document.",
+    kind: "measured",
+    evidence: {
+      path: "service/stepstitch_service/fixproof.py",
+      test: "service/tests/test_fixproof.py",
+    },
+  },
 
   // --- Posture defaults (policy: configurable, but this is the default) -------
   {

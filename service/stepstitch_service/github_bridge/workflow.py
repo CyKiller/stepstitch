@@ -177,3 +177,42 @@ jobs:
         run: gh issue edit "${{ github.event.inputs.issue_number }}" --add-label "stepstitch:confirmed-fix"
 """
 )
+
+
+# The FixProof merge gate. Customers drop this into
+# ``.github/workflows/stepstitch-fixproof-gate.yml`` and mark the job a REQUIRED status
+# check in branch protection (Settings -> Branches -> require status checks -> "fixproof").
+# Branch protection itself is a repository setting; no workflow can turn it on.
+#
+# The check is deliberately OFFLINE: it needs no secret, no StepStitch host, and no trust
+# in whoever produced the PR. The PR carries its proof (fixproof.json, exported by
+# `stepstitch proof export` after verification); the gate recomputes the statement hash
+# and holds the proof to the repo's own policy — including that the proof's subject is
+# EXACTLY the PR head commit, so a proof about some other code cannot ride in.
+#
+# `github.event.pull_request.head.sha`, not `github.sha`: on pull_request events
+# github.sha is the ephemeral MERGE commit, which no exported proof can ever name.
+STEPSTITCH_FIXPROOF_GATE_WORKFLOW = r"""name: stepstitch fixproof gate
+
+on:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  fixproof:
+    name: no AI fix merges without proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Install the verifier
+        run: pip install stepstitch-service
+      - name: Verify the proof against this PR's head
+        run: |
+          stepstitch proof verify fixproof.json \
+            --policy proof-policy.json \
+            --head-sha "${{ github.event.pull_request.head.sha }}"
+"""

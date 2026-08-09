@@ -338,7 +338,8 @@ jobs:
       - name: Red-to-green evidence bundle is measured, not asserted
         run: |
           PYTHONPATH=service python3 scripts/demo_red_to_green.py --measure
-          git diff --exit-code demo/evidence-bundle.json web/src/lib/demo-bundle.json
+          git diff --exit-code demo/evidence-bundle.json web/src/lib/demo-bundle.json \
+            demo/fixproof.json web/public/fixproof.json web/public/proof-policy.json
       - name: Drive the demo console
         run: npm run test:demo-console
 
@@ -415,7 +416,19 @@ jobs:
       # Deliberately NO retries: a retry would launder flakiness through a gate
       # whose entire value is that it is measured.
       - name: Run the live financial loop
+        env:
+          # Written by loop step 10 (`stepstitch proof export`), verified offline in
+          # steps 11-12, uploaded below — the REAL proof of this run, downloadable
+          # from every CI run. Never committed: it carries this run's commit SHA.
+          FIXPROOF_OUT: ${{ runner.temp }}/fixproof.json
         run: python3 scripts/live_financial_loop.py
+      - name: Upload the FixProof this run measured
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fixproof
+          path: ${{ runner.temp }}/fixproof.json
+          if-no-files-found: ignore
 
   compliance:
     name: Compliance evidence (no drift)

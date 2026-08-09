@@ -58,6 +58,12 @@ CREATE TABLE IF NOT EXISTS stepstitch_verifications (
     -- the frozen reproduction itself) / signed (measured + signed with the tenant's key).
     -- Derived, never accepted from a caller. See stepstitch_service/evidence.py.
     evidence_grade TEXT NOT NULL DEFAULT 'asserted',
+    -- FixProof bindings (migration 0010): WHICH code the verdict is about and WHO reported
+    -- it. Commits are validated 40-hex upstream; all three stay NULL on rows that never
+    -- captured them — the fixproof endpoint refuses rather than fabricates (fixproof.py).
+    base_commit  TEXT,
+    fixed_commit TEXT,
+    verified_by  TEXT,
     created_at   TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_stepstitch_verif_trace   ON stepstitch_verifications (trace_id);

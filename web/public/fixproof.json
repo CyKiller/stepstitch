@@ -1,0 +1,62 @@
+{
+  "schema": "stepstitch.fixproof/v2",
+  "statement": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "subject": [
+      {
+        "name": "stepstitch-demo/transfer-app",
+        "digest": {
+          "gitCommit": "beefc0debeefc0debeefc0debeefc0debeefc0de"
+        }
+      }
+    ],
+    "predicateType": "https://stepstitch.dev/attestation/fixproof/v2",
+    "predicate": {
+      "trace_id": "trc_demo_red_to_green_0001",
+      "base_commit": {
+        "gitCommit": "baddc0debaddc0debaddc0debaddc0debaddc0de"
+      },
+      "failure": {
+        "fingerprint": {
+          "route": "/accounts/:id/transfer",
+          "exception_type": "TypeError"
+        },
+        "red_signature": "TypeError: amount is not a function",
+        "red_verdict": "reproduced"
+      },
+      "frozen_test": {
+        "sha256": "sha256:12c5523955ec68b7fe16fd6b2e07bb1b716b76d37097de51b1a29b77b075f2bd",
+        "frozen_at": "2026-06-02T08:00:09.000Z",
+        "frozen_by": "demo-operator"
+      },
+      "execution_envelope": {
+        "sha256": null,
+        "schema_version": null
+      },
+      "results": {
+        "pre_passed": false,
+        "post_passed": true,
+        "verdict": "confirmed_fixed",
+        "fix_ref": "demo-fixture commits (synthetic, labeled — not repository history)",
+        "fix_mechanism": "demo fixture: broken handler replaced by fixed handler"
+      },
+      "privacy": {
+        "policy": "financial-services-enterprise",
+        "policy_sha256": "sha256:0fcf58488f228773e794384a9869b09c25f3130706a35cdd3425247edba3c4f4",
+        "scrub_status": "scrubbed",
+        "schema_status": null,
+        "structural_result": "redaction_only"
+      },
+      "verifier": {
+        "identity": "demo-operator",
+        "kind": "measured-by-host",
+        "evidence_grade": "measured"
+      },
+      "issued_at": "2026-06-02T08:00:09.000Z",
+      "sdk_build": null,
+      "scope": "this reported failure, under this frozen test and envelope — not a claim of overall program correctness"
+    }
+  },
+  "statement_sha256": "sha256:55fc89f7c8f381a78fd85cb826f5b27f2e088ae5564cbbecd888938c5ab41e79",
+  "signature": null
+}

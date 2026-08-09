@@ -6,6 +6,7 @@ import {
   Certificate,
   Detective,
   Monitor,
+  SealCheck,
 } from "@phosphor-icons/react/dist/ssr";
 import { Section, SectionHeader } from "@/components/section";
 import { Reveal } from "@/components/reveal";
@@ -65,6 +66,23 @@ POST /session/{id}/verify  ->  requires scope: verify (agents get: repros)
 pytest service/tests/test_evidence.py server/tests/test_agents.py`,
     source: "service/stepstitch_service/host/agents.py",
   },
+  {
+    icon: SealCheck,
+    title: "Verify a proof-carrying fix, offline, right now",
+    claimIds: [
+      "fixproof-offline-verifiable",
+      "fixproof-mutation-covered",
+      "fixproof-no-raw-values",
+    ],
+    body:
+      "Download the example FixProof and the policy it must satisfy, then check both on your own machine: the in-toto statement binds the fixed commit, the frozen-test and environment digests, the measured red-then-green results, and the privacy policy digest. It is hash-verifiable as shipped; sign with your own key to add a signature requirement.",
+    code: `curl -O https://stepstitch.vercel.app/fixproof.json \\
+     -O https://stepstitch.vercel.app/proof-policy.json
+pip install stepstitch-service
+stepstitch proof verify fixproof.json --policy proof-policy.json
+# change any byte of the statement and run it again — verification refuses`,
+    source: "service/stepstitch_service/fixproof.py",
+  },
 ];
 
 export default function VerifyPage() {
@@ -85,7 +103,7 @@ export default function VerifyPage() {
           <SectionHeader
             eyebrow="Trust"
             title="Don't trust us. Run the checks."
-            body="Every material claim on this site maps to a file and a named test in the open repository. This page turns the three that matter most into commands you can run against your own deployment."
+            body="Every material claim on this site maps to a file and a named test in the open repository. This page turns the four that matter most into commands you can run against your own deployment."
           />
         </div>
 

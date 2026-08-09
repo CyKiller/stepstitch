@@ -25,6 +25,10 @@ Run with the service package on the path:
 Outputs (committed, deterministic — re-running produces an identical bundle):
   - demo/evidence-bundle.json     canonical bundle
   - web/src/lib/demo-bundle.json  copy the static site builds against (drift-guarded)
+  - demo/fixproof.json            the example FixProof statement (synthetic demo commits,
+                                  pinned timestamps — byte-stable like the bundle)
+  - web/public/fixproof.json      the same document, downloadable from /verify
+  - web/public/proof-policy.json  verbatim copy of examples/proof/proof-policy.json
 """
 from __future__ import annotations
 
@@ -407,6 +411,63 @@ def build_bundle(measure: bool = False) -> Dict[str, Any]:
     }
 
 
+# Synthetic demo commits: 40 hex chars, unmistakably not real repository history. The
+# committed proof must be byte-stable, and a REAL commit id in a committed file would
+# either drift every merge or lie about the code it names — so the demo proof names
+# fixture commits and says so in fix_ref. (The real, run-specific proof is the CI
+# artifact the live financial loop exports; that one carries the actual HEAD.)
+_DEMO_BASE_COMMIT = "baddc0de" * 5
+_DEMO_FIXED_COMMIT = "beefc0de" * 5
+
+
+def build_demo_fixproof(bundle: Dict[str, Any]) -> Dict[str, Any]:
+    """The example FixProof, built from the bundle's own recorded facts.
+
+    Everything measured comes FROM the committed measurement (the same booleans CI
+    re-measures on every commit); everything identifying is synthetic and labeled. The
+    document verifies offline with `stepstitch proof verify` — the exact command the
+    /verify page hands a visitor.
+    """
+    import hashlib
+
+    from stepstitch_service.fixproof import build_fixproof_statement, wrap
+    from stepstitch_service.scrubber import policy_sha256
+
+    steps = bundle["steps"]
+    measurement = steps["7_ci_verification"]["measurement"]
+    playwright_code = steps["5_playwright_repro"]["playwright_code"]
+    scrub = steps["3_privacy_scrub"]
+    statement = build_fixproof_statement(
+        trace_id=bundle["trace_id"],
+        subject_name="stepstitch-demo/transfer-app",
+        fixed_commit=_DEMO_FIXED_COMMIT,
+        base_commit=_DEMO_BASE_COMMIT,
+        fingerprint={"route": "/accounts/:id/transfer", "exception_type": "TypeError"},
+        red_signature="TypeError: amount is not a function",
+        red_verdict=measurement["red_verdict"],
+        frozen_test_sha256=hashlib.sha256(
+            playwright_code.encode("utf-8")).hexdigest(),
+        frozen_at=_TS.format(9),
+        frozen_by="demo-operator",
+        envelope_sha256=None,   # the committed measurement predates envelope capture
+        envelope_schema_version=None,
+        pre_passed=measurement["pre_passed"],
+        post_passed=measurement["post_passed"],
+        verdict=steps["7_ci_verification"]["verdict"],
+        fix_ref="demo-fixture commits (synthetic, labeled — not repository history)",
+        fix_mechanism="demo fixture: broken handler replaced by fixed handler",
+        policy=scrub["policy"],
+        policy_sha256=policy_sha256(FINANCIAL_SERVICES_ENTERPRISE),
+        scrub_status=scrub["scrub_status"],
+        schema_status=None,
+        verifier_identity="demo-operator",
+        evidence_grade=measurement["evidence_grade"],
+        issued_at=_TS.format(9),
+        sdk_build=None,
+    )
+    return wrap(statement)
+
+
 def main() -> None:
     measure = "--measure" in sys.argv[1:]
     bundle = build_bundle(measure=measure)
@@ -420,6 +481,21 @@ def main() -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
         print(f"wrote {path.relative_to(REPO_ROOT)}")
+
+    proof_text = json.dumps(build_demo_fixproof(bundle), indent=2,
+                            ensure_ascii=False) + "\n"
+    for path in (REPO_ROOT / "demo" / "fixproof.json",
+                 REPO_ROOT / "web" / "public" / "fixproof.json"):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(proof_text, encoding="utf-8")
+        print(f"wrote {path.relative_to(REPO_ROOT)}")
+    # The policy ships verbatim: the file a visitor verifies with is the file a customer
+    # starts from, so the two can never quietly diverge.
+    policy_text = (REPO_ROOT / "examples" / "proof" /
+                   "proof-policy.json").read_text(encoding="utf-8")
+    policy_path = REPO_ROOT / "web" / "public" / "proof-policy.json"
+    policy_path.write_text(policy_text, encoding="utf-8")
+    print(f"wrote {policy_path.relative_to(REPO_ROOT)}")
 
     s = bundle["steps"]
     print(

@@ -141,3 +141,57 @@ def test_a_non_red_green_pair_is_not_confirmed_fixed():
     assert derive_verdict(True, True) != VERDICT_CONFIRMED_FIXED
     assert derive_verdict(False, False) != VERDICT_CONFIRMED_FIXED
     assert derive_verdict(False, None) != VERDICT_CONFIRMED_FIXED
+
+
+# --- the committed example FixProof ------------------------------------------------------
+
+PROOF_PATH = REPO_ROOT / "demo" / "fixproof.json"
+PROOF_WEB_COPY = REPO_ROOT / "web" / "public" / "fixproof.json"
+POLICY_WEB_COPY = REPO_ROOT / "web" / "public" / "proof-policy.json"
+POLICY_SOURCE = REPO_ROOT / "examples" / "proof" / "proof-policy.json"
+
+
+@pytest.fixture()
+def fixproof():
+    return json.loads(PROOF_PATH.read_text(encoding="utf-8"))
+
+
+def test_the_committed_proof_verifies_offline_with_the_shipped_policy(fixproof):
+    """The exact experience the /verify page promises a visitor: two downloaded files and
+    the CLI, nothing else."""
+    from stepstitch_service.fixproof import verify_fixproof
+
+    policy = json.loads(POLICY_SOURCE.read_text(encoding="utf-8"))
+    result = verify_fixproof(fixproof, policy)
+    assert result.ok, [c for c in result.checks if not c["passed"]]
+
+
+def test_the_proof_copies_and_policy_copies_match_their_sources(fixproof):
+    assert fixproof == json.loads(PROOF_WEB_COPY.read_text(encoding="utf-8"))
+    assert (POLICY_WEB_COPY.read_text(encoding="utf-8")
+            == POLICY_SOURCE.read_text(encoding="utf-8"))
+
+
+def test_the_proof_agrees_with_the_bundle_it_was_built_from(bundle, fixproof):
+    """One demo, one story: the proof's measured booleans, verdict, and frozen-test digest
+    must be the bundle's own — drift between the two committed artifacts is a failure."""
+    import hashlib
+
+    p = fixproof["statement"]["predicate"]
+    ci = bundle["steps"]["7_ci_verification"]
+    assert p["results"]["pre_passed"] == ci["measurement"]["pre_passed"]
+    assert p["results"]["post_passed"] == ci["measurement"]["post_passed"]
+    assert p["results"]["verdict"] == ci["verdict"]
+    assert p["trace_id"] == bundle["trace_id"]
+    code = bundle["steps"]["5_playwright_repro"]["playwright_code"]
+    assert p["frozen_test"]["sha256"] == (
+        "sha256:" + hashlib.sha256(code.encode("utf-8")).hexdigest())
+
+
+def test_the_demo_commits_are_synthetic_and_labeled(fixproof):
+    """A real commit id in a committed proof would drift or lie; the demo names fixture
+    commits and says so where a reader will look."""
+    s = fixproof["statement"]
+    assert s["subject"][0]["digest"]["gitCommit"] == "beefc0de" * 5
+    assert s["predicate"]["base_commit"] == {"gitCommit": "baddc0de" * 5}
+    assert "synthetic" in s["predicate"]["results"]["fix_ref"]

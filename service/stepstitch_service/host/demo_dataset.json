@@ -86,7 +86,7 @@
       "footsteps": "[{\"timestamp\": \"2026-07-01T09:00:00Z\", \"type\": \"navigation\", \"route\": \"/accounts/:id/transfer\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:04Z\", \"type\": \"input\", \"route\": \"/accounts/:id/transfer\", \"target\": \"[data-testid=amount]\", \"label\": \"[masked]\", \"metadata\": {\"interacted\": true}}, {\"timestamp\": \"2026-07-01T09:00:07Z\", \"type\": \"click\", \"route\": \"/accounts/:id/transfer\", \"target\": \"[data-testid=send-transfer]\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:08Z\", \"type\": \"api_error\", \"route\": \"/accounts/:id/transfer\", \"label\": \"[masked]\", \"metadata\": {\"status\": 500, \"method\": \"POST\", \"endpoint\": \"/api/accounts/:id/transfers\"}}]",
       "id": "trc_demo_transfer_fixed",
       "project_id": "demo-bank",
-      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"scrubbed\", \"scrubbed_fields\": [\"explanation\"], \"policy\": \"financial-services-enterprise\"}}",
+      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"scrubbed\", \"scrubbed_fields\": [\"explanation\"], \"policy\": \"financial-services-enterprise\", \"policy_sha256\": \"sha256:0fcf58488f228773e794384a9869b09c25f3130706a35cdd3425247edba3c4f4\"}}",
       "user_id": "demo-user-1"
     },
     {
@@ -98,7 +98,7 @@
       "footsteps": "[{\"timestamp\": \"2026-07-01T09:00:00Z\", \"type\": \"navigation\", \"route\": \"/accounts/:id/transfer\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:04Z\", \"type\": \"input\", \"route\": \"/accounts/:id/transfer\", \"target\": \"[data-testid=amount]\", \"label\": \"[masked]\", \"metadata\": {\"interacted\": true}}, {\"timestamp\": \"2026-07-01T09:00:07Z\", \"type\": \"click\", \"route\": \"/accounts/:id/transfer\", \"target\": \"[data-testid=confirm-and-send]\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:08Z\", \"type\": \"api_error\", \"route\": \"/accounts/:id/transfer\", \"label\": \"[masked]\", \"metadata\": {\"status\": 500, \"method\": \"POST\", \"endpoint\": \"/api/accounts/:id/transfers\"}}]",
       "id": "trc_demo_transfer_repeat",
       "project_id": "demo-bank",
-      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"scrubbed\", \"scrubbed_fields\": [\"explanation\"], \"policy\": \"financial-services-enterprise\"}}",
+      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"scrubbed\", \"scrubbed_fields\": [\"explanation\"], \"policy\": \"financial-services-enterprise\", \"policy_sha256\": \"sha256:0fcf58488f228773e794384a9869b09c25f3130706a35cdd3425247edba3c4f4\"}}",
       "user_id": "demo-user-2"
     },
     {
@@ -110,7 +110,7 @@
       "footsteps": "[{\"timestamp\": \"2026-07-01T09:00:00Z\", \"type\": \"navigation\", \"route\": \"/accounts/:id/statements\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:04Z\", \"type\": \"input\", \"route\": \"/accounts/:id/statements\", \"target\": \"[data-testid=amount]\", \"label\": \"[masked]\", \"metadata\": {\"interacted\": true}}, {\"timestamp\": \"2026-07-01T09:00:07Z\", \"type\": \"click\", \"route\": \"/accounts/:id/statements\", \"target\": \"[data-testid=download-statement]\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:08Z\", \"type\": \"api_error\", \"route\": \"/accounts/:id/statements\", \"label\": \"[masked]\", \"metadata\": {\"status\": 500, \"method\": \"POST\", \"endpoint\": \"/api/accounts/:id/statements\"}}]",
       "id": "trc_demo_statement_reproduced",
       "project_id": "demo-bank",
-      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"clean\", \"scrubbed_fields\": [], \"policy\": \"financial-services-enterprise\"}}",
+      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"clean\", \"scrubbed_fields\": [], \"policy\": \"financial-services-enterprise\", \"policy_sha256\": \"sha256:0fcf58488f228773e794384a9869b09c25f3130706a35cdd3425247edba3c4f4\"}}",
       "user_id": "demo-user-3"
     },
     {
@@ -122,7 +122,7 @@
       "footsteps": "[{\"timestamp\": \"2026-07-01T09:00:00Z\", \"type\": \"navigation\", \"route\": \"/payees/:id/edit\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:04Z\", \"type\": \"input\", \"route\": \"/payees/:id/edit\", \"target\": \"[data-testid=amount]\", \"label\": \"[masked]\", \"metadata\": {\"interacted\": true}}, {\"timestamp\": \"2026-07-01T09:00:07Z\", \"type\": \"click\", \"route\": \"/payees/:id/edit\", \"target\": \"[data-testid=save-payee]\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:08Z\", \"type\": \"api_error\", \"route\": \"/payees/:id/edit\", \"label\": \"[masked]\", \"metadata\": {\"status\": 500, \"method\": \"POST\", \"endpoint\": \"/api/payees/:id\"}}]",
       "id": "trc_demo_payee_fix_failed",
       "project_id": "demo-bank",
-      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"scrubbed\", \"scrubbed_fields\": [\"explanation\"], \"policy\": \"financial-services-enterprise\"}}",
+      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"scrubbed\", \"scrubbed_fields\": [\"explanation\"], \"policy\": \"financial-services-enterprise\", \"policy_sha256\": \"sha256:0fcf58488f228773e794384a9869b09c25f3130706a35cdd3425247edba3c4f4\"}}",
       "user_id": "demo-user-4"
     },
     {
@@ -134,7 +134,7 @@
       "footsteps": "[{\"timestamp\": \"2026-07-01T09:00:00Z\", \"type\": \"navigation\", \"route\": \"/search\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:04Z\", \"type\": \"input\", \"route\": \"/search\", \"target\": \"[data-testid=amount]\", \"label\": \"[masked]\", \"metadata\": {\"interacted\": true}}, {\"timestamp\": \"2026-07-01T09:00:07Z\", \"type\": \"click\", \"route\": \"/search\", \"target\": \"[data-testid=run-search]\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:08Z\", \"type\": \"api_error\", \"route\": \"/search\", \"label\": \"[masked]\", \"metadata\": {\"status\": 503, \"method\": \"POST\", \"endpoint\": \"/api/search\"}}]",
       "id": "trc_demo_search_repro_invalid",
       "project_id": "demo-bank",
-      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"clean\", \"scrubbed_fields\": [], \"policy\": \"financial-services-enterprise\"}}",
+      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"clean\", \"scrubbed_fields\": [], \"policy\": \"financial-services-enterprise\", \"policy_sha256\": \"sha256:0fcf58488f228773e794384a9869b09c25f3130706a35cdd3425247edba3c4f4\"}}",
       "user_id": "demo-user-5"
     },
     {
@@ -146,7 +146,7 @@
       "footsteps": "[{\"timestamp\": \"2026-07-01T09:00:00Z\", \"type\": \"navigation\", \"route\": \"/cards/:id/freeze\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:04Z\", \"type\": \"input\", \"route\": \"/cards/:id/freeze\", \"target\": \"[data-testid=amount]\", \"label\": \"[masked]\", \"metadata\": {\"interacted\": true}}, {\"timestamp\": \"2026-07-01T09:00:07Z\", \"type\": \"click\", \"route\": \"/cards/:id/freeze\", \"target\": \"[data-testid=freeze-card]\", \"label\": \"[masked]\"}, {\"timestamp\": \"2026-07-01T09:00:08Z\", \"type\": \"api_error\", \"route\": \"/cards/:id/freeze\", \"label\": \"[masked]\", \"metadata\": {\"status\": 500, \"method\": \"POST\", \"endpoint\": \"/api/cards/:id/freeze\"}}]",
       "id": "trc_demo_card_untriaged",
       "project_id": "demo-bank",
-      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"clean\", \"scrubbed_fields\": [], \"policy\": \"financial-services-enterprise\"}}",
+      "trace_metadata": "{\"sdk_version\": \"0.8.0\", \"viewport\": \"1440x900\", \"_scrub\": {\"scrub_status\": \"clean\", \"scrubbed_fields\": [], \"policy\": \"financial-services-enterprise\", \"policy_sha256\": \"sha256:0fcf58488f228773e794384a9869b09c25f3130706a35cdd3425247edba3c4f4\"}}",
       "user_id": "demo-user-6"
     }
   ],

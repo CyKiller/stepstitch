@@ -1,8 +1,11 @@
 """GitHub issue/PR content is privacy-safe, label-correct, and deterministic."""
-from stepstitch_service.integrations.base import build_trace_summary
 from stepstitch_service.github_bridge.content import (
-    build_issue, repro_labels, branch_name, regression_test_path,
+    branch_name,
+    build_issue,
+    regression_test_path,
+    repro_labels,
 )
+from stepstitch_service.integrations.base import build_trace_summary
 
 
 def _summary(grade_footsteps):
@@ -54,8 +57,8 @@ def test_branch_and_test_path():
 
 
 def test_build_body_matches_issue_body():
-    from stepstitch_service.integrations.base import build_trace_summary
     from stepstitch_service.github_bridge.content import build_body, build_issue
+    from stepstitch_service.integrations.base import build_trace_summary
     s = build_trace_summary("trace_42", [
         {"timestamp": "t", "type": "api_error", "route": "/x", "label": "[masked]",
          "metadata": {"status": 500}}], project_id="p1")
@@ -125,3 +128,67 @@ def test_workflow_records_nothing_when_a_run_did_not_complete():
     t = STEPSTITCH_REPRO_WORKFLOW
     assert "needs.red.outputs.ran == 'true' && needs.green.outputs.ran == 'true'" in t
     assert "StepStitch stores only measured results." in t
+
+
+# --- the FixProof merge gate template ---------------------------------------------------
+
+
+def test_fixproof_gate_parses_as_yaml_and_runs_on_pull_request():
+    import yaml
+
+    from stepstitch_service.github_bridge import STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+
+    doc = yaml.safe_load(STEPSTITCH_FIXPROOF_GATE_WORKFLOW)
+    on = doc.get("on") or doc.get(True)  # PyYAML 1.1 reads bare `on:` as boolean True
+    assert "pull_request" in on
+    assert list(doc["jobs"]) == ["fixproof"]
+
+
+def test_fixproof_gate_binds_the_pr_head_not_the_merge_commit():
+    """github.sha on a pull_request event is the ephemeral MERGE commit — no exported
+    proof can ever name it, so binding it would fail every honest proof and (worse)
+    binding nothing would pass a proof about unrelated code."""
+    from stepstitch_service.github_bridge import STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+
+    assert "github.event.pull_request.head.sha" in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+    assert "--head-sha" in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+    assert "${{ github.sha }}" not in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+
+
+def test_fixproof_gate_needs_no_secret_and_no_token():
+    """The gate is offline verification of a document the PR carries. A secret in this
+    template would mean the check trusts something other than the proof."""
+    from stepstitch_service.github_bridge import STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+
+    assert "secrets." not in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+    assert "STEPSTITCH_ADMIN_TOKEN" not in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+    assert "STEPSTITCH_VERIFY_TOKEN" not in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+    assert "permissions: {}" in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+
+
+def test_fixproof_gate_command_parses_under_the_cli():
+    """House rule: a command the software hands a customer must itself parse."""
+    from stepstitch_service.cli import build_parser
+
+    build_parser().parse_args(
+        ["proof", "verify", "fixproof.json", "--policy", "proof-policy.json",
+         "--head-sha", "a" * 40])
+
+
+def test_the_shipped_proof_policy_is_usable_and_strict():
+    """The example policy must load, carry no typo'd keys, and hold the measured floor —
+    it is what customers will copy verbatim."""
+    import json
+    from pathlib import Path
+
+    from stepstitch_service.fixproof import POLICY_KEYS
+
+    policy = json.loads(
+        (Path(__file__).resolve().parents[2] / "examples" / "proof" /
+         "proof-policy.json").read_text(encoding="utf-8"))
+    unknown = {k for k in policy if k not in POLICY_KEYS and not k.startswith("_")}
+    assert not unknown, f"shipped policy carries unknown keys: {unknown}"
+    assert policy["require_grade"] == "measured"
+    assert policy["require_pre_red"] is True
+    assert policy["require_post_green"] is True
+    assert policy["allowed_verifier_kinds"] == ["measured-by-host"]
