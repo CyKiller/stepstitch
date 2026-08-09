@@ -90,7 +90,7 @@ def test_repro_workflow_parses_as_yaml_with_three_jobs():
     assert list(doc["jobs"]) == ["red", "green", "report"]
     # red and green each publish whether they ran and whether they passed.
     for job in ("red", "green"):
-        assert set(doc["jobs"][job]["outputs"]) == {"passed", "ran"}
+        assert set(doc["jobs"][job]["outputs"]) == {"passed", "ran", "sha"}
     assert doc["jobs"]["report"]["needs"] == ["red", "green"]
 
 
@@ -133,26 +133,57 @@ def test_workflow_records_nothing_when_a_run_did_not_complete():
 # --- the FixProof merge gate template ---------------------------------------------------
 
 
-def test_fixproof_gate_parses_as_yaml_and_runs_on_pull_request():
+def test_fixproof_gate_parses_as_yaml_and_runs_from_the_protected_base():
+    """pull_request_target runs the BASE branch's workflow definition and checkout: a
+    PR can edit neither the gate nor the policy that judges it. (Safe here because the
+    head is fetched as data and never executed — asserted separately below.)"""
     import yaml
 
     from stepstitch_service.github_bridge import STEPSTITCH_FIXPROOF_GATE_WORKFLOW
 
     doc = yaml.safe_load(STEPSTITCH_FIXPROOF_GATE_WORKFLOW)
     on = doc.get("on") or doc.get(True)  # PyYAML 1.1 reads bare `on:` as boolean True
-    assert "pull_request" in on
+    assert "pull_request_target" in on
+    assert "pull_request" not in on  # target only — never the PR-controlled variant
     assert list(doc["jobs"]) == ["fixproof"]
 
 
-def test_fixproof_gate_binds_the_pr_head_not_the_merge_commit():
-    """github.sha on a pull_request event is the ephemeral MERGE commit — no exported
-    proof can ever name it, so binding it would fail every honest proof and (worse)
-    binding nothing would pass a proof about unrelated code."""
+def test_fixproof_gate_runs_the_protocol_against_the_pr_head():
+    """The head goes through `proof gate`, which binds the proof's subject to HEAD^
+    (the tested code) and refuses anything but a proof-only head commit. github.sha —
+    the ephemeral merge commit — must appear nowhere."""
     from stepstitch_service.github_bridge import STEPSTITCH_FIXPROOF_GATE_WORKFLOW
 
     assert "github.event.pull_request.head.sha" in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
-    assert "--head-sha" in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+    assert "proof gate" in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
     assert "${{ github.sha }}" not in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+
+
+def test_fixproof_gate_never_checks_out_or_executes_the_pr_head():
+    """The pull_request_target safety invariant: the head is fetched as git DATA and
+    read with `git show`/`git diff` inside `proof gate` — no step checks it out, so
+    no PR-controlled code can run inside the privileged workflow."""
+    from stepstitch_service.github_bridge import STEPSTITCH_FIXPROOF_GATE_WORKFLOW as wf
+
+    for line in wf.splitlines():
+        if "ref:" in line:
+            raise AssertionError(
+                f"the gate checks out an explicit ref — if that is the PR head, "
+                f"PR code can execute in the privileged context: {line.strip()!r}"
+            )
+    assert "git fetch" in wf and "never checked out, never executed" in wf
+
+
+def test_fixproof_repro_workflow_reports_resolved_commits():
+    """The production repro workflow must carry the commit identities it actually ran:
+    each half resolves `git rev-parse HEAD` from its own checkout (never an input) and
+    the /verify report sends both, so verification rows name real commits."""
+    from stepstitch_service.github_bridge import STEPSTITCH_REPRO_WORKFLOW as wf
+
+    assert 'echo "sha=$(git rev-parse HEAD)"' in wf
+    assert '\\"base_commit\\": \\"$BASE_SHA\\"' in wf
+    assert '\\"fixed_commit\\": \\"$FIX_SHA\\"' in wf
+    assert "needs.red.outputs.sha" in wf and "needs.green.outputs.sha" in wf
 
 
 def test_fixproof_gate_needs_no_secret_and_no_token():
@@ -199,6 +230,8 @@ def test_fixproof_gate_command_parses_under_the_cli():
     """House rule: a command the software hands a customer must itself parse."""
     from stepstitch_service.cli import build_parser
 
+    build_parser().parse_args(
+        ["proof", "gate", "a" * 40, "--policy", "proof-policy.json"])
     build_parser().parse_args(
         ["proof", "verify", "fixproof.json", "--policy", "proof-policy.json",
          "--head-sha", "a" * 40])
