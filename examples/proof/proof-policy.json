@@ -1,10 +1,16 @@
 {
-  "_comment": "The proof policy a merge gate enforces: `stepstitch proof verify fixproof.json --policy proof-policy.json --head-sha <PR head>`. Every requirement here is checked OFFLINE against the proof document alone. require_grade 'measured' means StepStitch itself ran the frozen reproduction red-then-green; an outcome a CI job merely asserted never passes this floor. require_signature stays false until you configure STEPSTITCH_SIGNING_KEY — flip it once your host signs with your own key.",
+  "_comment": "The proof policy a merge gate enforces: `stepstitch proof verify fixproof.json --policy proof-policy.json --head-sha <PR head>`. Every requirement is checked OFFLINE against the proof document alone. The trust chain: trusted_keys names the ONLY public keys whose ed25519 signatures count — run `stepstitch proof keygen` on your StepStitch host, set STEPSTITCH_SIGNING_KEY there, and paste the printed public key below. This template deliberately refuses to run until you do (a placeholder key is an unusable policy, exit 2): a gate that was never configured must never read as green.",
+  "_comment_bindings": "require_grade 'measured' means StepStitch itself ran the frozen reproduction red-then-green — an outcome a CI job merely asserted never passes. require_bindings true refuses any proof missing a load-bearing binding: base commit, fixed commit, failure fingerprint + red signature, frozen-test digest, execution-envelope digest, privacy-policy digest, structural result. allowed_verifier_identities names who may hold the verify credential; keep it to your host's verifier accounts.",
   "require_grade": "measured",
   "require_pre_red": true,
   "require_post_green": true,
-  "require_signature": false,
+  "require_signature": true,
+  "trusted_keys": {
+    "REPLACE-WITH-YOUR-KEY-ID": "ed25519:REPLACE_WITH_THE_PUBLIC_KEY_FROM_stepstitch_proof_keygen"
+  },
+  "require_bindings": true,
   "allowed_verifier_kinds": ["measured-by-host"],
+  "allowed_verifier_identities": ["REPLACE-WITH-YOUR-VERIFIER-IDENTITY"],
   "require_privacy": {},
   "expected_head_sha": null
 }

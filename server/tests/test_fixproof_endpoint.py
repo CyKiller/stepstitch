@@ -182,19 +182,47 @@ def test_the_download_is_the_bare_document_with_a_safe_filename(tmp_path):
         conn.close()
 
 
-def test_a_signed_export_carries_the_signature(tmp_path):
-    def signer(blob: bytes) -> str:
-        assert isinstance(blob, bytes) and blob  # signs the canonical statement bytes
-        return "fake-signature-over-statement"
+def test_a_signed_export_verifies_cryptographically_and_a_fake_string_does_not(
+        tmp_path):
+    """The host signs with a REAL ed25519 key through the same seam production uses,
+    and the offline verifier accepts it only against that key's public half. The fake
+    string this test used to inject is the trust-audit exploit: it must now fail the
+    signature requirement."""
+    import hashlib
 
+    from stepstitch_service import _ed25519
+    from stepstitch_service.host.signing import make_ed25519_signer
+
+    seed = hashlib.sha256(b"fixproof endpoint test key").digest()
+    signer = make_ed25519_signer(seed, "test-host")
     client, conn, trace = _client(tmp_path, sign_blob=signer)
     try:
         _measure_fix(client, trace)
         body = client.get(f"{_PFX}/session/{trace}/fixproof", headers=_admin()).json()
         assert body["signed"] is True
-        assert body["fixproof"]["signature"] == "fake-signature-over-statement"
-        assert verify_fixproof(body["fixproof"],
-                               dict(POLICY, require_signature=True)).ok
+        signature = body["fixproof"]["signature"]
+        assert signature["algorithm"] == "ed25519"
+        assert signature["key_id"] == "test-host"
+        trusting = dict(POLICY, require_signature=True,
+                        trusted_keys={"test-host":
+                                      "ed25519:" + _ed25519.public_key(seed).hex()})
+        assert verify_fixproof(body["fixproof"], trusting).ok
+
+        # The wrong trust anchor refuses the same intact document.
+        stranger = hashlib.sha256(b"some other key").digest()
+        distrusting = dict(trusting,
+                           trusted_keys={"test-host":
+                                         "ed25519:"
+                                         + _ed25519.public_key(stranger).hex()})
+        rejected = verify_fixproof(body["fixproof"], distrusting)
+        assert not rejected.ok
+
+        # And an opaque string — what this test used to call "signed" — never passes.
+        faked = dict(body["fixproof"], signature="fake-signature-over-statement")
+        result = verify_fixproof(faked, trusting)
+        assert not result.ok
+        assert any(c["check"] == "require_signature" and not c["passed"]
+                   for c in result.checks)
     finally:
         conn.close()
 

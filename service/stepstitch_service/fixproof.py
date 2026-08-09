@@ -28,6 +28,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from . import _ed25519
 from .attestation import canonical_bytes
 from .evidence import TamperError, grade_at_least
 
@@ -39,13 +40,30 @@ MEASURED_BY_HOST = "measured-by-host"
 ASSERTED_BY_CALLER = "asserted-by-caller"
 
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
+_PUBLIC_KEY = re.compile(r"^ed25519:[0-9a-f]{64}$")
 
 # Every key a proof policy may carry. An unknown key is refused as unusable input — a
 # typo'd requirement that silently verified nothing would be worse than no policy.
 POLICY_KEYS = frozenset({
     "require_grade", "require_pre_red", "require_post_green", "require_signature",
-    "allowed_verifier_kinds", "require_privacy", "expected_head_sha",
+    "trusted_keys", "require_bindings", "allowed_verifier_kinds",
+    "allowed_verifier_identities", "require_privacy", "expected_head_sha",
 })
+
+# The load-bearing bindings a merge gate refuses to go without (`require_bindings`).
+# The trust-audit lesson behind the list: a proof is only "no trust in the PR author"
+# if every field that anchors it to reality is actually there — a missing envelope or
+# policy digest is a proof about less than it appears to claim.
+MANDATORY_BINDINGS = (
+    "subject.gitCommit",
+    "base_commit",
+    "failure.fingerprint",
+    "failure.red_signature",
+    "frozen_test.sha256",
+    "execution_envelope.sha256",
+    "privacy.policy_sha256",
+    "privacy.structural_result",
+)
 
 
 def _prefixed(digest: Optional[str]) -> Optional[str]:
@@ -169,6 +187,101 @@ def statement_sha256(statement: Dict[str, Any]) -> str:
     return "sha256:" + hashlib.sha256(canonical_bytes(statement)).hexdigest()
 
 
+def sign_statement(statement: Dict[str, Any], *, seed: Any,
+                   key_id: str) -> Dict[str, Any]:
+    """A detached Ed25519 signature object over the canonical statement bytes.
+
+    Deliberately minimal — algorithm, key id, signature hex. The public key is NOT
+    embedded: a verifier that read the key out of the document it is verifying would
+    be trusting the author again, which is the exact failure this signature exists to
+    close. Trust comes from the policy's ``trusted_keys``, nowhere else.
+    """
+    if isinstance(seed, str):
+        seed = bytes.fromhex(seed.strip())
+    return {
+        "algorithm": "ed25519",
+        "key_id": key_id,
+        "signature": _ed25519.sign(seed, canonical_bytes(statement)).hex(),
+    }
+
+
+def _trusted_keys_or_refuse(policy: Dict[str, Any]) -> Dict[str, bytes]:
+    """Decode ``trusted_keys`` or refuse the policy as unusable.
+
+    Unusable — not failing: a gate whose trust anchors are absent, placeholders, or
+    malformed did not reject the proof, it never ran. The distinction is the CLI's
+    exit-code contract (2, not 1), and it is what makes "forgot to configure the gate"
+    a loud error instead of a green check.
+    """
+    keys = policy.get("trusted_keys")
+    if policy.get("require_signature") and not keys:
+        raise ValueError(
+            "require_signature is true but trusted_keys is empty — a signature nobody "
+            "is trusted to make cannot be verified. Run `stepstitch proof keygen` on "
+            "the verifying host and put its public key in trusted_keys."
+        )
+    decoded: Dict[str, bytes] = {}
+    for key_id, value in (keys or {}).items():
+        text = str(value).strip().lower()
+        if not _PUBLIC_KEY.fullmatch(text):
+            raise ValueError(
+                f"trusted_keys[{key_id!r}] is not a usable ed25519 public key "
+                f"(expected 'ed25519:<64 hex>', got {value!r}). Replace the "
+                "placeholder with your host's real public key — "
+                "`stepstitch proof keygen` prints it."
+            )
+        decoded[key_id] = bytes.fromhex(text.removeprefix("ed25519:"))
+    return decoded
+
+
+def _check_signature(signature: Any, trusted: Dict[str, bytes],
+                     message: bytes) -> tuple:
+    """(passed, detail) for the cryptographic signature requirement.
+
+    The v2 lesson, permanently: presence is not authenticity. Anything that cannot be
+    verified against a policy-trusted key — no signature, an opaque string, a wrong
+    algorithm, an untrusted key id, forged bytes — fails with a detail that says which."""
+    if not signature:
+        return False, "no signature on the document"
+    if not isinstance(signature, dict):
+        return False, ("opaque signature string cannot be cryptographically verified "
+                       "offline — sign with an ed25519 key (`stepstitch proof keygen`)")
+    if signature.get("algorithm") != "ed25519":
+        return False, f"unsupported signature algorithm {signature.get('algorithm')!r}"
+    key_id = signature.get("key_id")
+    if key_id not in trusted:
+        return False, (f"signed by key_id={key_id!r}, which this policy does not "
+                       "trust — a valid signature by the wrong signer proves nothing")
+    try:
+        raw = bytes.fromhex(str(signature.get("signature") or ""))
+    except ValueError:
+        return False, "signature bytes are not hex"
+    if not _ed25519.verify(trusted[key_id], message, raw):
+        return False, (f"signature does not verify against trusted key {key_id!r} — "
+                       "forged, or made over different statement bytes")
+    return True, (f"ed25519 signature by trusted key {key_id!r} verifies over the "
+                  "canonical statement bytes")
+
+
+def _binding_values(statement: Dict[str, Any]) -> Dict[str, Any]:
+    predicate = statement.get("predicate") or {}
+    subject = (statement.get("subject") or [{}])[0]
+    failure = predicate.get("failure") or {}
+    frozen = predicate.get("frozen_test") or {}
+    envelope = predicate.get("execution_envelope") or {}
+    privacy = predicate.get("privacy") or {}
+    return {
+        "subject.gitCommit": (subject.get("digest") or {}).get("gitCommit"),
+        "base_commit": (predicate.get("base_commit") or {}).get("gitCommit"),
+        "failure.fingerprint": failure.get("fingerprint"),
+        "failure.red_signature": failure.get("red_signature"),
+        "frozen_test.sha256": frozen.get("sha256"),
+        "execution_envelope.sha256": envelope.get("sha256"),
+        "privacy.policy_sha256": privacy.get("policy_sha256"),
+        "privacy.structural_result": privacy.get("structural_result"),
+    }
+
+
 def wrap(statement: Dict[str, Any], signature: Optional[str] = None) -> Dict[str, Any]:
     """The export document: statement + reproducible hash + optional detached signature."""
     return {
@@ -217,6 +330,18 @@ def verify_fixproof(
     unknown = {k for k in set(policy) - POLICY_KEYS if not k.startswith("_")}
     if unknown:
         raise ValueError(f"unknown policy key(s): {', '.join(sorted(unknown))}")
+    # Trust anchors are validated BEFORE any evidence question: a policy with absent or
+    # placeholder keys, or a typo'd binding name, is unusable input — refusing it here
+    # (ValueError, CLI exit 2) is what keeps "misconfigured gate" from reading as green.
+    trusted = _trusted_keys_or_refuse(policy)
+    required_bindings = policy.get("require_bindings")
+    if isinstance(required_bindings, (list, tuple)):
+        bogus = sorted(set(required_bindings) - set(MANDATORY_BINDINGS))
+        if bogus:
+            raise ValueError(
+                f"require_bindings names unknown binding(s): {', '.join(bogus)} — "
+                f"known bindings: {', '.join(MANDATORY_BINDINGS)}"
+            )
 
     statement = document.get("statement")
     if not isinstance(statement, dict):
@@ -254,15 +379,31 @@ def verify_fixproof(
                     f"post_passed={results.get('post_passed')!r} (green requires True)")
 
     if policy.get("require_signature"):
-        outcome.add("require_signature", bool(document.get("signature")),
-                    "signature present" if document.get("signature")
-                    else "no signature on the document")
+        passed, detail = _check_signature(document.get("signature"), trusted,
+                                          canonical_bytes(statement))
+        outcome.add("require_signature", passed, detail)
+
+    if required_bindings:
+        names = list(MANDATORY_BINDINGS) if required_bindings is True \
+            else list(required_bindings)
+        values = _binding_values(statement)
+        missing = [n for n in names if not values.get(n)]
+        outcome.add("require_bindings", not missing,
+                    f"missing binding(s): {', '.join(missing)}" if missing
+                    else f"all {len(names)} required bindings present")
 
     allowed = policy.get("allowed_verifier_kinds")
     if allowed is not None:
         kind = verifier.get("kind")
         outcome.add("allowed_verifier_kinds", kind in allowed,
                     f"verifier kind={kind!r}, allowed={list(allowed)!r}")
+
+    allowed_identities = policy.get("allowed_verifier_identities")
+    if allowed_identities is not None:
+        identity = verifier.get("identity")
+        outcome.add("allowed_verifier_identities", identity in allowed_identities,
+                    f"verifier identity={identity!r}, "
+                    f"authorized={list(allowed_identities)!r}")
 
     required_privacy = policy.get("require_privacy") or {}
     for key, want in required_privacy.items():

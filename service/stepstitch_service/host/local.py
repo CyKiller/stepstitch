@@ -26,6 +26,7 @@ from .auth import build_auth
 from .host import build_app
 from .localdb import build_local_db_callables, connect_local, local_path_from_dsn
 from .retention_job import purge_interval_from_env, run_purge_loop
+from .signing import load_signing_seed, make_ed25519_signer
 
 DEFAULT_LOCAL_DSN = "sqlite:///.stepstitch/local.db"
 # Deliberately not 3000/8000/8080: `start` runs NEXT TO the developer's own app and the
@@ -53,6 +54,18 @@ def create_local_app_from_env():
     get_user_id, require_admin = build_auth(admin_token, ingest_token)
     audit = make_db_audit(execute)
     purge_interval = purge_interval_from_env()
+
+    # Same signing contract as the Postgres host: STEPSTITCH_SIGNING_KEY holding a
+    # 64-hex Ed25519 seed (or a path to one, what `stepstitch proof keygen` writes)
+    # makes every exported FixProof carry a signature the offline verifier can check
+    # against the deployer's public key. Unset -> documents are hash-only and a
+    # require_signature policy will refuse them, loudly and correctly.
+    sign_blob = None
+    signing_seed = load_signing_seed(os.environ.get("STEPSTITCH_SIGNING_KEY"))
+    if signing_seed is not None:
+        sign_blob = make_ed25519_signer(
+            signing_seed,
+            os.environ.get("STEPSTITCH_SIGNING_KEY_ID", "stepstitch-host"))
 
     @asynccontextmanager
     async def lifespan(app):
@@ -86,6 +99,7 @@ def create_local_app_from_env():
         admin_token=admin_token,
         ingest_token=ingest_token,
         base_url=base_url,
+        sign_blob=sign_blob,
         local_mode=True,
     )
     # For `stepstitch start` to surface — not logged.

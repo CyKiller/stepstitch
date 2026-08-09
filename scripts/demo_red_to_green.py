@@ -419,6 +419,67 @@ def build_bundle(measure: bool = False) -> Dict[str, Any]:
 _DEMO_BASE_COMMIT = "baddc0de" * 5
 _DEMO_FIXED_COMMIT = "beefc0de" * 5
 
+# The demo signing key. PUBLIC BY DESIGN and worthless as a secret: the seed is a hash
+# of this very sentence, committed to the repository, so the committed proof stays
+# byte-stable (Ed25519 signing is deterministic) and any visitor can re-derive it. What
+# the demo demonstrates is the verification MECHANIC — a signature that cryptographically
+# binds the statement bytes to a key the policy names. Your deployment's trust comes
+# from your own key (`stepstitch proof keygen`), which never leaves your host.
+_DEMO_SIGNING_SEED = __import__("hashlib").sha256(
+    b"stepstitch demo signing key -- public by design, provides no security"
+).digest()
+_DEMO_KEY_ID = "stepstitch-demo"
+
+
+def build_demo_proof_policy() -> "Dict[str, Any]":
+    """The policy the /verify page hands a visitor, satisfied by the committed proof.
+
+    Everything the hardened customer template requires, with two demo-honest
+    differences: the trusted key is the (public-by-design) demo key above, and
+    require_bindings uses the list form to omit ONLY the execution-envelope digest —
+    the committed measurement is byte-stable under the CI drift gate, and an envelope
+    digest would move with the CI browser version. Real host exports carry it, and the
+    customer template (`examples/proof/proof-policy.json`) requires it.
+    """
+    from stepstitch_service import _ed25519
+
+    return {
+        "_comment": (
+            "Demo proof policy: verifies web/public/fixproof.json offline, including "
+            "its ed25519 signature by the demo key (public by design — the seed is "
+            "derived in scripts/demo_red_to_green.py so the committed proof stays "
+            "byte-stable; your deployment uses `stepstitch proof keygen`). "
+            "expected_head_sha pins the demo's labeled synthetic fixed commit, so "
+            "the same document replayed for any other commit is refused."
+        ),
+        "_comment_bindings": (
+            "List form omits only execution_envelope.sha256: the committed demo "
+            "measurement must stay byte-stable while CI's browser version moves. "
+            "The customer template requires every binding, envelope included."
+        ),
+        "require_grade": "measured",
+        "require_pre_red": True,
+        "require_post_green": True,
+        "require_signature": True,
+        "trusted_keys": {
+            _DEMO_KEY_ID:
+                "ed25519:" + _ed25519.public_key(_DEMO_SIGNING_SEED).hex(),
+        },
+        "require_bindings": [
+            "subject.gitCommit",
+            "base_commit",
+            "failure.fingerprint",
+            "failure.red_signature",
+            "frozen_test.sha256",
+            "privacy.policy_sha256",
+            "privacy.structural_result",
+        ],
+        "allowed_verifier_kinds": ["measured-by-host"],
+        "allowed_verifier_identities": ["demo-operator"],
+        "require_privacy": {},
+        "expected_head_sha": _DEMO_FIXED_COMMIT,
+    }
+
 
 def build_demo_fixproof(bundle: Dict[str, Any]) -> Dict[str, Any]:
     """The example FixProof, built from the bundle's own recorded facts.
@@ -430,7 +491,8 @@ def build_demo_fixproof(bundle: Dict[str, Any]) -> Dict[str, Any]:
     """
     import hashlib
 
-    from stepstitch_service.fixproof import build_fixproof_statement, wrap
+    from stepstitch_service.fixproof import (build_fixproof_statement,
+                                             sign_statement, wrap)
     from stepstitch_service.scrubber import policy_sha256
 
     steps = bundle["steps"]
@@ -465,7 +527,8 @@ def build_demo_fixproof(bundle: Dict[str, Any]) -> Dict[str, Any]:
         issued_at=_TS.format(9),
         sdk_build=None,
     )
-    return wrap(statement)
+    return wrap(statement, sign_statement(statement, seed=_DEMO_SIGNING_SEED,
+                                          key_id=_DEMO_KEY_ID))
 
 
 def main() -> None:
@@ -489,10 +552,13 @@ def main() -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(proof_text, encoding="utf-8")
         print(f"wrote {path.relative_to(REPO_ROOT)}")
-    # The policy ships verbatim: the file a visitor verifies with is the file a customer
-    # starts from, so the two can never quietly diverge.
-    policy_text = (REPO_ROOT / "examples" / "proof" /
-                   "proof-policy.json").read_text(encoding="utf-8")
+    # The demo policy is GENERATED, not copied from the customer template: the template
+    # now (correctly) refuses to run until a real key replaces its placeholder, while a
+    # visitor's verification must succeed — against the demo key, whose public half this
+    # policy names and whose signature the visitor's `stepstitch proof verify` checks
+    # cryptographically. Drift-gated with the proof itself.
+    policy_text = json.dumps(build_demo_proof_policy(), indent=2,
+                             ensure_ascii=False) + "\n"
     policy_path = REPO_ROOT / "web" / "public" / "proof-policy.json"
     policy_path.write_text(policy_text, encoding="utf-8")
     print(f"wrote {policy_path.relative_to(REPO_ROOT)}")

@@ -12,6 +12,13 @@ import logging
 import subprocess
 from typing import Awaitable, Callable, Optional
 
+# The Ed25519 path lives in the packaged host (so `stepstitch start` signs too); these
+# re-exports keep `server.signing` the one import site for every signer flavor.
+from stepstitch_service.host.signing import (  # noqa: F401
+    load_signing_seed,
+    make_ed25519_signer,
+)
+
 logger = logging.getLogger("stepstitch.signing")
 
 

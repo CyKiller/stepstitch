@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import secrets
 import shutil
 import socket
 import sqlite3
@@ -36,6 +37,7 @@ from pathlib import Path
 from typing import Optional
 
 REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "service"))  # for _ed25519 (public-key derivation only)
 EXAMPLE = REPO / "examples" / "tiny-transfer"
 ADMIN = "live-loop-admin-token"
 INGEST = "live-loop-ingest-token"
@@ -139,6 +141,14 @@ def main() -> int:
     app_url = f"http://127.0.0.1:{app_port}"
     host = f"http://127.0.0.1:{host_port}"
 
+    # An EPHEMERAL signing key, generated fresh for this run and handed only to the
+    # host: the exported proof must carry a real ed25519 signature the offline gate
+    # verifies against this run's public key — the full trust chain, no fixtures.
+    signing_seed = secrets.token_bytes(32)
+    from stepstitch_service import _ed25519
+
+    signing_public = "ed25519:" + _ed25519.public_key(signing_seed).hex()
+
     host_env = dict(
         os.environ,
         PYTHONPATH=str(REPO / "service"),
@@ -146,6 +156,8 @@ def main() -> int:
         STEPSTITCH_INGEST_TOKEN=INGEST,
         STEPSTITCH_APP_BASE_URL=app_url,
         STEPSTITCH_PROFILE="financial-services-strict",
+        STEPSTITCH_SIGNING_KEY=signing_seed.hex(),
+        STEPSTITCH_SIGNING_KEY_ID="live-loop-host",
         RETENTION_PURGE_INTERVAL_SECONDS="0",
     )
     # Long-lived processes log to FILES, not to subprocess.PIPE. Nothing reads a pipe
@@ -329,7 +341,8 @@ def main() -> int:
               f"raw row binds the commit ({str(fixed_commit)[:12]}…) and the verifier")
         conn.close()
 
-        step(10, "the proof: `stepstitch proof export` writes the in-toto statement")
+        step(10, "the proof: `stepstitch proof export` writes the SIGNED in-toto "
+                 "statement")
         proof_path = os.environ.get("FIXPROOF_OUT") or str(Path(work) / "fixproof.json")
         exported = subprocess.run(
             [sys.executable, "-m", "stepstitch_service.cli", "proof", "export",
@@ -342,19 +355,43 @@ def main() -> int:
             print("   " + "\n   ".join(
                 ((exported.stdout or "") + (exported.stderr or "")).strip().splitlines()))
         check(exported.returncode == 0, f"proof exported to {proof_path}")
+        document = json.loads(Path(proof_path).read_text(encoding="utf-8"))
+        signature = document.get("signature") or {}
+        check(isinstance(signature, dict)
+              and signature.get("algorithm") == "ed25519"
+              and signature.get("key_id") == "live-loop-host",
+              "the exported proof carries this run's ed25519 signature")
 
-        step(11, "the gate: `stepstitch proof verify` accepts it for THIS commit, offline")
+        # The merge-gate policy, materialized the way a customer's would be: the full
+        # hardened template with THIS run's public key as the trust anchor and the
+        # actual verifier identity the row recorded.
+        gate_policy_path = str(Path(work) / "proof-policy.json")
+        gate_policy = {
+            "require_grade": "measured",
+            "require_pre_red": True,
+            "require_post_green": True,
+            "require_signature": True,
+            "trusted_keys": {"live-loop-host": signing_public},
+            "require_bindings": True,
+            "allowed_verifier_kinds": ["measured-by-host"],
+            "allowed_verifier_identities": [verified_by],
+            "require_privacy": {},
+            "expected_head_sha": None,
+        }
+        Path(gate_policy_path).write_text(json.dumps(gate_policy, indent=2),
+                                          encoding="utf-8")
+
+        step(11, "the gate: `stepstitch proof verify` accepts it for THIS commit — "
+                 "offline, signature and all bindings checked")
         gate = subprocess.run(
             [sys.executable, "-m", "stepstitch_service.cli", "proof", "verify",
-             proof_path, "--policy", str(REPO / "examples" / "proof" / "proof-policy.json"),
-             "--head-sha", head_sha],
+             proof_path, "--policy", gate_policy_path, "--head-sha", head_sha],
             capture_output=True, text=True, timeout=60,
         )
-        if gate.returncode != 0:
-            print("   ---- proof verify output ----")
-            print("   " + "\n   ".join(
-                ((gate.stdout or "") + (gate.stderr or "")).strip().splitlines()))
-        check(gate.returncode == 0, "offline verification passed (measured floor, head bound)")
+        print("   " + "\n   ".join((gate.stdout or "").strip().splitlines()))
+        check(gate.returncode == 0,
+              "offline verification passed (trusted signature, every binding, "
+              "measured floor, head bound)")
 
         step(12, "the gate proven red: a tampered copy must be rejected in this same run")
         tampered_path = str(Path(work) / "fixproof-tampered.json")
@@ -363,17 +400,35 @@ def main() -> int:
         Path(tampered_path).write_text(json.dumps(doc), encoding="utf-8")
         tampered = subprocess.run(
             [sys.executable, "-m", "stepstitch_service.cli", "proof", "verify",
-             tampered_path, "--policy",
-             str(REPO / "examples" / "proof" / "proof-policy.json"),
-             "--head-sha", head_sha],
+             tampered_path, "--policy", gate_policy_path, "--head-sha", head_sha],
             capture_output=True, text=True, timeout=60,
         )
         check(tampered.returncode == 1,
               f"tampered proof rejected (exit {tampered.returncode})")
 
+        step(13, "the gate proven unforgeable: the same intact proof under a policy "
+                 "trusting a DIFFERENT key")
+        stranger_public = "ed25519:" + _ed25519.public_key(
+            secrets.token_bytes(32)).hex()
+        stranger_policy_path = str(Path(work) / "proof-policy-stranger.json")
+        Path(stranger_policy_path).write_text(
+            json.dumps(dict(gate_policy,
+                            trusted_keys={"live-loop-host": stranger_public}),
+                       indent=2),
+            encoding="utf-8")
+        stranger = subprocess.run(
+            [sys.executable, "-m", "stepstitch_service.cli", "proof", "verify",
+             proof_path, "--policy", stranger_policy_path, "--head-sha", head_sha],
+            capture_output=True, text=True, timeout=60,
+        )
+        check(stranger.returncode == 1,
+              "an untrusted signer is refused even with an intact document "
+              f"(exit {stranger.returncode})")
+
         print("\nBrowser -> proxy -> strict scrubber -> database -> MCP -> red-to-green "
-              "-> proof-carrying fix,\nwith every claim asserted against the stored bytes "
-              "and the proof verified offline. No mocks were involved.")
+              "-> proof-carrying fix,\nsigned by this run's host key, verified offline "
+              "against that key alone, refused when tampered\nor differently signed. "
+              "No mocks were involved.")
         return 0
     finally:
         for proc in (app, stepstitch):

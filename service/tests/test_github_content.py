@@ -163,7 +163,36 @@ def test_fixproof_gate_needs_no_secret_and_no_token():
     assert "secrets." not in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
     assert "STEPSTITCH_ADMIN_TOKEN" not in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
     assert "STEPSTITCH_VERIFY_TOKEN" not in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
-    assert "permissions: {}" in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+    # Read-only: `contents: read` (checkout + reading the base policy), nothing more.
+    import yaml
+
+    doc = yaml.safe_load(STEPSTITCH_FIXPROOF_GATE_WORKFLOW)
+    assert doc["permissions"] == {"contents": "read"}
+
+
+def test_fixproof_gate_pins_its_actions_and_its_verifier():
+    """A trust gate with floating dependencies is a moving trust boundary: every action
+    is pinned by full commit SHA, and the verifier by exact version — which release-please
+    keeps equal to the shipping package version (extra-files)."""
+    import re
+
+    from stepstitch_service.github_bridge import STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+    from stepstitch_service.github_bridge.workflow import _GATE_VERSION
+
+    for line in STEPSTITCH_FIXPROOF_GATE_WORKFLOW.splitlines():
+        if "uses:" in line:
+            assert re.search(r"uses: [\w./-]+@[0-9a-f]{40}\b", line), (
+                f"action not pinned by commit SHA: {line.strip()!r}"
+            )
+    assert f"pip install stepstitch-service=={_GATE_VERSION}" in \
+        STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+    assert "__STEPSTITCH_VERSION__" not in STEPSTITCH_FIXPROOF_GATE_WORKFLOW
+    # The pin must be the real package version, not a stale constant.
+    from pathlib import Path
+
+    pyproject = (Path(__file__).resolve().parents[1] /
+                 "pyproject.toml").read_text(encoding="utf-8")
+    assert f'version = "{_GATE_VERSION}"' in pyproject
 
 
 def test_fixproof_gate_command_parses_under_the_cli():
@@ -175,9 +204,11 @@ def test_fixproof_gate_command_parses_under_the_cli():
          "--head-sha", "a" * 40])
 
 
-def test_the_shipped_proof_policy_is_usable_and_strict():
-    """The example policy must load, carry no typo'd keys, and hold the measured floor —
-    it is what customers will copy verbatim."""
+def test_the_shipped_proof_policy_is_strict_and_refuses_to_run_unconfigured():
+    """The example policy must load, carry no typo'd keys, and require the full trust
+    chain — signature by a trusted key, every mandatory binding, the measured floor.
+    Its placeholders are deliberate: until a customer pastes their real key, the policy
+    is UNUSABLE (exit 2), never quietly green (the trust-audit failure mode)."""
     import json
     from pathlib import Path
 
@@ -191,4 +222,12 @@ def test_the_shipped_proof_policy_is_usable_and_strict():
     assert policy["require_grade"] == "measured"
     assert policy["require_pre_red"] is True
     assert policy["require_post_green"] is True
+    assert policy["require_signature"] is True
+    assert policy["require_bindings"] is True
     assert policy["allowed_verifier_kinds"] == ["measured-by-host"]
+    assert policy["trusted_keys"], "the template must show the trusted_keys shape"
+    assert policy["allowed_verifier_identities"], (
+        "the template must show the identity allowlist shape"
+    )
+    # (test_fixproof_adversarial.py proves the placeholder key makes this policy
+    # refuse to run at all.)

@@ -71,16 +71,17 @@ pytest service/tests/test_evidence.py server/tests/test_agents.py`,
     title: "Verify a proof-carrying fix, offline, right now",
     claimIds: [
       "fixproof-offline-verifiable",
+      "fixproof-signature-verified",
       "fixproof-mutation-covered",
       "fixproof-no-raw-values",
     ],
     body:
-      "Download the example FixProof and the policy it must satisfy, then check both on your own machine: the in-toto statement binds the fixed commit, the frozen-test and environment digests, the measured red-then-green results, and the privacy policy digest. It is hash-verifiable as shipped; sign with your own key to add a signature requirement.",
+      "Download the example FixProof and the policy it must satisfy, then check both on your own machine: the in-toto statement binds the fixed commit, the frozen-test digest, the measured red-then-green results, and the privacy policy digest — and the check includes a real Ed25519 signature verified against the key the policy names. (The demo key is public by design so this example stays reproducible; your deployment trusts only the key `stepstitch proof keygen` creates on your host.)",
     code: `curl -O https://stepstitch.vercel.app/fixproof.json \\
      -O https://stepstitch.vercel.app/proof-policy.json
 pip install stepstitch-service
 stepstitch proof verify fixproof.json --policy proof-policy.json
-# change any byte of the statement and run it again — verification refuses`,
+# 8/8 checks incl. the ed25519 signature. Change any byte and rerun — it refuses.`,
     source: "service/stepstitch_service/fixproof.py",
   },
 ];

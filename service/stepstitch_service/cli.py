@@ -807,6 +807,20 @@ def build_parser() -> argparse.ArgumentParser:
                                    "proof's subject must be exactly this commit")
     proof_verify.add_argument("--json", action="store_true", dest="as_json",
                               help="emit machine-readable results")
+    proof_keygen = proof_sub.add_parser(
+        "keygen",
+        help="generate the ed25519 signing key that makes proofs verifiable",
+        description="Writes a new ed25519 signing seed (private — stays on the host; "
+                    "point STEPSTITCH_SIGNING_KEY at the file) and prints the public "
+                    "key to paste into your proof policy's trusted_keys. The seed is "
+                    "never printed. Refuses to overwrite an existing key file.",
+    )
+    proof_keygen.add_argument("--out", default="stepstitch-signing.key",
+                              help="where to write the private seed "
+                                   "(default stepstitch-signing.key, mode 0600)")
+    proof_keygen.add_argument("--key-id", default="stepstitch-host", dest="key_id",
+                              help="the key id recorded in signatures and named in "
+                                   "trusted_keys (default stepstitch-host)")
 
     start = sub.add_parser(
         "start",
@@ -865,6 +879,8 @@ def _proof_command(args: Any, parser: argparse.ArgumentParser,
         return _proof_export(args, transport=transport)
     if command == "verify":
         return _proof_verify(args)
+    if command == "keygen":
+        return _proof_keygen(args)
     parser.print_help()
     return 2
 
@@ -892,6 +908,35 @@ def _proof_export(args: Any, transport: Optional[Transport] = None) -> int:
           f"{'signed' if payload.get('signed') else 'hash-verifiable, unsigned'})")
     if args.as_json:
         print(json.dumps(document, indent=2))
+    return 0
+
+
+def _proof_keygen(args: Any) -> int:
+    """Generate the host signing key. The seed is written, never printed: what the
+    terminal (and its scrollback, and CI logs) sees is only the public half."""
+    import secrets as _secrets
+
+    # Lazy import (module top stays stdlib-only-importable — it is stdlib, but the
+    # doctor rule is "the top imports nothing that could be broken").
+    from stepstitch_service import _ed25519
+
+    out = Path(args.out)
+    if out.exists():
+        print(f"refusing to overwrite {out} — an existing signing key may already be "
+              "trusted by a policy. Move it aside first if you really mean to rotate.")
+        return 2
+    seed = _secrets.token_bytes(32)
+    out.touch(mode=0o600)
+    out.write_text(seed.hex() + "\n", encoding="utf-8")
+    public = "ed25519:" + _ed25519.public_key(seed).hex()
+    print(f"wrote private signing seed to {out} (mode 0600) — never commit or share it")
+    print(f"public key: {public}")
+    print()
+    print("wire it up:")
+    print(f"  1. on the host:   export STEPSTITCH_SIGNING_KEY={out}")
+    print(f"                    export STEPSTITCH_SIGNING_KEY_ID={args.key_id}")
+    print("  2. in your proof policy's trusted_keys:")
+    print(f'       "trusted_keys": {{"{args.key_id}": "{public}"}}')
     return 0
 
 
