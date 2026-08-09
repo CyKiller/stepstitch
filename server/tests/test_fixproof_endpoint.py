@@ -77,10 +77,13 @@ def _repro(verdict, *, transcript="", passed=None, sha="a" * 64):
         verdict=verdict, session_id="s", script_sha256=sha,
         runs=[RunAttempt(index=0, exit_code=0 if passed else 1, passed=passed,
                          timed_out=False, duration_seconds=1.0, transcript=transcript)],
-        detail=f"runner said {verdict}")
+        detail=f"runner said {verdict}",
+        # A real freeze records the run's execution envelope; the fake must too, or
+        # the exported proof lacks the envelope binding a hardened policy requires.
+        execution_envelope_sha256="e" * 64)
 
 
-def _measure_fix(client, trace):
+def _measure_fix(client, trace, *, fixed_commit=FIXED_SHA, base_commit=BASE_SHA):
     """Freeze red, then verify-fix green with commit bindings — the measured path."""
     with patch("stepstitch_service.runner.run_reproduction",
                return_value=_repro("reproduced", transcript=RED)):
@@ -89,7 +92,8 @@ def _measure_fix(client, trace):
     with patch("stepstitch_service.runner.run_reproduction",
                return_value=_repro("not_reproduced", sha=sha)):
         body = client.post(f"/admin/session/{trace}/verify-fix",
-                           json={"base_commit": BASE_SHA, "fixed_commit": FIXED_SHA},
+                           json={"base_commit": base_commit,
+                                 "fixed_commit": fixed_commit},
                            headers=_admin()).json()
     assert body["verdict"] == "fixed"
 
@@ -259,3 +263,76 @@ def test_agent_scopes_cover_fixproof_like_the_attestation():
         assert scope_allows("verify", "GET", path)
         assert not scope_allows("none", "GET", path)
     assert not scope_allows("summaries", "POST", f"{_PFX}/session/t1/fixproof")
+
+
+def test_the_full_customer_chain_from_measured_export_through_the_merge_gate(tmp_path):
+    """The second audit's definitive requirement, in one test: a real git repository,
+    a host-MEASURED verification bound to that repository's actual code commit, the
+    host-SIGNED export, a proof-only commit on top, and the exact `proof gate` command
+    the generated workflow runs — accepted. Then the two protocol attacks — code after
+    the proof, a stowaway file — refused against the very same repository."""
+    import hashlib
+    import json
+    import subprocess
+
+    from stepstitch_service import _ed25519
+    from stepstitch_service.cli import main
+    from stepstitch_service.host.signing import make_ed25519_signer
+
+    def git(*argv):
+        return subprocess.run(
+            ["git", "-C", str(repo), "-c", "user.name=chain",
+             "-c", "user.email=chain@example.test", "-c", "commit.gpgsign=false",
+             *argv],
+            capture_output=True, text=True, timeout=60, check=True,
+        ).stdout.strip()
+
+    repo = tmp_path / "customer-repo"
+    repo.mkdir()
+    git("init", "-q")
+    (repo / "app.py").write_text("def handler():\n    return 'fixed'\n",
+                                 encoding="utf-8")
+    git("add", "app.py")
+    git("commit", "-q", "-m", "the fix (commit A)")
+    code_commit = git("rev-parse", "HEAD")
+
+    seed = hashlib.sha256(b"full-chain host key").digest()
+    client, conn, trace = _client(tmp_path,
+                                  sign_blob=make_ed25519_signer(seed, "host"))
+    try:
+        _measure_fix(client, trace, fixed_commit=code_commit)
+        document = client.get(f"{_PFX}/session/{trace}/fixproof",
+                              headers=_admin()).json()["fixproof"]
+    finally:
+        conn.close()
+
+    (repo / "fixproof.json").write_text(json.dumps(document, indent=2),
+                                        encoding="utf-8")
+    git("add", "fixproof.json")
+    git("commit", "-q", "-m", f"fixproof for {code_commit} (commit B)")
+    head = git("rev-parse", "HEAD")
+
+    policy_path = tmp_path / "proof-policy.json"
+    policy_path.write_text(json.dumps({
+        "require_grade": "measured",
+        "require_pre_red": True,
+        "require_post_green": True,
+        "require_signature": True,
+        "trusted_keys": {"host": "ed25519:" + _ed25519.public_key(seed).hex()},
+        "require_bindings": True,
+        "allowed_verifier_kinds": ["measured-by-host"],
+        "allowed_verifier_identities": ["admin"],
+        "require_privacy": {},
+        "expected_head_sha": None,
+    }), encoding="utf-8")
+
+    assert main(["proof", "gate", head, "--policy", str(policy_path),
+                 "--repo", str(repo)]) == 0
+
+    # Attack: code pushed after the proof rides a stale proof — refused.
+    (repo / "app.py").write_text("def handler():\n    return 'untested'\n",
+                                 encoding="utf-8")
+    git("add", "app.py")
+    git("commit", "-q", "-m", "code after the proof")
+    assert main(["proof", "gate", git("rev-parse", "HEAD"),
+                 "--policy", str(policy_path), "--repo", str(repo)]) == 1

@@ -40,12 +40,31 @@ The workflow also reports the run outcome to the Verified-Fix engine — see
 
 > **No AI fix merges without proof.**
 
-After a verification carries a `fixed_commit`, export the proof and commit it with the
-fix PR:
+The PR ends in a **proof-only commit** — the protocol that makes "the proof names the
+merged code" actually satisfiable (a proof committed *into* the code commit would move
+the head it has to name):
+
+```text
+A = the exact tested code commit        <- verify-fix ran here; the proof's subject
+B = a child commit adding ONLY fixproof.json   <- the PR head
+```
 
 ```bash
+# 1. commit the fix — this is commit A, the code under test
+git commit -am "fix the transfer handler"
+
+# 2. measure and export: freeze -> verify-fix at A -> the signed proof names A
 stepstitch proof export <trace-id> --out fixproof.json
+
+# 3. the proof-only commit — commit B, nothing else in it
+git add fixproof.json
+git commit -m "fixproof for $(git rev-parse HEAD)"
 ```
+
+The gate (`stepstitch proof gate <PR-head> --policy proof-policy.json`) enforces the
+protocol end to end: the head has exactly one parent, `HEAD^..HEAD` changes nothing but
+`fixproof.json`, and the signed proof verifies with its subject bound to `HEAD^` — the
+tested code. Code pushed after the proof, or a stowaway file beside it, is refused.
 
 Set it up once:
 
@@ -68,21 +87,27 @@ Set it up once:
 The gate is deliberately offline: **no secrets, no StepStitch host, no trust in the PR
 author**. Internal consistency is not enough — a fabricated document with a correctly
 recomputed hash is still refused, because the signature is verified cryptographically
-(Ed25519 over the canonical statement bytes) against the keys **your** policy names.
-Three hardenings make the trust chain end-to-end:
+(Ed25519, via the `cryptography` library) against the keys **your** policy names, and
+trust anchors themselves are validated (a small-order key — against which one forged
+signature would verify every message — is refused as an unusable policy). The trust
+chain is end-to-end:
 
-- the policy (trusted keys and requirements) is loaded from the **protected base
-  branch**, so a PR that weakens `proof-policy.json` in its own diff is still judged
-  by the policy of the branch it wants to enter;
+- `pull_request_target` runs **both the gate definition and the checkout from the
+  protected base branch** — a PR can weaken neither the workflow nor the
+  `proof-policy.json` that judges it, and the PR head enters only as fetched git data,
+  never as executed code;
 - the workflow pins its actions by commit SHA and the verifier by exact version — no
   floating dependency inside the trust boundary;
-- the proof's subject commit must be exactly the PR head.
+- the proof's subject commit must be exactly the PR head's parent — the tested code
+  under the proof-only-commit protocol.
 
 So the merge is refused when:
 
+- the head is not a proof-only commit: it has more than one parent, changes anything
+  besides `fixproof.json`, carries no proof, or has code committed after the proof;
 - the document carries no signature, an opaque signature string, forged signature
   bytes, or a valid signature by any key the policy does not trust;
-- the proof references a different commit than the PR head (including a genuine proof
+- the proof names a different commit than the tested code (including a genuine proof
   replayed from another PR);
 - a load-bearing binding is missing — base commit, failure fingerprint, red signature,
   frozen-test digest, execution-envelope digest, privacy-policy digest, structural
@@ -93,14 +118,22 @@ So the merge is refused when:
 - the verifier kind or identity is not on the policy's allowlist;
 - any byte of the statement was changed after export.
 
-Every one of those refusals is a permanent acceptance test
-(`service/tests/test_fixproof_adversarial.py` — the six attacks from the trust audit,
-each proven refused).
+Every one of those refusals is a permanent acceptance test: the six attacks from the
+first trust audit in `service/tests/test_fixproof_adversarial.py`, and the full
+customer flow — real git repositories, proof-only commits, code-after-proof, stowaway
+files, merge heads, forged and small-order keys — in
+`service/tests/test_proof_gate.py`.
 
-Verification is `stepstitch proof verify fixproof.json --policy proof-policy.json
---head-sha <sha>` — the same command works on a laptop with no network. The proof claims
-one failure was fixed under one frozen test and envelope; it never claims the program is
-universally correct.
+`stepstitch proof gate <head> --policy proof-policy.json` and `stepstitch proof verify
+fixproof.json --policy proof-policy.json --head-sha <sha>` both work on a laptop with
+no network. The proof claims one failure was fixed under one frozen test and envelope;
+it never claims the program is universally correct.
+
+The reproduction workflow (`STEPSTITCH_REPRO_WORKFLOW`) reports the commit each half
+actually ran (`git rev-parse HEAD` from its own checkout) as `base_commit` /
+`fixed_commit`. Its outcome is recorded at the **asserted** grade — honest, because the
+host did not run it — so a `require_grade: measured` merge policy is satisfied only by
+the host's own `freeze` → `verify-fix` path, which is where exported proofs come from.
 
 ## Labels
 

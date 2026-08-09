@@ -807,6 +807,25 @@ def build_parser() -> argparse.ArgumentParser:
                                    "proof's subject must be exactly this commit")
     proof_verify.add_argument("--json", action="store_true", dest="as_json",
                               help="emit machine-readable results")
+    proof_gate = proof_sub.add_parser(
+        "gate",
+        help="run the merge-gate protocol against a proof-only PR head commit",
+        description="The proof-only-commit protocol: the PR head must be a commit "
+                    "that adds ONLY fixproof.json on top of the tested code commit, "
+                    "and the signed proof's subject must be that parent commit "
+                    "(HEAD^). Enforces all of it with read-only git queries — no "
+                    "code from the head is ever executed. Exit 0 = the protocol and "
+                    "the policy both hold; 1 = refused; 2 = unusable input.",
+    )
+    proof_gate.add_argument("head_sha",
+                            help="the PR head commit (the proof-only commit)")
+    proof_gate.add_argument("--policy", required=True,
+                            help="path to the proof policy JSON (the merge gate "
+                                 "loads this from the protected base branch)")
+    proof_gate.add_argument("--repo", default=".",
+                            help="path to the git repository (default: cwd)")
+    proof_gate.add_argument("--json", action="store_true", dest="as_json",
+                            help="emit machine-readable results")
     proof_keygen = proof_sub.add_parser(
         "keygen",
         help="generate the ed25519 signing key that makes proofs verifiable",
@@ -879,6 +898,8 @@ def _proof_command(args: Any, parser: argparse.ArgumentParser,
         return _proof_export(args, transport=transport)
     if command == "verify":
         return _proof_verify(args)
+    if command == "gate":
+        return _proof_gate(args)
     if command == "keygen":
         return _proof_keygen(args)
     parser.print_help()
@@ -940,37 +961,36 @@ def _proof_keygen(args: Any) -> int:
     return 0
 
 
-def _proof_verify(args: Any) -> int:
-    # Imported here, not at module top: fixproof is stdlib-only, but this module's top
-    # must stay importable with nothing installed so `doctor` can diagnose a broken env.
+def _load_json_file(path_str: str, label: str) -> Any:
+    """A JSON file or None (with the reason printed) — None means unusable input."""
+    try:
+        return json.loads(Path(path_str).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        print(f"{label} not found: {path_str}")
+        return None
+    except json.JSONDecodeError as exc:
+        print(f"{label} is not valid JSON: {exc}")
+        return None
+
+
+def _report_proof_verification(document: Any, policy: Any,
+                               head_sha: Optional[str], as_json: bool) -> int:
+    """Run the offline verifier and print its outcome — shared by `verify` (a proof
+    file on disk) and `gate` (a proof read out of a commit)."""
+    # Imported here, not at module top: this module's top must stay importable with
+    # nothing installed so `doctor` can diagnose a broken env.
     from stepstitch_service.evidence import TamperError
     from stepstitch_service.fixproof import verify_fixproof
 
-    def _load(path_str: str, label: str) -> Any:
-        try:
-            return json.loads(Path(path_str).read_text(encoding="utf-8"))
-        except FileNotFoundError:
-            print(f"{label} not found: {path_str}")
-            return None
-        except json.JSONDecodeError as exc:
-            print(f"{label} is not valid JSON: {exc}")
-            return None
-
-    document = _load(args.proof_file, "proof file")
-    if document is None:
-        return 2
-    policy = _load(args.policy, "policy file")
-    if policy is None:
-        return 2
     try:
-        result = verify_fixproof(document, policy, head_sha=args.head_sha)
+        result = verify_fixproof(document, policy, head_sha=head_sha)
     except TamperError as exc:
         print(f"TAMPERED: {exc}")
         return 1
     except ValueError as exc:
         print(f"unusable policy: {exc}")
         return 2
-    if args.as_json:
+    if as_json:
         print(json.dumps(result.as_dict(), indent=2))
     else:
         for check in result.checks:
@@ -980,6 +1000,76 @@ def _proof_verify(args: Any) -> int:
         print(f"{verdict} ({sum(c['passed'] for c in result.checks)}/"
               f"{len(result.checks)} checks passed)")
     return 0 if result.ok else 1
+
+
+def _proof_verify(args: Any) -> int:
+    document = _load_json_file(args.proof_file, "proof file")
+    if document is None:
+        return 2
+    policy = _load_json_file(args.policy, "policy file")
+    if policy is None:
+        return 2
+    return _report_proof_verification(document, policy, args.head_sha, args.as_json)
+
+
+def _proof_gate(args: Any) -> int:
+    """The proof-only-commit protocol (docs/integrations/github.md): the head adds
+    ONLY fixproof.json, its single parent is the tested code, and the signed proof
+    names that parent. Read-only git queries — nothing from the head is executed."""
+    import subprocess
+
+    policy = _load_json_file(args.policy, "policy file")
+    if policy is None:
+        return 2
+
+    def git(*argv: str) -> tuple:
+        try:
+            proc = subprocess.run(["git", "-C", args.repo, *argv],
+                                  capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.SubprocessError) as exc:
+            return 1, "", str(exc)
+        return proc.returncode, proc.stdout or "", proc.stderr or ""
+
+    code, out, err = git("rev-list", "--parents", "-n", "1", args.head_sha)
+    if code != 0:
+        print(f"cannot resolve {args.head_sha} in {args.repo}: "
+              f"{(err or out).strip() or 'not a git repository?'}")
+        return 2
+    parts = out.split()
+    head, parents = parts[0], parts[1:]
+    if len(parents) != 1:
+        print("REFUSED: the head must be a proof-only commit with exactly one "
+              f"parent (the tested code commit); {head[:12]} has "
+              f"{len(parents)} parents.")
+        return 1
+    parent = parents[0]
+
+    code, out, _diff_err = git("diff", "--name-only", parent, head)
+    if code != 0:
+        print(f"cannot diff {parent[:12]}..{head[:12]}: is the history complete "
+              "(fetch depth >= 2)?")
+        return 2
+    changed = [line.strip() for line in out.splitlines() if line.strip()]
+    if changed != ["fixproof.json"]:
+        print("REFUSED: on top of the tested code the head commit must change "
+              "only fixproof.json; it changes: "
+              f"{', '.join(changed) or '(nothing)'}. Code committed after the "
+              "proof is untested code riding a stale proof.")
+        return 1
+
+    code, out, _show_err = git("show", f"{head}:fixproof.json")
+    if code != 0:
+        print("REFUSED: the head commit does not carry fixproof.json")
+        return 1
+    try:
+        document = json.loads(out)
+    except json.JSONDecodeError as exc:
+        print(f"REFUSED: the proof the PR carries is not valid JSON: {exc}")
+        return 1
+
+    print(f"proof-only commit {head[:12]} on tested code {parent[:12]} — "
+          "verifying the proof against the parent commit")
+    return _report_proof_verification(document, policy, parent, args.as_json)
 
 
 def run_init(

@@ -10,8 +10,10 @@ fixed commit and whose predicate carries the ten bindings. The wrapper adds a
 reproducible hash (``statement_sha256``) and an optional detached signature, exactly the
 shape the attestation bundle already uses, so one verification recipe covers both.
 
-Deliberately stdlib-only (like attestation.py): ``stepstitch proof verify`` must work
-offline in an environment that has nothing but Python. Canonicalization is
+Deliberately OFFLINE: ``stepstitch proof verify`` needs the installed package and two
+files — no host, no account, no network. (Signature crypto is the ``cryptography``
+library, a package dependency; see ``_ed25519.py`` for why the one hand-carried check
+that remains — trust-anchor order validation — must exist.) Canonicalization is
 ``attestation.canonical_bytes`` — a second canonicalizer would be a second chance for
 "same content, different bytes" to break verification, and the tests treat
 re-serialization as explicitly not tampering.
@@ -230,7 +232,18 @@ def _trusted_keys_or_refuse(policy: Dict[str, Any]) -> Dict[str, bytes]:
                 "placeholder with your host's real public key — "
                 "`stepstitch proof keygen` prints it."
             )
-        decoded[key_id] = bytes.fromhex(text.removeprefix("ed25519:"))
+        raw = bytes.fromhex(text.removeprefix("ed25519:"))
+        # Well-formed hex is not a well-formed ANCHOR: a small-order point (the
+        # identity above all) verifies one forged signature against every message,
+        # and RFC-compliant verifiers accept it — so the policy loader must not.
+        if not _ed25519.is_usable_public_key(raw):
+            raise ValueError(
+                f"trusted_keys[{key_id!r}] is not a usable ed25519 public key: the "
+                "encoded point is off-curve, non-canonical, or of small order, and "
+                "could not anchor trust. Generate a real key with "
+                "`stepstitch proof keygen`."
+            )
+        decoded[key_id] = raw
     return decoded
 
 

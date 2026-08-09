@@ -246,20 +246,26 @@ def test_attack_3c_a_subset_bindings_policy_must_name_real_bindings():
 # --- attack 4: change the policy inside the PR --------------------------------------------
 
 
-def test_attack_4_the_gate_loads_its_policy_from_the_protected_base_branch():
-    """A PR that weakens proof-policy.json in the same diff must be verifying against
-    the BASE branch's policy, not its own. The workflow template is the enforcement
-    point: it must read the policy out of the protected base commit and pass THAT file
-    to the verifier."""
+def test_attack_4_the_gate_and_its_policy_both_come_from_the_protected_base():
+    """A PR that weakens proof-policy.json — or the gate workflow itself — in the same
+    diff must change nothing about how it is judged. pull_request_target runs the BASE
+    branch's workflow definition AND checkout, so the policy file the gate reads is the
+    protected branch's; the PR head enters only as fetched git data, never as an
+    executed checkout."""
+    import yaml
+
     from stepstitch_service.github_bridge import STEPSTITCH_FIXPROOF_GATE_WORKFLOW as wf
-    assert "github.event.pull_request.base.sha" in wf, (
-        "the gate never references the protected base commit"
-    )
-    assert "git show" in wf and "proof-policy.json" in wf
-    # The verifier must be pointed at the base-branch copy, never the checkout's.
-    verify_line = next(line for line in wf.splitlines() if "--policy" in line)
-    assert "trusted-proof-policy.json" in verify_line, (
-        f"the verify command reads the PR's own policy file: {verify_line!r}"
+
+    doc = yaml.safe_load(wf)
+    on = doc.get("on") or doc.get(True)
+    assert "pull_request_target" in on and "pull_request" not in on
+    # The policy is the base checkout's file, read by the gate command directly.
+    gate_line = next(line for line in wf.splitlines() if "--policy" in line)
+    assert "proof-policy.json" in gate_line
+    # And no step checks out the PR head — the fetch is data-only.
+    assert not any("ref:" in line for line in wf.splitlines()), (
+        "an explicit ref checkout inside a pull_request_target workflow is the "
+        "classic privilege-escalation shape"
     )
 
 
@@ -302,6 +308,17 @@ def test_require_signature_without_trusted_keys_is_an_unusable_policy():
         policy["trusted_keys"] = keys
         with pytest.raises(ValueError, match="trusted_keys"):
             verify_fixproof(_signed_document(), policy, head_sha=FIXED)
+
+
+def test_a_small_order_trust_anchor_is_an_unusable_policy():
+    """The second audit's forgery: against a small-order public key (the identity
+    point, above all), one forged signature verifies EVERY message — and RFC-compliant
+    verifiers do not reject such keys. A policy naming one has no trust anchor at all,
+    so it must refuse to run, exactly like a placeholder."""
+    identity = "ed25519:" + (1).to_bytes(32, "little").hex()
+    policy = dict(HARDENED_POLICY, trusted_keys={"tenant-host": identity})
+    with pytest.raises(ValueError, match="not a usable ed25519 public key"):
+        verify_fixproof(_signed_document(), policy, head_sha=FIXED)
 
 
 def test_a_placeholder_public_key_is_an_unusable_policy():

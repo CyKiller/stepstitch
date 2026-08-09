@@ -115,3 +115,50 @@ def test_seed_length_is_enforced():
         _ed25519.sign(b"short", b"m")
     with pytest.raises(ValueError):
         _ed25519.public_key(b"x" * 33)
+
+
+# --- small-order trust anchors: the second audit's forgery --------------------------------
+
+# The identity point and the other low-order points on edwards25519. Against any of
+# these as a public key, ONE forged signature verifies EVERY message (A contributes
+# nothing to sB == R + kA), which RFC-compliant verifiers — including OpenSSL —
+# deliberately do not reject. A trust anchor must therefore be validated separately.
+_IDENTITY = (1).to_bytes(32, "little")                    # (0, 1), order 1
+_ORDER_2 = ((2**255 - 19) - 1).to_bytes(32, "little")     # (0, -1), order 2
+_ORDER_4A = (0).to_bytes(32, "little")                    # (±sqrt(-1), 0)
+_ORDER_4B = bytes(31) + b"\x80"
+
+
+def _identity_forgery(s: int = 12345) -> bytes:
+    """R = sB makes (R, s) verify any message when A is the identity."""
+    r_point = _ed25519._compress(_ed25519._scalar_mult(_ed25519._BASE, s))
+    return r_point + s.to_bytes(32, "little")
+
+
+@pytest.mark.parametrize("small_order_key",
+                         [_IDENTITY, _ORDER_2, _ORDER_4A, _ORDER_4B])
+def test_a_small_order_public_key_never_verifies_anything(small_order_key):
+    forged = _identity_forgery()
+    assert not _ed25519.verify(small_order_key, b"any fixproof statement bytes",
+                               forged)
+    assert not _ed25519.verify(small_order_key, b"a different message", forged)
+
+
+@pytest.mark.parametrize("small_order_key",
+                         [_IDENTITY, _ORDER_2, _ORDER_4A, _ORDER_4B])
+def test_a_small_order_key_is_not_a_valid_trust_anchor(small_order_key):
+    assert not _ed25519.is_usable_public_key(small_order_key)
+
+
+def test_every_honestly_generated_key_is_a_usable_trust_anchor():
+    for label in (b"one", b"two", b"three"):
+        seed = hashlib.sha256(b"anchor " + label).digest()
+        assert _ed25519.is_usable_public_key(_ed25519.public_key(seed))
+
+
+def test_a_non_canonical_key_encoding_is_not_usable():
+    # y >= p is a non-canonical field element; off-curve bytes are not a point at all.
+    p = 2**255 - 19
+    assert not _ed25519.is_usable_public_key(p.to_bytes(32, "little"))
+    assert not _ed25519.is_usable_public_key(b"\xff" * 32)
+    assert not _ed25519.is_usable_public_key(b"\x00" * 31)  # wrong length

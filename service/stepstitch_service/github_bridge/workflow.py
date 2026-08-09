@@ -73,6 +73,10 @@ _RUN_REPRO_STEPS = r"""
         id: result
         run: |
           echo "ran=true" >> "$GITHUB_OUTPUT"
+          # The commit this half actually ran against — resolved from the checkout,
+          # never assumed from an input. Carried into the /verify report so the
+          # verification row (and any proof built on it) names real commits.
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           if [ "${{ steps.run.outcome }}" = "success" ]; then
             echo "passed=true" >> "$GITHUB_OUTPUT"
           else
@@ -108,6 +112,7 @@ jobs:
     outputs:
       passed: ${{ steps.result.outputs.passed }}
       ran: ${{ steps.result.outputs.ran }}
+      sha: ${{ steps.result.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -126,6 +131,7 @@ jobs:
     outputs:
       passed: ${{ steps.result.outputs.passed }}
       ran: ${{ steps.result.outputs.ran }}
+      sha: ${{ steps.result.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -151,12 +157,14 @@ jobs:
           POST: ${{ needs.green.outputs.passed }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           FIX_REF: ${{ github.event.inputs.fix_ref || github.sha }}
+          BASE_SHA: ${{ needs.red.outputs.sha }}
+          FIX_SHA: ${{ needs.green.outputs.sha }}
         run: |
-          echo "measured: pre_passed=$PRE post_passed=$POST"
+          echo "measured: pre_passed=$PRE post_passed=$POST (base=$BASE_SHA fixed=$FIX_SHA)"
           curl -fsS -X POST -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
             "$BASE/api/stepstitch/v1/session/$TRACE/verify" \
-            -d "{\"pre_passed\": $PRE, \"post_passed\": $POST, \"fix_ref\": \"$FIX_REF\", \"run_url\": \"$RUN_URL\"}"
+            -d "{\"pre_passed\": $PRE, \"post_passed\": $POST, \"fix_ref\": \"$FIX_REF\", \"run_url\": \"$RUN_URL\", \"base_commit\": \"$BASE_SHA\", \"fixed_commit\": \"$FIX_SHA\"}"
       - name: Explain why nothing was reported
         if: ${{ !(needs.red.outputs.ran == 'true' && needs.green.outputs.ran == 'true') }}
         run: |
@@ -185,29 +193,34 @@ jobs:
 # Branch protection itself is a repository setting; no workflow can turn it on.
 #
 # The check is deliberately OFFLINE: it needs no secret, no StepStitch host, and no trust
-# in whoever produced the PR. The PR carries its proof (fixproof.json, exported by
-# `stepstitch proof export` after verification); the gate cryptographically verifies the
-# proof's signature against the trusted keys in the repo's policy and holds it to every
-# other requirement — including that the proof's subject is EXACTLY the PR head commit,
-# so a proof about some other code cannot ride in.
+# in whoever produced the PR. The PR ends in a proof-only commit (docs/integrations/
+# github.md): its parent is the exact tested code commit the signed proof names, and the
+# head adds nothing but fixproof.json. `stepstitch proof gate` enforces the whole
+# protocol — one parent, only-fixproof diff, subject == parent, signature against the
+# policy's trusted keys — with read-only git queries.
 #
-# Three trust-audit hardenings, each load-bearing:
-#   - the policy (keys + requirements) is read from the PROTECTED BASE COMMIT, never
-#     from the PR's checkout — a PR that weakens proof-policy.json in its own diff is
-#     still judged by the policy of the branch it wants to enter;
+# The second trust audit's hardenings, each load-bearing:
+#   - `pull_request_target`: BOTH the workflow definition and the checkout come from
+#     the protected base branch, so a PR can weaken neither the gate nor the policy
+#     that judges it. Safe here BY CONSTRUCTION: the PR head is fetched as git DATA
+#     and read with `git show`/`git diff` — no code from it is ever checked out,
+#     installed, or executed, and the job holds no secrets to exfiltrate.
+#   - the proof-only-commit protocol closes the loop the first design shipped with
+#     (committing the proof moved the head the proof had to name): the proof's subject
+#     is HEAD^, and HEAD^..HEAD may touch nothing but fixproof.json — so code after
+#     the proof, or a stowaway file beside it, is refused.
 #   - actions are pinned by commit SHA and the verifier by exact version — a floating
-#     dependency inside a trust gate is a moving trust boundary;
-#   - `github.event.pull_request.head.sha`, not `github.sha`: on pull_request events
-#     github.sha is the ephemeral MERGE commit, which no exported proof can ever name.
+#     dependency inside a trust gate is a moving trust boundary.
 _GATE_VERSION = "0.11.0"  # x-release-please-version
 
 STEPSTITCH_FIXPROOF_GATE_WORKFLOW = r"""name: stepstitch fixproof gate
 
+# pull_request_target: the gate DEFINITION and the checkout below are the protected
+# base branch's — a PR cannot edit the workflow or the policy that judges it. The PR's
+# commits are fetched as data only and never executed (see the fetch step).
 on:
-  pull_request:
+  pull_request_target:
 
-# Read-only by construction: checking out the PR and reading the base branch's policy
-# need `contents: read`; nothing in this gate ever writes.
 permissions:
   contents: read
 
@@ -217,25 +230,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # The BASE branch (the default checkout on pull_request_target): supplies the
+      # trusted proof-policy.json and the repository the head is fetched into.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          # The PR head itself — the commit the proof must be about.
-          ref: ${{ github.event.pull_request.head.sha }}
-      - name: Load the trusted policy from the protected base branch
-        # The PR's own proof-policy.json is attacker-editable in the same diff. The
-        # trusted keys and requirements must come from the branch the PR wants to
-        # enter, so no PR can weaken the policy that judges it.
-        run: |
-          git fetch --depth=1 origin "${{ github.event.pull_request.base.sha }}"
-          git show "${{ github.event.pull_request.base.sha }}:proof-policy.json" \
-            > "${{ runner.temp }}/trusted-proof-policy.json"
+      - name: Fetch the PR head as data — never checked out, never executed
+        run: git fetch --depth=2 origin "${{ github.event.pull_request.head.sha }}"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.11" }
       - name: Install the pinned verifier
         run: pip install stepstitch-service==__STEPSTITCH_VERSION__
-      - name: Verify the proof against this PR's head
+      - name: Enforce the proof-only-commit protocol against this PR's head
+        # proof gate reads the head with `git show`/`git diff` only, requires it to be
+        # a single-parent commit adding nothing but fixproof.json, and verifies the
+        # signed proof with its subject bound to the parent — the tested code commit.
         run: |
-          stepstitch proof verify fixproof.json \
-            --policy "${{ runner.temp }}/trusted-proof-policy.json" \
-            --head-sha "${{ github.event.pull_request.head.sha }}"
+          stepstitch proof gate "${{ github.event.pull_request.head.sha }}" \
+            --policy proof-policy.json
 """.replace("__STEPSTITCH_VERSION__", _GATE_VERSION)

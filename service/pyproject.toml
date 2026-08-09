@@ -12,6 +12,10 @@ license = { text = "Apache-2.0" }
 dependencies = [
     "fastapi>=0.104",
     "pydantic>=2.5",
+    # FixProof signatures (Ed25519). A hardened library, not hand-rolled math — the
+    # second trust audit's requirement; _ed25519.py keeps only the trust-anchor
+    # (small-order/prime-order) validation the library deliberately does not do.
+    "cryptography>=42",
 ]
 
 [project.scripts]
