@@ -28,7 +28,9 @@ Outputs (committed, deterministic — re-running produces an identical bundle):
   - demo/fixproof.json            the example FixProof statement (synthetic demo commits,
                                   pinned timestamps — byte-stable like the bundle)
   - web/public/fixproof.json      the same document, downloadable from /verify
-  - web/public/proof-policy.json  verbatim copy of examples/proof/proof-policy.json
+  - web/public/proof-policy.json  the generated demo policy (trusts the public-by-design
+                                  demo signing key; the customer template refuses to run
+                                  until a real key replaces its placeholder)
 """
 from __future__ import annotations
 
