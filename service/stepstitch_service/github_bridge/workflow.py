@@ -211,7 +211,7 @@ jobs:
 #     the proof, or a stowaway file beside it, is refused.
 #   - actions are pinned by commit SHA and the verifier by exact version — a floating
 #     dependency inside a trust gate is a moving trust boundary.
-_GATE_VERSION = "0.11.0"  # x-release-please-version
+_GATE_VERSION = "0.12.0"  # x-release-please-version
 
 STEPSTITCH_FIXPROOF_GATE_WORKFLOW = r"""name: stepstitch fixproof gate
 

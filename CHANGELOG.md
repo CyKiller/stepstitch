@@ -4,6 +4,36 @@ All notable changes to StepStitch are recorded here. Versions are repo-wide tags
 SDK (`@stepstitch/tracker`) and the backend (`stepstitch_service`) are versioned in
 lockstep per `RELEASE.md`.
 
+## [0.12.0](https://github.com/CyKiller/stepstitch/compare/v0.11.0...v0.12.0) (2026-08-09)
+
+
+### Features
+
+* agent-scope enforcement works under OIDC — the capability gap is closed ([695914b](https://github.com/CyKiller/stepstitch/commit/695914bb92c6f96657d4b44f64ce63e3ef41ae22))
+* FixProof v2 — proof-carrying fixes with offline verification ([7aab26c](https://github.com/CyKiller/stepstitch/commit/7aab26c7857dafea563d54c65b5ac0f68707ee4c))
+* **fixproof:** close the trust chain — cryptographic signatures, mandatory bindings, protected policy ([d9943d0](https://github.com/CyKiller/stepstitch/commit/d9943d017ff93b570b2332babbb9395b5e67894a))
+* one unified workflow status on every trace — state, meaning, next action ([10a4364](https://github.com/CyKiller/stepstitch/commit/10a436407c0e49e72fbca6e8c557e226fc368d0c))
+* PCI account-data defense-in-depth — hostile fixtures, Luhn labeling, advisory-detector seam ([bf3cf70](https://github.com/CyKiller/stepstitch/commit/bf3cf70d5cb0c92beb91a6a12dc09dc89a8c0978))
+* Reproduction Success benchmark corpus with ready, refusal, determinism, and intended-red gates ([6da0172](https://github.com/CyKiller/stepstitch/commit/6da0172bd5fc7cc090a53a162bd6058e9c395f3c))
+* stepstitch init — guided first-run wiring with idempotent uninstall ([09cd7e2](https://github.com/CyKiller/stepstitch/commit/09cd7e29abef712a3347400e1cf5a2b5525f767f))
+* **web:** restructure around the two pillars and add a verify-it-yourself page ([f02af4e](https://github.com/CyKiller/stepstitch/commit/f02af4e73baff1756f5651de804a7de01a1fc585))
+
+
+### Bug Fixes
+
+* demo execution 404 raises HTTPException, satisfying the dict return type ([f05968f](https://github.com/CyKiller/stepstitch/commit/f05968fc91d97ec10f8a1dbd52d00b5f57952da0))
+* **fixproof:** the merge flow is executable and the crypto rejects small-order forgeries ([2d5ae27](https://github.com/CyKiller/stepstitch/commit/2d5ae276ac07c709ea6f155feb8e72a8593c9dae))
+* **packaging:** PEP 639 SPDX license metadata — and the wheel now carries the license text ([64decd9](https://github.com/CyKiller/stepstitch/commit/64decd9b55bce991f44c7879cbf8a2d170632b67))
+* **packaging:** the pinned Python satisfies requires-python — uv sync works clean ([8a80f95](https://github.com/CyKiller/stepstitch/commit/8a80f9567e8060455c02ce255f85c729536e576a))
+* regenerate the demo dataset — Luhn labels the synthetic account numbers as numbers, not cards ([83aa63b](https://github.com/CyKiller/stepstitch/commit/83aa63b47af9f760ef4dd3eaeebb30ef0155f387))
+* retract MRM applicability claims and gate publication behind human approval ([f9b0290](https://github.com/CyKiller/stepstitch/commit/f9b0290a375e6654023349a2fe0b456f37e70e89))
+* the release gate tests the commit it publishes ([80c0d8a](https://github.com/CyKiller/stepstitch/commit/80c0d8a6628987d3e528ba3a40e96e4d9b0f3154))
+* the replay proof expects head 0010 and asserts its columns landed ([02287db](https://github.com/CyKiller/stepstitch/commit/02287dbdf7461bc85f8671e1fc719bb955be2df2))
+* verify.mjs reports its measured outcomes on a fresh socket ([d8c4f57](https://github.com/CyKiller/stepstitch/commit/d8c4f574e0e6d53787b41e0025669387ff8817b7))
+* **web:** clear four high-severity production findings and gate the audit in CI ([206f9cd](https://github.com/CyKiller/stepstitch/commit/206f9cd01455de44014a5f152401e0573243a989))
+* **web:** drop the deprecated Edge Runtime from the OG image route ([8278831](https://github.com/CyKiller/stepstitch/commit/82788319de25309cda638a3f2e5e861a4ff959df))
+* what publishes is what was tagged, and unit tests stop probing the machine ([632db03](https://github.com/CyKiller/stepstitch/commit/632db0370cdbb059488edacc7f079bcf555b5b03))
+
 ## [0.11.0](https://github.com/CyKiller/stepstitch/compare/v0.10.0...v0.11.0) (2026-08-07)
 
 
