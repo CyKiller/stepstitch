@@ -75,6 +75,15 @@ jobs:
       - name: Install
         working-directory: web
         run: npm ci
+      - name: Production dependency audit (high+)
+        working-directory: web
+        # The site must not ship with known high-severity findings in its PRODUCTION
+        # dependency tree (--omit=dev: a vitest/jsdom advisory is not a shipping risk,
+        # and gating on dev deps would redden unrelated PRs for tooling noise). This
+        # gate goes red the day an advisory lands for a pinned dependency — that is the
+        # point: 0.12.0 readiness found four shipped highs (postcss/sharp via next,
+        # nanoid) that nothing was watching. Proven red against next 16.2.12 first.
+        run: npm audit --omit=dev --audit-level=high
       - name: Lint (eslint)
         working-directory: web
         run: npm run lint
