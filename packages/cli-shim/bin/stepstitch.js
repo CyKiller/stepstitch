@@ -34,6 +34,9 @@ const pkg = require('../package.json');
 const SERVICE_VERSION =
   process.env.STEPSTITCH_SERVICE_VERSION || pkg.stepstitch.serviceVersion;
 const WINDOWS = process.platform === 'win32';
+// Must equal `requires-python` in service/pyproject.toml; the parity test below the shim
+// reads both files so the two cannot drift apart silently.
+const PYTHON_FLOOR = '>=3.10';
 
 function findUvx() {
   const exe = WINDOWS ? 'uvx.exe' : 'uvx';
@@ -105,9 +108,18 @@ function main() {
   const spec =
     process.env.STEPSTITCH_SERVICE_SPEC ||
     `stepstitch-service[local]==${SERVICE_VERSION}`;
+  // --python is NOT optional, and leaving it off is how `npx stepstitch start` failed on
+  // any machine whose default interpreter predates the floor — including a stock macOS,
+  // whose /usr/bin/python3 is 3.9. Without it uv resolves against whatever Python it
+  // happens to prefer and then reports the package as unsatisfiable, which reads like a
+  // broken release rather than a solvable environment problem. WITH it, uv selects (and
+  // if necessary downloads) a Python that fits, which is the "uv manages the Python; the
+  // developer needs nothing else" promise at the top of this file. The generated MCP
+  // command has always passed this flag; `start` did not, and only `start` runs on an
+  // empty machine.
   const child = spawnSync(
     uvx,
-    ['--from', spec, 'stepstitch', ...args],
+    ['--python', PYTHON_FLOOR, '--from', spec, 'stepstitch', ...args],
     { stdio: 'inherit', shell: false },
   );
   if (child.error) {
