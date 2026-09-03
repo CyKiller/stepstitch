@@ -199,7 +199,7 @@
         "warnings": [
           "templated_route_needs_fixture"
         ],
-        "script_sha256": "105308a1df8bc9ff8808c310e0c24608c3a9146f047a4a52082b2b2864d90f95"
+        "script_sha256": "584cb56596945c7b10facc94fc412bf77f59dca12a0bc1e4fe70df9d794fe4e4"
       },
       "footsteps": [
         {
@@ -234,7 +234,7 @@
         "warnings": [
           "templated_route_needs_fixture"
         ],
-        "script_sha256": "7558c5f3fe30312a371a9add33e874473b840b82192c6a15c129f32f5d6cd0af"
+        "script_sha256": "732dd648b50905bb75bae8dd0eedee20ad83d58aedf59b40db04773fe44b32d1"
       },
       "footsteps": [
         {

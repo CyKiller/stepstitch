@@ -24,7 +24,7 @@ OUTPUT = pathlib.Path(__file__).resolve().parents[1] / "COMPLIANCE-EVIDENCE.md"
 
 
 def main() -> int:
-    OUTPUT.write_text(build_evidence())
+    OUTPUT.write_text(build_evidence(), encoding="utf-8")
     print(f"wrote {OUTPUT}")
     return 0
 

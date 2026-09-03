@@ -13,7 +13,7 @@ nothing. The full CI gate is re-run as the release gate before any artifact is p
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **938** | `PYTHONPATH=service pytest service/tests/` |
+| Service (compiler, router, privacy, connectors) | **945** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **241** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **40** | `npx vitest run` |
 | Web (marketing site + copy claims) | **158** | `cd web && npx vitest run` |
