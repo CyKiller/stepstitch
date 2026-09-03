@@ -19,23 +19,23 @@ const studies: Study[] = [
     name: "Marvox",
     role: "Reference (dogfood) deployment",
     icon: ShieldCheck,
-    lede: "StepStitch is a required subsystem — Marvox refuses to boot in production if the vendored evidence service cannot mount. It is load-bearing, not a plugin.",
+    lede: "StepStitch is a required subsystem: Marvox refuses to boot in production if the vendored evidence service cannot mount. It is load-bearing, not a plugin.",
     points: [
-      "Server-side scrub boundary on every ingest — screens, input values and page text never reach storage, and free text is scrubbed",
+      "Server-side scrub boundary on every ingest: screens, input values and page text never reach storage, and free text is scrubbed",
       "Pinned and vendored, gated by ~20 tests covering drift, the privacy boundary, and a production boot check",
-      "Bug reports compile into privacy-safe Playwright regressions — proposal-only, never run against production",
-      "An operator-triggered fix loop confirms the repro is red, then opt-in opens a human-review PR that adds it as a skip-marked test — it never edits product code or auto-merges",
+      "Bug reports compile into privacy-safe Playwright regressions: proposal-only, never run against production",
+      "An operator-triggered fix loop confirms the repro is red, then opt-in opens a human-review PR that adds it as a skip-marked test: it never edits product code or auto-merges",
     ],
   },
   {
     name: "aGentSyS",
     role: "Agentic connector showcase",
     icon: Eye,
-    lede: "StepStitch docks into the swarm as a capability cartridge — a secure modal that turns “a copilot tells you things” into a network that can safely act on what actually broke.",
+    lede: "StepStitch docks into the swarm as a capability cartridge: a secure modal that turns “a copilot tells you things” into a network that can safely act on what actually broke.",
     points: [
       "A named “Diagnostics & Repro” agent, powered by StepStitch, joins the core roster",
       "Consumed over a frozen OpenAPI surface, re-exposed to every agent as MCP tools",
-      "Evidence is governance-gated — policy clears the write before any agent acts on a draft",
+      "Evidence is governance-gated: policy clears the write before any agent acts on a draft",
     ],
   },
 ];
@@ -44,8 +44,8 @@ export function CaseStudies() {
   return (
     <Section id="production" className="border-b border-line">
       <SectionHeader
-        title="Running in production — starting with our own"
-        body="StepStitch isn't a demo. We run it as a required, boot-blocking subsystem in our own products — the evidence layer one refuses to start without, and the source of truth an agent swarm acts on. Your team's deployment is next."
+        title="Running in production: starting with our own"
+        body="StepStitch isn't a demo. We run it as a required, boot-blocking subsystem in our own products: the evidence layer one refuses to start without, and the source of truth an agent swarm acts on. Your team's deployment is next."
       />
 
       <div className="mt-12 grid gap-5 lg:grid-cols-2">

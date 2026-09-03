@@ -206,12 +206,12 @@ export const SAMPLE_TRACE: DemoTrace = {
 //   ⚠ templated_route_needs_fixture [step 5]: Route '/accounts/:id/transfer' is templated; supply a concrete fixture id.
 //
 // Reproduction setup (change with PUT /admin/config/repro):
-//   READY       Application base URL — points at https://staging.example.test
-//   READY       Templated route values — every templated segment has a test value
-//   NEEDS-CONFIG Authentication fixture — not configured — the reproduction runs unauthenticated. Set auth.fixture (e.g. "tests/auth.setup.ts") if the flow needs a session.
+//   READY       Application base URL: points at https://staging.example.test
+//   READY       Templated route values: every templated segment has a test value
+//   NEEDS-CONFIG Authentication fixture: not configured: the reproduction runs unauthenticated. Set auth.fixture (e.g. "tests/auth.setup.ts") if the flow needs a session.
 //
 // NOTE: no credentials are embedded. A protected field reads its value from an
-// environment variable by name — set that variable in CI.
+// environment variable by name: set that variable in CI.
 
 test('StepStitch reproduction', async ({ page }) => {
   // TODO: authenticate as a synthetic test user if the flow requires it.

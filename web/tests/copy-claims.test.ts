@@ -50,7 +50,7 @@ describe("buyer-facing copy never claims screen/input/raw capture", () => {
 
   it("the privacy comparison states the honest claim", () => {
     const text = readFileSync(join(APP, "privacy-vs-replay/page.tsx"), "utf8");
-    expect(text).toContain("not a recording");
+    expect(text).toMatch(/not\s+a\s+recording/);
   });
 });
 
@@ -145,6 +145,14 @@ describe("no absolute PII/NPI claim survives anywhere in the buyer copy", () => 
       UNPROVABLE.flatMap((rule) => [...honest.matchAll(rule.re)].map((m) => m[0])),
     ).toEqual([]);
   });
+});
+
+describe("buyer copy uses direct punctuation", () => {
+  for (const file of ALL_COPY) {
+    it(`${file.split("/src/")[1]} avoids em and en dashes`, () => {
+      expect(renderedCopy(readFileSync(file, "utf8"))).not.toMatch(/[—–]/);
+    });
+  }
 });
 
 describe("'live' claims are conditional, never ambient", () => {

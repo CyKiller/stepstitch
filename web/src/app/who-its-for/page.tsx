@@ -6,14 +6,14 @@ import { Reveal } from "@/components/reveal";
 import { Button } from "@/components/button";
 
 export const metadata: Metadata = {
-  title: "Who StepStitch is for — StepStitch",
+  title: "Who StepStitch is for: StepStitch",
   description:
-    "StepStitch turns a user-reported bug into safe evidence developers can actually use — without recording the user's screen, typing, or private data. What that means for developers, users, and enterprises.",
+    "StepStitch turns a user-reported bug into minimized structural evidence developers can use without recording the user's screen, typing, or page text. What that means for developers, users, and enterprises.",
   alternates: { canonical: "/who-its-for" },
   openGraph: {
-    title: "Who StepStitch is for — StepStitch",
+    title: "Who StepStitch is for: StepStitch",
     description:
-      "One report, no raw user data, three people who need different things from it: the developer fixing it, the user who filed it, and the enterprise governing it.",
+      "One report, minimized structural evidence, and three people who need different things from it: the developer fixing it, the user who filed it, and the enterprise governing it.",
     url: "/who-its-for",
   },
 };
@@ -22,20 +22,20 @@ const audiences = [
   {
     icon: Code,
     label: "Developer",
-    quote: "Fix real user bugs with AI agents without leaking user data.",
-    body: "A bug report becomes a replayability-scored, deterministic Playwright test — the same trace, the same repro, every time. An MCP-connected agent reads the sanitized evidence directly, with no raw user data ever in its context.",
+    quote: "Give AI agents minimized evidence instead of a session recording.",
+    body: "A bug report becomes a replayability-scored, deterministic Playwright test: the same trace, the same repro, every time. An MCP-connected agent reads the sanitized structural evidence directly.",
   },
   {
     icon: User,
     label: "User",
-    quote: "Your issue can be fixed without recording your screen, typing, account info, or private data.",
-    body: "StepStitch never captures screens, keystrokes, input values, or page text — by default, not as a setting someone has to remember to turn on. What reaches storage is structure: which control, which route, in what order.",
+    quote: "Report an issue without recording your screen, typing, input values, or page text.",
+    body: "StepStitch never captures screens, keystrokes, input values, or page text. That is the default, not a setting someone has to remember to turn on. What reaches storage is structure: which control, which route, in what order.",
   },
   {
     icon: Buildings,
     label: "Enterprise",
     quote: "Support, QA, engineering, and compliance get one safe evidence trail.",
-    body: "Every trace carries a scrub report, a replayability grade, and — when you want it — a signed, independently-verifiable attestation. Self-hosted by default; governance (SSO, audit retention, compliance packs) is additive, never a prerequisite.",
+    body: "Every trace carries a scrub report and replayability grade, with an optional signed, independently verifiable attestation. Self-hosted by default; governance (SSO, audit retention, compliance packs) is additive, never a prerequisite.",
   },
 ];
 
@@ -53,9 +53,10 @@ export default function WhoItsForPage() {
         </Reveal>
         <div className="mt-6">
           <SectionHeader
+            as="h1"
             eyebrow="Who it's for"
-            title="One report, no raw user data — three different people need it"
-            body="When a user reports a bug, StepStitch turns that report into safe evidence developers can actually use. It does not record the user's screen or private information. It creates a clean reproduction test, checks whether this bug has happened before, and gives developers or AI agents a safe packet to help fix it."
+            title="One report, three different people who need it"
+            body="When a user reports a bug, StepStitch turns that report into minimized structural evidence developers can use. It does not record the user's screen, input values, or page text. It creates a reproduction test, checks whether this bug has happened before, and gives developers or AI agents a scrubbed packet to help fix it."
           />
         </div>
 

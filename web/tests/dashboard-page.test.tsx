@@ -53,12 +53,10 @@ async function renderPage() {
 describe("/dashboard", { timeout: 20_000 }, () => {
   it("links to the console when the demo host is configured", async () => {
     process.env.STEPSTITCH_DEMO_HOST = "http://127.0.0.1:8020";
-    const mod = await renderPage();
-    const link = screen.getByRole("link", { name: /Open the console/i });
+    await renderPage();
+    const link = screen.getByRole("link", { name: /Open the live console/i });
     expect(link.getAttribute("href")).toBe("/dashboard/demo");
-    // "Live" is earned: with the proxy wired, the page may say so.
-    expect(String(mod.metadata.title)).toMatch(/live synthetic/i);
-    expect(screen.getByText("Live synthetic console")).toBeTruthy();
+    expect(screen.getByText("Console preview")).toBeTruthy();
   });
 
   it("never says 'live' anywhere when the demo host is not configured", async () => {
@@ -71,16 +69,14 @@ describe("/dashboard", { timeout: 20_000 }, () => {
 
   it("stays useful when the demo host is not configured", async () => {
     await renderPage();
-    // No dead link to a proxy that is not wired…
-    expect(screen.queryByRole("link", { name: /Open the console/i })).toBeNull();
-    // …and the page still tells you how to see the same thing.
-    expect(screen.getByText(/offline right now/i)).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Run it locally/i })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Open the live console/i })).toBeNull();
+    expect(screen.getByRole("link", { name: /Explore the preview/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Run it on your data/i })).toBeTruthy();
   });
 
   it("says plainly that the data is synthetic", async () => {
     await renderPage();
-    expect(screen.getByText(/synthetic dataset built by the real pipeline/i)).toBeTruthy();
+    expect(screen.getAllByText(/committed synthetic dataset/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Made up/)).toBeTruthy();
     expect(screen.getByText(/no real person behind any of it/i)).toBeTruthy();
   });

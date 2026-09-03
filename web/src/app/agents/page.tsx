@@ -13,13 +13,13 @@ import { Button } from "@/components/button";
 import { GITHUB_URL } from "@/lib/links";
 
 export const metadata: Metadata = {
-  title: "Agents & MCP — StepStitch",
+  title: "Agents & MCP: StepStitch",
   description:
     "StepStitch exposes a read-only / draft-only surface to agents over MCP, OpenAPI, and function-calling. Agents can read safe summaries and create drafts; they cannot delete, purge, change retention, read raw traces, write records, or merge. Human approval is the control point.",
 };
 
 const surfaces = [
-  ["MCP server", "A universal connector for Copilot Studio, Claude, OpenAI, Bedrock, LangGraph, and any MCP client — the same safe operations everywhere."],
+  ["MCP server", "A universal connector for Copilot Studio, Claude, OpenAI, Bedrock, LangGraph, and any MCP client, with the same safe operations everywhere."],
   ["OpenAPI spec", "openapi-v2.json describes the read-only / draft tools for connector platforms that consume OpenAPI."],
   ["Function specs", "The identical capability list, exposed as function-calling tool definitions."],
 ];
@@ -30,7 +30,7 @@ const canDo = [
   "Read sanitized diagnostics and the recommended next step",
   "Read the privacy posture and scrub report",
   "Generate a deterministic Playwright reproduction",
-  "Match a bug against the verified-fix corpus — “you’ve fixed this shape before”",
+  "Match a bug against the verified-fix corpus: “you’ve fixed this shape before”",
   "Get a signed, independently-verifiable evidence attestation",
   "Get a fragility map and a minimal repro for the failing path",
   "Create export-preview drafts (ServiceNow / Salesforce / Genesys / GitHub)",
@@ -59,8 +59,9 @@ export default function AgentsPage() {
         </Reveal>
         <div className="mt-6">
           <SectionHeader
+            as="h1"
             eyebrow="Agents & MCP"
-            title="A safe surface for agents — read summaries, draft tickets, nothing destructive"
+            title="A safe surface for agents: read summaries, draft tickets, nothing destructive"
             body="StepStitch plugs into any agent network over MCP, OpenAPI, or function-calling. The capability list is a single source of truth shared across all three surfaces, and it is deliberately read-only and draft-only. Agents help an operator move faster; they never take an irreversible action."
           />
         </div>
@@ -89,13 +90,13 @@ export default function AgentsPage() {
             <div className="flex items-center gap-2.5">
               <UserCheck size={18} weight="bold" className="text-accent" />
               <h3 className="text-base font-semibold text-fg">
-                Scope each agent — not just the surface
+                Scope each agent: not just the surface
               </h3>
             </div>
             <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-muted">
               The list above is the ceiling for <span className="text-fg">any</span> agent. From
               the operator console you register each agent individually and issue it a named,
-              revocable token scoped to a tier — so one connection gets summaries only while another
+              revocable token scoped to a tier, so one connection gets summaries only while another
               can pull a repro. The host enforces the scope: an out-of-scope call is refused, not
               silently allowed, and every read and denial lands on the audit trail.
             </p>
@@ -167,7 +168,7 @@ export default function AgentsPage() {
             </div>
             <p className="mt-3 text-[15px] leading-relaxed text-muted">
               An agent can assemble the evidence and hand a human a ready-to-review draft. The final
-              action — filing the ticket, opening the PR, merging the fix — always belongs to a named
+              action: filing the ticket, opening the PR, merging the fix: always belongs to a named
               person or your own CI. StepStitch supplies evidence, repros, drafts, and verification
               records; your systems and your people perform the final action.
             </p>

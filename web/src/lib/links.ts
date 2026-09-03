@@ -8,7 +8,7 @@ export const SITE_URL =
 export const GITHUB_URL = "https://github.com/CyKiller/stepstitch";
 export const NPM_URL = "https://www.npmjs.com/package/@stepstitch/tracker";
 export const DOCS_URL = `${GITHUB_URL}#readme`;
-// Release links are derived, never written out by hand — see lib/version.ts.
+// Release links are derived, never written out by hand: see lib/version.ts.
 export const RELEASES_URL = `${GITHUB_URL}/releases`;
 export const LATEST_RELEASE_URL = `${RELEASES_URL}/tag/${RELEASE_TAG}`;
 // Single contact intent across the whole page: "Book a pilot".

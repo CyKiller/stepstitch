@@ -20,7 +20,7 @@ const pillars = [
     icon: Scales,
     title: "Independent verification",
     lead:
-      "The test bytes and execution envelope are frozen, the red run is measured before any fix exists, and the rerun is measured by StepStitch — the proposing agent holds no credential that could record a verdict.",
+      "The test bytes and execution envelope are frozen, the red run is measured before any fix exists, and the rerun is measured by StepStitch. The proposing agent holds no credential that could record a verdict.",
     claims: ["red-to-green-measured", "agent-cannot-self-verify"],
     href: "/verify",
     linkLabel: "Verify an attestation",
@@ -31,9 +31,8 @@ export function Pillars() {
   return (
     <Section id="pillars" className="border-b border-line">
       <SectionHeader
-        eyebrow="Two pillars"
-        title="Blindfolded X-ray, measured proof"
-        body="Everything StepStitch does supports one of two properties: the AI sees the shape of the failure without the customer's data, and no one — human or agent — gets to declare a fix worked without a measured rerun."
+        title="Private evidence, independently verified"
+        body="The AI receives the structure of the failure without screens, input values, or page text. A fix is confirmed only after the same frozen test fails and then passes."
       />
       <div className="mt-12 grid gap-5 md:grid-cols-2">
         {pillars.map((p, i) => (

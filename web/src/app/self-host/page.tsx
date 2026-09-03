@@ -8,7 +8,7 @@ import { Button } from "@/components/button";
 import { GITHUB_URL } from "@/lib/links";
 
 export const metadata: Metadata = {
-  title: "Self-host StepStitch — open source, Apache-2.0",
+  title: "Self-host StepStitch: open source, Apache-2.0",
   description:
     "Run StepStitch inside your own boundary in minutes. Install the SDK, deploy the service with Docker or one Railway command, pick a privacy profile. No data leaves your infrastructure.",
 };
@@ -34,6 +34,7 @@ export default function SelfHostPage() {
         </Reveal>
         <div className="mt-6">
           <SectionHeader
+            as="h1"
             eyebrow="Self-host"
             title="Run it inside your boundary in minutes"
             body="StepStitch is Apache-2.0 and self-hosted by default. The SDK has zero runtime dependencies; the service is one container. Your traces never leave your infrastructure."

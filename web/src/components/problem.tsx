@@ -6,7 +6,7 @@ const analogy = [
   {
     icon: VideoCamera,
     title: "Session replay is a security camera",
-    body: "It records the screen, inputs, and PII. Useful, until an auditor asks why customer data left the building.",
+    body: "It reconstructs a session for someone to watch. Useful, but often difficult to approve in regulated environments.",
     muted: true,
   },
   {
@@ -66,13 +66,13 @@ export function Problem() {
               Session replay
             </h3>
             <p className="mt-4 text-lg font-medium text-fg">
-              Captures the screen, then asks an engineer to watch it back.
+              Reconstructs a session, then asks an engineer to interpret it.
             </p>
             <ul className="mt-5 space-y-2.5 text-[15px] text-muted">
-              <li>Records pixels, text, and input values by default</li>
-              <li>Carries PII into a third-party tool you do not control</li>
-              <li>Often banned outright in regulated environments</li>
-              <li>Leaves you with a video, not a fix</li>
+              <li>Produces a watchable recording</li>
+              <li>May collect more customer context than the bug requires</li>
+              <li>Requires careful privacy configuration</li>
+              <li>Leaves a recording, not regression coverage</li>
             </ul>
           </div>
         </Reveal>
@@ -88,7 +88,7 @@ export function Problem() {
             <ul className="mt-5 space-y-2.5 text-[15px] text-muted">
               <li>Route templates, stable selectors, API status codes</li>
               <li>Scrubbed in the browser and again on the server</li>
-              <li>Self-hosted, so the data never leaves your boundary</li>
+              <li>You control the hosting and storage boundary</li>
               <li>Leaves you with a runnable Playwright reproduction</li>
             </ul>
           </div>

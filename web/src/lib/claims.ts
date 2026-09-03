@@ -1,9 +1,9 @@
 /**
- * The claim registry — every material marketing statement, mapped to the thing
+ * The claim registry: every material marketing statement, mapped to the thing
  * that proves it.
  *
  * The rule this encodes: **the site may not assert an absolute the code cannot
- * demonstrate.** "No NPI captured" was such an absolute — the server-side
+ * demonstrate.** "No NPI captured" was such an absolute: the server-side
  * scrubber redacts SSNs, cards, emails, phone numbers, dates and long digit
  * runs, but a customer's *name* or street address in free text survives every
  * one of those patterns. The product's own vocabulary already said this
@@ -11,8 +11,8 @@
  * from_reproduction split in `agent_packet.py`); the site did not.
  *
  * Scope, stated precisely so this file does not itself overclaim: the high-risk
- * surfaces — the financial-services pilot page, the FAQ's compliance answer, and the
- * competitor comparison — import their sentences from here, so copy and evidence move
+ * surfaces: the financial-services pilot page, the FAQ's compliance answer, and the
+ * competitor comparison: import their sentences from here, so copy and evidence move
  * together. The remaining entries are an evidence index: they are checked to point at
  * files that exist, and the rendered copy is independently policed by the
  * absolute-claim scanner in `web/tests/copy-claims.test.ts`. Wiring a sentence here is
@@ -22,7 +22,7 @@
  *   - `text`     the exact sentence rendered on the page, imported by the page
  *                so copy and evidence cannot drift apart
  *   - `kind`     measured (a test/CI job runs it) | architectural (true by
- *                construction — the code path does not exist) | policy (a
+ *                construction: the code path does not exist) | policy (a
  *                default or posture, configurable)
  *   - `evidence` a repo path a reader can open, plus the test that pins it
  *   - `asOf` / `source` required for anything said about a competitor
@@ -35,7 +35,7 @@
 export type ClaimKind = "measured" | "architectural" | "policy";
 
 export type Claim = {
-  /** Stable id — what the tests and the page both refer to. */
+  /** Stable id: what the tests and the page both refer to. */
   id: string;
   /** The exact sentence the page renders. */
   text: string;
@@ -52,7 +52,7 @@ export const CLAIMS: Claim[] = [
   {
     id: "no-screen-capture",
     text:
-      "StepStitch never records the screen, the session, or what anyone typed — there is no code path that captures them.",
+      "StepStitch never records the screen, the session, or what anyone typed: there is no code path that captures them.",
     kind: "architectural",
     evidence: { path: "src/redaction.ts", test: "tests/redaction-proof.test.ts" },
   },
@@ -95,7 +95,7 @@ export const CLAIMS: Claim[] = [
   {
     id: "browser-to-database-measured",
     text:
-      "CI runs the whole chain with no mocks — real browser, real SDK, same-origin proxy, real scrubber, then reads the stored database row back — and asserts no form value reached storage.",
+      "CI runs the whole chain with no mocks: real browser, real SDK, same-origin proxy, and real scrubber. It then reads the stored database row back and asserts no form value reached storage.",
     kind: "measured",
     evidence: {
       path: "scripts/live_financial_loop.py",
@@ -105,7 +105,7 @@ export const CLAIMS: Claim[] = [
   {
     id: "red-to-green-measured",
     text:
-      "confirmed_fixed is derived from two measured runs — the same frozen test failing before the fix and passing after — never from a caller asserting it.",
+      "confirmed_fixed is derived from two measured runs: the same frozen test failing before the fix and passing after, never from a caller asserting it.",
     kind: "measured",
     evidence: {
       path: "service/stepstitch_service/verification/verdict.py",
@@ -127,7 +127,7 @@ export const CLAIMS: Claim[] = [
   {
     id: "reproduction-not-certified",
     text:
-      "Evidence from a local reproduction is scrubbed and never comes from the reported session, but the application under test is yours — so StepStitch marks that data customer_data_status: not_verified rather than certifying it.",
+      "Evidence from a local reproduction is scrubbed and never comes from the reported session, but the application under test is yours. StepStitch therefore marks that data customer_data_status: not_verified rather than certifying it.",
     kind: "architectural",
     evidence: {
       path: "service/stepstitch_service/agent_packet.py",
@@ -146,7 +146,7 @@ export const CLAIMS: Claim[] = [
   {
     id: "attestation-self-verifiable",
     text:
-      "The attestation is canonical JSON hashed with SHA-256 and signed with a key only your tenant holds — anyone can recompute the hash or run cosign verify-blob without asking us anything.",
+      "The attestation is canonical JSON hashed with SHA-256 and signed with a key only your tenant holds: anyone can recompute the hash or run cosign verify-blob without asking us anything.",
     kind: "measured",
     evidence: {
       path: "service/stepstitch_service/attestation.py",
@@ -166,7 +166,7 @@ export const CLAIMS: Claim[] = [
   {
     id: "evidence-grade-uncounterfeitable",
     text:
-      "Evidence grades are derived from how an outcome was obtained, never accepted from a caller — a payload claiming a signed grade is recorded as asserted.",
+      "Evidence grades are derived from how an outcome was obtained, never accepted from a caller: a payload claiming a signed grade is recorded as asserted.",
     kind: "measured",
     evidence: {
       path: "service/stepstitch_service/evidence.py",
@@ -176,7 +176,7 @@ export const CLAIMS: Claim[] = [
   {
     id: "fixproof-offline-verifiable",
     text:
-      "A FixProof is an in-toto statement whose hash is reproducible from the document alone — stepstitch proof verify checks it offline against your policy, with no host, no account, and no trust in whoever handed it over.",
+      "A FixProof is an in-toto statement whose hash is reproducible from the document alone: stepstitch proof verify checks it offline against your policy, with no host, no account, and no trust in whoever handed it over.",
     kind: "measured",
     evidence: {
       path: "service/stepstitch_service/fixproof.py",
@@ -196,7 +196,7 @@ export const CLAIMS: Claim[] = [
   {
     id: "fixproof-no-raw-values",
     text:
-      "The proof binds digests, statuses, and identities — a proof built from a hostile ingest is scanned against the canary values and none of them appear in the exported document.",
+      "The proof binds digests, statuses, and identities: a proof built from a hostile ingest is scanned against the canary values and none of them appear in the exported document.",
     kind: "measured",
     evidence: {
       path: "service/stepstitch_service/fixproof.py",
@@ -206,7 +206,7 @@ export const CLAIMS: Claim[] = [
   {
     id: "fixproof-signature-verified",
     text:
-      "The signature check is cryptographic, not cosmetic: an Ed25519 signature verified against keys your policy names — a fabricated document with a recomputed hash, a fake signature string, and a valid signature by an untrusted key are each refused, and each refusal is a permanent test.",
+      "The signature check is cryptographic, not cosmetic. An Ed25519 signature is verified against keys your policy names; a fabricated document with a recomputed hash, a fake signature string, and a valid signature by an untrusted key are each refused, and each refusal is a permanent test.",
     kind: "measured",
     evidence: {
       path: "service/stepstitch_service/fixproof.py",

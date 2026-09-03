@@ -7,12 +7,9 @@ import { MobileMenu } from "./mobile-menu";
 import { GITHUB_URL, DOCS_URL } from "@/lib/links";
 
 // Anchors are absolute (/#id) so they work from sub-pages too.
-// Kept to six items so the bar stays on a single line at lg. "Who it's for" takes
-// the slot Pricing vacated — it does the qualifying job a visitor actually arrives
-// with; the rest live in the footer.
+// The demo is the primary CTA, so it is not repeated as another desktop link.
 const desktopLinks = [
   { href: "/#how", label: "How it works" },
-  { href: "/demo", label: "Demo" },
   { href: "/who-its-for", label: "Who it's for" },
   { href: "/agents", label: "Agents" },
   { href: "/security", label: "Security" },
@@ -21,13 +18,10 @@ const desktopLinks = [
 
 const mobileLinks = [
   { href: "/#how", label: "How it works" },
-  { href: "/dashboard", label: "Try the console" },
-  { href: "/demo", label: "Red-to-green demo" },
+  { href: "/dashboard", label: "Console preview" },
   { href: "/quickstart", label: "Quickstart" },
   { href: "/who-its-for", label: "Who it's for" },
-  { href: "/privacy-vs-replay", label: "Privacy vs. replay" },
   { href: "/agents", label: "Agents" },
-  { href: "/financial-services-pilot", label: "Financial-services pilot" },
   { href: "/security", label: "Security" },
   { href: "/self-host", label: "Self-host" },
   { href: DOCS_URL, label: "Docs", external: true },
@@ -69,7 +63,9 @@ export function Nav() {
             </a>
             <ThemeToggle />
             <div className="hidden sm:block">
-              <Button href="/#contact">Book a pilot</Button>
+              <Button href="/demo" event="nav_demo">
+                See the demo
+              </Button>
             </div>
             <MobileMenu links={mobileLinks} />
           </div>

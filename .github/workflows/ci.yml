@@ -55,6 +55,25 @@ jobs:
       - name: Audit runtime deps (zero-dep invariant -> must stay clean)
         run: npm audit --omit=dev --audit-level=high
 
+  sdk-windows:
+    name: SDK (Windows type-check + tests)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Install (runs prepare/build)
+        run: npm ci
+      - name: Type-check
+        run: npm run type-check
+      - name: Unit + documentation example suite
+        run: npm test
+
   web:
     name: Web (lint + type-check + tests + build)
     runs-on: ubuntu-latest

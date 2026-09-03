@@ -16,9 +16,9 @@ import { GITHUB_URL } from "@/lib/links";
 import { claim } from "@/lib/claims";
 
 export const metadata: Metadata = {
-  title: "Financial-services pilot — StepStitch",
+  title: "Financial-services pilot: StepStitch",
   description:
-    "A 30-day, self-hosted pilot that turns regulated support tickets into privacy-safe, reproducible engineering evidence — scrubbed trace, replayability score, Playwright repro, and ServiceNow/Salesforce/GitHub drafts. Free text, unapproved selectors and undeclared routes are refused with HTTP 422 under the strict profile; nothing is sent without human approval.",
+    "A 30-day, self-hosted pilot that turns regulated support tickets into privacy-safe, reproducible engineering evidence: scrubbed trace, replayability score, Playwright repro, and ServiceNow/Salesforce/GitHub drafts. Free text, unapproved selectors and undeclared routes are refused with HTTP 422 under the strict profile; nothing is sent without human approval.",
 };
 
 const whoFor = [
@@ -45,15 +45,15 @@ const day30 = [
 const modes = [
   {
     icon: Robot,
-    title: "Mode A — Power Platform native connectors",
+    title: "Mode A: Power Platform native connectors",
     tag: "default for Microsoft tenants",
     body: "Copilot Studio calls the read-only export-preview endpoint, gets a flat draft, and maps it onto Microsoft's native ServiceNow/Salesforce connectors as a human-approved step. StepStitch never holds system-of-record credentials.",
   },
   {
     icon: GitPullRequest,
-    title: "Mode B — governed direct-write",
+    title: "Mode B: governed direct-write",
     tag: "for paths not on Power Platform",
-    body: "StepStitch posts the sanitized draft itself — off by default, admin-only, dry-run by default, requires a named human approver + idempotency key, fully audited, and never on the agent surface.",
+    body: "StepStitch can post the sanitized draft itself. This mode is off by default, admin-only, dry-run by default, requires a named human approver and idempotency key, is fully audited, and is never exposed on the agent surface.",
   },
 ];
 
@@ -82,9 +82,10 @@ export default function FinancialServicesPilotPage() {
         </Reveal>
         <div className="mt-6">
           <SectionHeader
+            as="h1"
             eyebrow="30-day pilot"
             title="A regulated support-to-engineering pilot, with the boundary in the code"
-            body="In 30 days, turn user-reported bugs from a regulated app into privacy-safe, reproducible engineering evidence — a scrubbed trace, a replayability score, sanitized diagnostics, a Playwright repro, and ticket/PR drafts — without capturing screens, input values, or page text. Self-hosted and open source, so your reviewers can verify every line."
+            body="In 30 days, turn user-reported bugs from a regulated app into privacy-safe, reproducible engineering evidence: a scrubbed trace, a replayability score, sanitized diagnostics, a Playwright repro, and ticket/PR drafts. StepStitch does this without capturing screens, input values, or page text. Self-hosted and open source, so your reviewers can verify every line."
           />
         </div>
 
@@ -167,7 +168,7 @@ export default function FinancialServicesPilotPage() {
               <h3 className="text-base font-semibold text-fg">The compliance evidence packet</h3>
             </div>
             <p className="mt-3 text-[15px] leading-relaxed text-muted">
-              Hand your reviewer the packet generated from the live scrub policy — it cannot drift
+              Hand your reviewer the packet generated from the live scrub policy: it cannot drift
               from what the server actually enforces. It crosswalks the controls to SEC Reg S-P
               (2024) and NIST AI RMF, and names the test that backs each one.
             </p>

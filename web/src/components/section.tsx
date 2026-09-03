@@ -26,11 +26,15 @@ export function SectionHeader({
   eyebrow,
   title,
   body,
+  as = "h2",
 }: {
   eyebrow?: string;
   title: ReactNode;
   body?: string;
+  as?: "h1" | "h2";
 }) {
+  const Heading = as;
+
   return (
     <Reveal>
       <div className="max-w-2xl">
@@ -39,9 +43,9 @@ export function SectionHeader({
             {eyebrow}
           </p>
         ) : null}
-        <h2 className="text-balance text-3xl font-semibold tracking-tight text-fg md:text-4xl">
+        <Heading className="text-balance text-3xl font-semibold tracking-tight text-fg md:text-4xl">
           {title}
-        </h2>
+        </Heading>
         {body ? (
           <p className="mt-4 text-pretty text-lg leading-relaxed text-muted">
             {body}

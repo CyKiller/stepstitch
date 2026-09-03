@@ -24,11 +24,11 @@ export function OpenCore() {
     <Section id="open-core" className="border-b border-line">
       <SectionHeader
         title="Open core, and open all the way down."
-        body="Everything in the repository is Apache-2.0 right now — there is no crippled free tier and no closed core. A managed edition may come later; it will be additive, and nothing open today will be retroactively closed."
+        body="Everything in the repository is Apache-2.0 right now: there is no crippled free tier and no closed core. A managed edition may come later; it will be additive, and nothing open today will be retroactively closed."
       />
 
       <div className="mt-12 grid gap-5 lg:grid-cols-2">
-        {/* Free / open — the emphasized, accented column. */}
+        {/* Free / open: the emphasized, accented column. */}
         <Reveal>
           <div className="flex h-full flex-col rounded-2xl border border-accent/30 bg-accent/[0.04] p-7 md:p-8">
             <div className="flex items-baseline justify-between gap-3">
@@ -59,7 +59,7 @@ export function OpenCore() {
           </div>
         </Reveal>
 
-        {/* Commercial — an honest roadmap column. Deliberately carries no price
+        {/* Commercial: an honest roadmap column. Deliberately carries no price
             slot: what is coming is scope, not a tier you are being upsold into. */}
         <Reveal delay={0.08}>
           <div className="flex h-full flex-col rounded-2xl border border-line bg-surface p-7 md:p-8">

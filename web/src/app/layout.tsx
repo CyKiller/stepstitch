@@ -4,6 +4,7 @@ import { GeistMono } from "geist/font/mono";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { JsonLd } from "@/components/json-ld";
+import { AnalyticsEvents } from "@/components/analytics-events";
 import { Nav } from "@/components/nav";
 import { Footer } from "@/components/footer";
 import { SITE_URL } from "@/lib/links";
@@ -61,6 +62,7 @@ export default function RootLayout({
         <Nav />
         {children}
         <Footer />
+        <AnalyticsEvents />
         <Analytics />
         <SpeedInsights />
       </body>

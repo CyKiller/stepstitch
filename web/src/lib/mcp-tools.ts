@@ -25,7 +25,7 @@ export const MCP_TOOLS = [
 
 export const MCP_TOOL_COUNT = MCP_TOOLS.length;
 
-/** "thirteen" — for prose, where a numeral reads badly. */
+/** "thirteen": for prose, where a numeral reads badly. */
 export const MCP_TOOL_COUNT_WORD = [
   "zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
   "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
