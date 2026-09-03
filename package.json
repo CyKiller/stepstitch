@@ -78,11 +78,11 @@
     "test:repro-corpus": "node scripts/prove-repro-corpus.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "1.62.0",
+    "@playwright/test": "1.62.1",
     "@types/node": "20.19.9",
     "jsdom": "^24.1.0",
     "typescript": "^5.4.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=18.18.0"
