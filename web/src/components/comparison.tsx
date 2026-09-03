@@ -15,22 +15,22 @@ type Row = {
 
 const rows: Row[] = [
   {
-    axis: "Captures screens, page text, input values",
-    replay: { kind: "no", text: "By default" },
+    axis: "Avoids screen, page text, and input capture",
+    replay: { kind: "no", text: "Replay is the product" },
     openreplay: { kind: "no", text: "Records DOM" },
-    apm: { kind: "partial", text: "Often" },
-    stitch: { kind: "yes", text: "Never" },
+    apm: { kind: "partial", text: "Varies by signal" },
+    stitch: { kind: "yes", text: "By architecture" },
   },
   {
     // "No PII captured" was the claim here, and it is not one we can keep: the SDK
     // provably never captures screens, input values or page text (there is no such
-    // code path), but free text a user types is user-authored — a name or an address
+    // code path), but free text a user types is user-authored: a name or an address
     // survives every redaction pattern. So the cell states the architectural fact and
     // the server-side control, and stops at the boundary of what is demonstrable.
-    axis: "PII risk in the tool",
-    replay: { kind: "no", text: "High" },
-    openreplay: { kind: "partial", text: "Medium" },
-    apm: { kind: "partial", text: "Medium" },
+    axis: "Data-minimization posture",
+    replay: { kind: "partial", text: "Requires configuration" },
+    openreplay: { kind: "partial", text: "DOM replay" },
+    apm: { kind: "partial", text: "Varies by signal" },
     stitch: { kind: "yes", text: "No screens, input values or page text; free text scrubbed server-side" },
   },
   {
@@ -82,7 +82,7 @@ export function Comparison() {
     <Section id="compare" className="border-b border-line">
       <SectionHeader
         title="Not session replay, not error tracking"
-        body="Those tools tell you something broke. StepStitch hands you a test that proves it, with nothing sensitive leaving your boundary. Even the open-source replay tools still record the screen."
+        body="Session replay and error tracking are useful for observation. StepStitch is built for a different output: a deterministic regression test backed by minimized structural evidence."
       />
 
       <Reveal>
@@ -152,7 +152,7 @@ export function Comparison() {
           <ul className="mt-3 grid gap-2">
             {COMPETITOR_CLAIMS.map((c) => (
               <li key={c.id} className="text-[13px] leading-relaxed text-muted">
-                <span className="font-medium text-fg">{c.subject}</span> — {c.text}{" "}
+                <span className="font-medium text-fg">{c.subject}</span>: {c.text}{" "}
                 <a
                   href={c.source}
                   target="_blank"

@@ -31,7 +31,7 @@ export function Agentic() {
     <Section id="agents" className="border-b border-line">
       <SectionHeader
         title="Bring your own agentic network"
-        body={`StepStitch is a capability provider, not an agent orchestrator. One MCP server surfaces ${MCP_TOOL_COUNT_WORD} read-only and draft tools — including structural fix-memory, signed evidence attestation, and fragility prediction. Any agent network consumes them. The autonomy lives in your stack.`}
+        body={`StepStitch is a capability provider, not an agent orchestrator. One MCP server surfaces ${MCP_TOOL_COUNT_WORD} read-only and draft tools: including structural fix-memory, signed evidence attestation, and fragility prediction. Any agent network consumes them. The autonomy lives in your stack.`}
       />
 
       <div className="mt-12 grid grid-cols-1 gap-5 lg:grid-cols-2">

@@ -15,12 +15,12 @@ import { GITHUB_URL } from "@/lib/links";
 import { claim } from "@/lib/claims";
 
 export const metadata: Metadata = {
-  title: "Verify it yourself — StepStitch",
+  title: "Verify it yourself: StepStitch",
   description:
     "The checks behind every StepStitch claim, as commands you can run: replay hostile fixtures through the live scrub boundary, recompute an attestation hash, confirm the fixing agent holds no verdict credential.",
   alternates: { canonical: "/verify" },
   openGraph: {
-    title: "Verify it yourself — StepStitch",
+    title: "Verify it yourself: StepStitch",
     description:
       "Don't take the vendor's word. Run the privacy and verification checks against your own deployment.",
     url: "/verify",
@@ -33,7 +33,7 @@ const checks = [
     title: "Replay hostile fixtures through the live scrub boundary",
     claimIds: ["tenant-fixtures-verifiable"],
     body:
-      "Write the payloads you are worried about — card-number shapes, raw URLs, response bodies — and let the verifier tell you what the live policy does with each one before anything goes live.",
+      "Write the payloads you are worried about, such as card-number shapes, raw URLs, and response bodies, and let the verifier tell you what the live policy does with each one before anything goes live.",
     code: `stepstitch policy verify examples/policy/financial-fixtures.json
 # per fixture: rejected (422, nothing stored) | dropped | redacted | accepted
 # plus a must_not_persist literal scan over everything that would be stored`,
@@ -44,7 +44,7 @@ const checks = [
     title: "Recompute an attestation, or verify its signature",
     claimIds: ["attestation-self-verifiable"],
     body:
-      "Every verified fix carries a canonical, hashed evidence bundle — scrub report, replayability, verdict, evidence grade. The hash covers the grade, so nothing can be upgraded after issue.",
+      "Every verified fix carries a canonical, hashed evidence bundle: scrub report, replayability, verdict, evidence grade. The hash covers the grade, so nothing can be upgraded after issue.",
     code: `# 1. the hash is reproducible from the bundle alone
 python -c "import json,hashlib,sys; b=json.load(open('attestation.json')); \\
 print(hashlib.sha256(json.dumps(b,sort_keys=True,separators=(',',':')).encode()).hexdigest())"
@@ -59,7 +59,7 @@ cosign verify-blob --key tenant.pub --signature attestation.sig attestation.json
     claimIds: ["agent-cannot-self-verify", "evidence-grade-uncounterfeitable"],
     body:
       "Read the scope table: writing a verdict requires the verify scope, which sits outside the ladder any connected agent is issued from. Then read the test that proves a caller-supplied grade is demoted.",
-    code: `# the credential 'stepstitch connect' issues can read repros — never verify
+    code: `# the credential 'stepstitch connect' issues can read repros: never verify
 POST /session/{id}/verify  ->  requires scope: verify (agents get: repros)
 
 # and the grade cannot be asserted into existence
@@ -76,12 +76,12 @@ pytest service/tests/test_evidence.py server/tests/test_agents.py`,
       "fixproof-no-raw-values",
     ],
     body:
-      "Download the example FixProof and the policy it must satisfy, then check both on your own machine: the in-toto statement binds the fixed commit, the frozen-test digest, the measured red-then-green results, and the privacy policy digest — and the check includes a real Ed25519 signature verified against the key the policy names. (The demo key is public by design so this example stays reproducible; your deployment trusts only the key `stepstitch proof keygen` creates on your host.)",
+      "Download the example FixProof and the policy it must satisfy, then check both on your own machine. The in-toto statement binds the fixed commit, frozen-test digest, measured red-then-green results, and privacy policy digest. The check also includes a real Ed25519 signature verified against the key the policy names. (The demo key is public by design so this example stays reproducible; your deployment trusts only the key `stepstitch proof keygen` creates on your host.)",
     code: `curl -O https://stepstitch.vercel.app/fixproof.json \\
      -O https://stepstitch.vercel.app/proof-policy.json
 pip install stepstitch-service
 stepstitch proof verify fixproof.json --policy proof-policy.json
-# 8/8 checks incl. the ed25519 signature. Change any byte and rerun — it refuses.`,
+# 8/8 checks incl. the ed25519 signature. Change any byte and rerun: it refuses.`,
     source: "service/stepstitch_service/fixproof.py",
   },
 ];
@@ -102,6 +102,7 @@ export default function VerifyPage() {
 
         <div className="mt-6">
           <SectionHeader
+            as="h1"
             eyebrow="Trust"
             title="Don't trust us. Run the checks."
             body="Every material claim on this site maps to a file and a named test in the open repository. This page turns the four that matter most into commands you can run against your own deployment."
@@ -154,7 +155,7 @@ export default function VerifyPage() {
               </div>
               <p className="mt-3 max-w-[75ch] text-[15px] leading-relaxed text-muted">
                 The public demo console is the real product surface over a
-                synthetic dataset — traces, privacy posture, replayability,
+                synthetic dataset: traces, privacy posture, replayability,
                 the frozen reproduction, and the measured red-to-green verdict.
               </p>
               <div className="mt-5 flex flex-wrap items-center gap-3">

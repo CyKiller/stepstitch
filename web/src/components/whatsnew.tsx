@@ -9,22 +9,22 @@ type Item = { icon: Icon; title: string; desc: string; proof: string; href: stri
 // The version this section describes. Deliberately PINNED, not tracked to the current
 // release: these three moats landed in 0.6, and auto-bumping the label would claim they
 // are new in whatever ships next. When a later release earns its own section, change this
-// literal and the items together — never one without the other.
+// literal and the items together: never one without the other.
 const SHIPPED_IN = "0.6";
 
-// Three moats shipped in 0.6 — each a first-class API + MCP tool, structural only.
+// Three moats shipped in 0.6: each a first-class API + MCP tool, structural only.
 const items: Item[] = [
   {
     icon: Fingerprint,
     title: "Fix Memory",
-    desc: "Every confirmed red→green fix becomes a structural fingerprint. A new bug is matched against the corpus — “you've fixed this shape before” — with the prior fix, without an agent ever seeing raw data.",
+    desc: "Every confirmed red→green fix becomes a structural fingerprint. A new bug is matched against the corpus with the prior fix: “you've fixed this shape before,” without an agent ever seeing raw data.",
     proof: "GET /similar-fixes",
     href: "/agents",
   },
   {
     icon: ShieldCheck,
     title: "Evidence Attestation",
-    desc: "A canonical, tamper-evident evidence bundle — scrub report, replayability, verdict, build — signed with your own key. Anyone verifies it independently: recompute the hash, or cosign verify-blob. We hold no key.",
+    desc: "A canonical, tamper-evident evidence bundle covers the scrub report, replayability, verdict, and build, signed with your own key. Anyone can verify it independently by recomputing the hash or running cosign verify-blob. We hold no key.",
     proof: "GET /attestation · cosign verify-blob",
     href: "/security",
   },
@@ -43,7 +43,7 @@ export function WhatsNew() {
       <SectionHeader
         eyebrow={`New in ${SHIPPED_IN}`}
         title="Three moats nobody else has"
-        body="Built on the primitives only StepStitch holds — a deterministic compiler, a provable scrubber, a verified-fix corpus, and supply-chain signing. Each is an open-source API and an MCP tool."
+        body="Built on the primitives only StepStitch holds: a deterministic compiler, a provable scrubber, a verified-fix corpus, and supply-chain signing. Each is an open-source API and an MCP tool."
       />
 
       <div className="mt-12 grid gap-4 lg:grid-cols-3">

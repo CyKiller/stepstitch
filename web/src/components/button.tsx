@@ -11,6 +11,7 @@ export function Button({
   external = false,
   leadingIcon: Leading,
   trailingIcon: Trailing = ArrowRight,
+  event,
 }: {
   href: string;
   children: React.ReactNode;
@@ -18,6 +19,7 @@ export function Button({
   external?: boolean;
   leadingIcon?: Icon;
   trailingIcon?: Icon | null;
+  event?: string;
 }) {
   const ext = external ? { target: "_blank", rel: "noreferrer" } : {};
   const base =
@@ -32,7 +34,12 @@ export function Button({
       : "bg-surface-2 text-accent";
 
   return (
-    <a href={href} {...ext} className={`${base} ${skin}`}>
+    <a
+      href={href}
+      {...ext}
+      data-analytics-event={event}
+      className={`${base} ${skin}`}
+    >
       {Leading ? <Leading size={16} weight="bold" /> : null}
       <span>{children}</span>
       {Trailing ? (

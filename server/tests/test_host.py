@@ -104,6 +104,8 @@ def test_dashboard_served_readonly():
     # It is the operator UI and targets the read-only API base; no embedded data/secrets.
     assert "StepStitch" in body and "/api/stepstitch/v1" in body
     assert "operator console" in body
+    # Keep the self-contained console from making a noisy /favicon.ico request.
+    assert '<link rel="icon" href="data:image/svg+xml,' in body
 
 
 def test_dashboard_sets_csp_with_per_request_nonce_and_security_headers():
@@ -377,7 +379,7 @@ def test_dashboard_script_is_syntactically_valid():
     import tempfile
 
     path = pathlib.Path(tempfile.mkdtemp()) / "dashboard.js"
-    path.write_text(_inline_script())
+    path.write_text(_inline_script(), encoding="utf-8")
     result = subprocess.run(
         ["node", "--check", str(path)], capture_output=True, text=True)
     assert result.returncode == 0, f"console JS does not parse:\n{result.stderr}"

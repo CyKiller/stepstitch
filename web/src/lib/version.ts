@@ -1,5 +1,5 @@
 // The currently released version, kept in step with the rest of the repo by
-// release-please. The literal below is rewritten on every release cut — the marker
+// release-please. The literal below is rewritten on every release cut: the marker
 // comment is what release-please matches on, so do not reflow this line or move the
 // comment. See the `extra-files` list in release-please-config.json.
 //

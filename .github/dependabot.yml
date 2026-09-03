@@ -21,6 +21,13 @@ updates:
       # trains us to ignore dependabot. Minor and patch TS updates still flow.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # Keep development types aligned with the SDK's supported Node line. Using
+      # Node 26 types would allow APIs that fail for customers on Node 18/20.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # jsdom 30 requires Node 22.22.2+, above the SDK's Node >=18.18 contract.
+      - dependency-name: "jsdom"
+        update-types: ["version-update:semver-major"]
 
   # The marketing site (web/package.json) — its own lockfile, its own dependency tree.
   # It was not covered here at all, so Next, React and everything under them went
@@ -52,6 +59,9 @@ updates:
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
       - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      # jsdom 30 requires Node 22.22.2+, above this app's Node >=20.9 contract.
+      - dependency-name: "jsdom"
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"

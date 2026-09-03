@@ -25,7 +25,7 @@ export function Contact() {
         }),
       });
       // 502/503 mean the relay is down or unconfigured: the message was NOT
-      // delivered, and the honest thing is to say so — never a success screen
+      // delivered, and the honest thing is to say so: never a success screen
       // over a discarded submission.
       if (res.status === 502 || res.status === 503) {
         setState("not_delivered");
@@ -71,7 +71,7 @@ export function Contact() {
               </p>
               <p className="mt-2 text-sm leading-relaxed text-muted">
                 Our contact relay is unavailable right now, so nothing was
-                delivered — we would rather tell you that than show a success
+                delivered: we would rather tell you that than show a success
                 screen. Please reach us on{" "}
                 <a
                   href="https://github.com/CyKiller/stepstitch/issues"

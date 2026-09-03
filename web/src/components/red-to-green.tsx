@@ -10,7 +10,7 @@ import { useReducedMotion } from "motion/react";
 
 // The literal product promise, animated: the compiled Playwright repro runs
 // RED while the bug is present, then GREEN once the fix lands. It is the real
-// reproduction text from SAMPLE_TRACE — not a faux screenshot — cycled through
+// reproduction text from SAMPLE_TRACE: not a faux screenshot: cycled through
 // its run states. Reduced-motion settles straight on the passing state.
 
 type Phase = "run" | "red" | "green";
@@ -29,7 +29,7 @@ export function RedToGreen() {
     return () => clearTimeout(t);
   }, [phase, reduce]);
 
-  // Reduced-motion users get the final passing state, no cycling — derived,
+  // Reduced-motion users get the final passing state, no cycling: derived,
   // not stored, so the effect never sets state synchronously.
   const display: Phase = reduce ? "green" : phase;
 
@@ -71,7 +71,7 @@ export function RedToGreen() {
         </span>
       </div>
 
-      {/* Body — fixed height so the run/red/green states don't shift layout */}
+      {/* Body: fixed height so the run/red/green states don't shift layout */}
       <div className="min-h-[148px] space-y-2 px-4 py-4 text-[13px] leading-relaxed">
         <p className="text-muted">
           <span className="text-accent">$</span> npx playwright test
@@ -85,14 +85,14 @@ export function RedToGreen() {
         {display === "red" ? (
           <>
             <p className="text-bad">
-              ✗ POST /api/accounts/:id/transfers — received{" "}
+              ✗ POST /api/accounts/:id/transfers: received{" "}
               <span className="font-semibold">500</span>
             </p>
             <p className="text-muted">
               expect(res.status).toBeLessThan(500)
             </p>
             <p className="pt-1 text-[12.5px] text-muted">
-              Bug present — the test fails. This is your reproduction.
+              Bug present: the test fails. This is your reproduction.
             </p>
           </>
         ) : null}
@@ -100,12 +100,12 @@ export function RedToGreen() {
         {display === "green" ? (
           <>
             <p className="text-ok">
-              ✓ POST /api/accounts/:id/transfers — received{" "}
+              ✓ POST /api/accounts/:id/transfers: received{" "}
               <span className="font-semibold">200</span>
             </p>
             <p className="text-muted">1 passed (1.2s)</p>
             <p className="pt-1 text-[12.5px] text-muted">
-              Fix shipped — the same test passes, so it stays fixed.
+              Fix shipped: the same test passes, so it stays fixed.
             </p>
           </>
         ) : null}

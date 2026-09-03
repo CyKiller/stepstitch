@@ -19,7 +19,7 @@ const faqs = [
   },
   {
     q: "Is it compatible with HIPAA / SEC Reg S-P?",
-    a: "StepStitch is self-hosted, so nothing leaves your boundary at all, and the SDK captures structure rather than content — no screens, input values or page text. Free text a user types is the one place customer data can enter, and the server scrubs it: healthcare-strict and financial-services-strict disable it outright and refuse the request with a 422; the default profile redacts and drops forbidden keys. " + claim("controls-not-certification") + " See the Security page for the crosswalk.",
+    a: "You control where StepStitch runs and stores its evidence, and the SDK captures structure rather than content: no screens, input values, or page text. Free text a user types is the one place customer data can enter, and the server scrubs it. The healthcare-strict and financial-services-strict profiles disable it outright and refuse the request with a 422; the default profile redacts and drops forbidden keys. " + claim("controls-not-certification") + " See the Security page for the crosswalk.",
   },
   {
     q: "What frameworks does it work with?",

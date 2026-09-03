@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "relay_unconfigured" }, { status: 503 });
     }
     const failed = await relay(hook, {
-      text: "[canary] stepstitch.dev contact relay check — not a real enquiry",
+      text: "[canary] stepstitch.dev contact relay check: not a real enquiry",
       source: "stepstitch.dev/contact",
       canary: true,
       submitted_at: new Date().toISOString(),
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
     // No relay configured: the submission has nowhere to go, and saying "ok"
     // here would show the visitor a success screen while their message was
     // discarded. Refuse honestly instead; the form tells them it did not send.
-    // (PII stays out of logs — only the fact of the refusal is recorded.)
+    // (PII stays out of logs: only the fact of the refusal is recorded.)
     console.warn(
       "[contact] CONTACT_WEBHOOK_URL is not set; refusing the submission rather than discarding it",
     );

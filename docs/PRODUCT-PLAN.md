@@ -138,6 +138,10 @@ README already nails the wedge (issue→repro, not session replay; privacy-safe;
 Motion: **land via the MCP server** (drops into whatever agent stack the customer already runs —
 zero migration) → **expand via the compliance pack**. A regulated financial-services customer is the lighthouse, reached through Microsoft.
 
+The operating cadence, funnel definitions, decision rules, and six-week exit criteria live in
+[`GTM-OPERATING-PLAN.md`](GTM-OPERATING-PLAN.md). Product work stays focused on observed
+activation blockers until three design partners complete a first trace.
+
 ---
 
 ## 5. P1 hand-off — MCP tool schema sketch (ready for an engineer)

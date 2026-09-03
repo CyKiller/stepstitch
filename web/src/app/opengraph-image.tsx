@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 // No `runtime` export: the Edge Runtime is deprecated in this Next version and the
-// default Node.js runtime renders ImageResponse fine — it also re-enables static
+// default Node.js runtime renders ImageResponse fine: it also re-enables static
 // generation for this route, which `runtime = "edge"` was silently disabling.
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -35,7 +35,7 @@ export default function OgImage() {
 
         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
           {/* Satori (the OG renderer) requires an explicit display on any element
-              with more than one child — mixed text + span was fine on the deprecated
+              with more than one child: mixed text + span was fine on the deprecated
               edge runtime only because the route never rendered at build time. A
               wrapping flex row of word spans keeps the two-tone headline. */}
           <div

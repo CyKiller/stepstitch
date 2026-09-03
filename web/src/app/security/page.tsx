@@ -11,7 +11,7 @@ import { Button } from "@/components/button";
 import { GITHUB_URL } from "@/lib/links";
 
 export const metadata: Metadata = {
-  title: "Security & compliance — StepStitch",
+  title: "Security & compliance: StepStitch",
   description:
     "How StepStitch stays audit-ready: a two-layer privacy boundary, a never-captured list, deployment profiles, and a crosswalk to SEC Reg S-P and NIST AI RMF. Open source, so you can verify it.",
 };
@@ -63,6 +63,7 @@ export default function SecurityPage() {
         </Reveal>
         <div className="mt-6">
           <SectionHeader
+            as="h1"
             eyebrow="Security & compliance"
             title="Audit-ready, because you can read the code"
             body="The privacy boundary is open source. Your reviewers can confirm exactly what is captured and what is dropped, line by line, before anything is deployed. No certificate to take on faith."

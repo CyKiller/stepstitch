@@ -44,7 +44,7 @@ const steps: Step[] = [
   {
     icon: GitPullRequest,
     title: "Fix, human-gated",
-    desc: "Open a pull request with the regression test. A reviewer merges, never the agent.",
+    desc: "Draft a pull request with the regression test. A reviewer decides whether to merge.",
     tool: "github_bridge",
   },
 ];
@@ -53,7 +53,7 @@ export function HowItWorks() {
   return (
     <Section id="how" className="border-y border-line">
       <SectionHeader
-        title="From one report to a merged fix"
+        title="From one report to a verified fix"
         body="StepStitch perceives, scores, compiles, and drafts. It never plans or acts on its own. The autonomy stays in your stack."
       />
 

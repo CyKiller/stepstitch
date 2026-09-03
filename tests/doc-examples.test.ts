@@ -31,6 +31,11 @@ function examplesFrom(relPath: string): Map<string, DocExample> {
 const README = examplesFrom("README.md")
 const GETTING_STARTED = examplesFrom("docs/getting-started.md")
 
+function canonicalPath(filePath: string): string {
+  const resolved = path.normalize(path.resolve(filePath))
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved
+}
+
 /**
  * Snippets are fragments of a host app, so identifiers the surrounding app
  * would provide (an HTTP response, the current project id) are declared here
@@ -44,6 +49,9 @@ const SNIPPET_PREAMBLE = [
 
 function typeCheck(code: string): string[] {
   const fileName = path.join(ROOT, "__doc_snippet__.ts")
+  const virtualFileName = canonicalPath(fileName)
+  const isVirtualFile = (candidate: string) =>
+    canonicalPath(candidate) === virtualFileName
   const full = SNIPPET_PREAMBLE + code
   const options: ts.CompilerOptions = {
     strict: true,
@@ -61,10 +69,10 @@ function typeCheck(code: string): string[] {
   const readFile = host.readFile.bind(host)
   const fileExists = host.fileExists.bind(host)
   const getSourceFile = host.getSourceFile.bind(host)
-  host.readFile = (fn) => (fn === fileName ? full : readFile(fn))
-  host.fileExists = (fn) => fn === fileName || fileExists(fn)
+  host.readFile = (fn) => (isVirtualFile(fn) ? full : readFile(fn))
+  host.fileExists = (fn) => isVirtualFile(fn) || fileExists(fn)
   host.getSourceFile = (fn, langVersion, ...rest) =>
-    fn === fileName
+    isVirtualFile(fn)
       ? ts.createSourceFile(fn, full, langVersion, true)
       : getSourceFile(fn, langVersion, ...rest)
   const program = ts.createProgram([fileName], options, host)

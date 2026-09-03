@@ -10,7 +10,7 @@ const steps = [
   {
     icon: ShieldCheck,
     title: "StepStitch records the steps, not the screen",
-    body: "It captures what they clicked and what failed. Never their screen, their typing, or any personal data.",
+    body: "It records which control was used and what failed. It never captures screens, input values, or page text; free text is scrubbed server-side.",
   },
   {
     icon: CheckCircle,
@@ -23,8 +23,6 @@ export function PlainExplainer() {
   return (
     <section className="border-b border-line bg-surface/40">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 md:grid-cols-12 md:gap-12 md:py-20">
-        {/* Left: a real heading instead of an uppercase eyebrow, kept to the
-            side so the steps read as a vertical sequence, not a card row. */}
         <Reveal className="md:col-span-4">
           <h2 className="text-2xl font-semibold tracking-tight text-fg md:text-3xl">
             In plain words
@@ -35,8 +33,7 @@ export function PlainExplainer() {
           </p>
         </Reveal>
 
-        {/* Right: divided vertical list — a distinct layout family from the
-            analogy cards and the pipeline that follow it. */}
+        {/* A divided list keeps the sequence easy to scan on every viewport. */}
         <div className="divide-y divide-line border-y border-line md:col-span-8">
           {steps.map((s, i) => {
             const Glyph = s.icon;

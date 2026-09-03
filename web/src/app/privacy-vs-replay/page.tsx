@@ -6,12 +6,12 @@ import { Reveal } from "@/components/reveal";
 import { Button } from "@/components/button";
 
 export const metadata: Metadata = {
-  title: "Privacy-first alternative to session replay — StepStitch",
+  title: "Privacy-first alternative to session replay: StepStitch",
   description:
-    "A privacy-first alternative to session replay (FullStory, LogRocket, OpenReplay). StepStitch turns a user-reported bug into an executable Playwright regression test — without recording screens, keystrokes, page text, or PII. Built for regulated teams.",
+    "A privacy-first alternative to session replay (FullStory, LogRocket, OpenReplay). StepStitch turns a user-reported bug into an executable Playwright regression test without recording screens, keystrokes, page text, or PII. Built for regulated teams.",
   alternates: { canonical: "/privacy-vs-replay" },
   openGraph: {
-    title: "Privacy-first alternative to session replay — StepStitch",
+    title: "Privacy-first alternative to session replay: StepStitch",
     description:
       "Don't ship a recording of your users to a vendor. StepStitch is capture-minimized by design and produces a regression test, not a replay.",
     url: "/privacy-vs-replay",
@@ -41,7 +41,7 @@ const categories = [
     useful:
       "Lower the friction of filing a good report and attach helpful context automatically.",
     tradeoff:
-      "Frequently stop at context or a replay clip — the output is a richer ticket, not an executable test.",
+      "Frequently stop at context or a replay clip: the output is a richer ticket, not an executable test.",
   },
 ];
 
@@ -54,10 +54,10 @@ const matrix: {
   stepstitch: boolean | "partial";
   note: string;
 }[] = [
-  { dimension: "Capture-minimized by default", replay: "partial", errors: "partial", stepstitch: true, note: "Others can be configured to mask; StepStitch never captures the data in the first place." },
+  { dimension: "Capture-minimized by default", replay: "partial", errors: "partial", stepstitch: true, note: "Others can be configured to mask; StepStitch omits screens, input values, and page text by architecture." },
   { dimension: "Produces an executable regression test", replay: false, errors: false, stepstitch: true, note: "A deterministic Playwright repro, not a clip or a stack trace." },
-  { dimension: "Replayability score / path-to-repro", replay: "partial", errors: false, stepstitch: true, note: "A 0–1 score grading how reproducible the issue is." },
-  { dimension: "No screen/DOM recording artifact", replay: false, errors: true, stepstitch: true, note: "Nothing to store, govern, or leak." },
+  { dimension: "Replayability score / path-to-repro", replay: "partial", errors: false, stepstitch: true, note: "A 0-1 score grading how reproducible the issue is." },
+  { dimension: "No screen/DOM recording artifact", replay: false, errors: true, stepstitch: true, note: "No visual recording artifact to store or govern." },
   { dimension: "Verified-fix evidence (red→green)", replay: false, errors: false, stepstitch: true, note: "CI confirms the repro failed before the fix and passes after." },
   { dimension: "Works where there's no screen to record", replay: false, errors: "partial", stepstitch: true, note: "AI agents, APIs, and backend flows leave no visual footprint for session replay; structural capture still works." },
 ];
@@ -83,9 +83,10 @@ export default function PrivacyVsReplayPage() {
         </Reveal>
         <div className="mt-6">
           <SectionHeader
+            as="h1"
             eyebrow="An honest comparison"
             title="A recording to watch, or a test that stays fixed?"
-            body="Session replay, error tracking, and bug-report tools are all genuinely useful — and most can be configured for privacy. We are not going to claim otherwise. The real difference is the output: those tools hand you a recording or a stack trace to interpret. StepStitch is capture-minimized by default and its output is an executable regression test, not a recording — one that fails on the bug and passes once it is fixed."
+            body="Session replay, error tracking, and bug-report tools are all genuinely useful, and most can be configured for privacy. The real difference is the output: those tools hand you a recording or a stack trace to interpret. StepStitch is capture-minimized by default and produces an executable regression test that fails on the bug and passes once it is fixed."
           />
         </div>
 
@@ -149,7 +150,7 @@ export default function PrivacyVsReplayPage() {
                 recording.
               </span>{" "}
               It never captures screens, input values, page text, raw URLs, request/response bodies,
-              cookies, headers, screenshots, raw console logs, or raw stack traces — so there is no
+              cookies, headers, screenshots, raw console logs, or raw stack traces, so there is no
               recording artifact to govern in the first place.
             </p>
           </div>

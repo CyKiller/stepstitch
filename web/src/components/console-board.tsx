@@ -1,12 +1,12 @@
 import { Bezel } from "./bezel";
 
-// A faithful, theme-aware mock of the console's pipeline board — the same pattern as
+// A faithful, theme-aware mock of the console's pipeline board: the same pattern as
 // <RedToGreen>, drawn in CSS/SVG rather than shipped as a screenshot. The site has no raster
 // images anywhere and supports both themes; a dark screenshot on a light page would read as
 // broken, and a PNG goes stale silently. Stage names and the glyph algorithm below are the real
 // ones from server/dashboard.py, so this can drift out of date but it cannot drift into fiction.
 
-// FNV-1a, byte-for-byte the console's hash32 — so a given fingerprint field yields the same
+// FNV-1a, byte-for-byte the console's hash32: so a given fingerprint field yields the same
 // shape and shade here as it does in the running console.
 function hash32(str: string): number {
   let h = 2166136261;
@@ -123,7 +123,7 @@ const CHECKOUT: Fingerprint = {
 };
 
 // The real board columns, derived from the verdict state machine in verification/verdict.py.
-// Wording matches the console's DEFAULT register — plain language, with the technical names
+// Wording matches the console's DEFAULT register: plain language, with the technical names
 // (Untriaged / Known shape / HTTP 500) living behind its "Technical detail" toggle. The site
 // should advertise the vocabulary a visitor actually meets when they open the thing.
 const COLUMNS: {
@@ -144,9 +144,9 @@ const COLUMNS: {
     cards: [
       {
         fp: { ...TRANSFER, terminal_selector: "[data-testid=confirm-transfer]" },
-        headline: "Transfer — the server errored after Confirm transfer",
+        headline: "Transfer: the server errored after Confirm transfer",
         facts: "1 person affected",
-        seen: "You fixed this before — see PR-42",
+        seen: "You fixed this before: see PR-42",
       },
     ],
   },
@@ -156,7 +156,7 @@ const COLUMNS: {
     cards: [
       {
         fp: CHECKOUT,
-        headline: "Checkout — the request was rejected",
+        headline: "Checkout: the request was rejected",
         facts: "1 person affected",
       },
     ],
@@ -168,7 +168,7 @@ const COLUMNS: {
     cards: [
       {
         fp: TRANSFER,
-        headline: "Transfer — the server errored after Review transfer",
+        headline: "Transfer: the server errored after Review transfer",
         facts: "4 people affected",
       },
     ],

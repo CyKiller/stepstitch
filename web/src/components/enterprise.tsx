@@ -17,7 +17,7 @@ type Control = {
   proof: string;
 };
 
-// Each control maps to a real, named place in the open-source code — same
+// Each control maps to a real, named place in the open-source code: same
 // proof-over-promises stance as the rest of the page. Verified against
 // server/oidc.py, service/.../profiles.py, and the router endpoints.
 const controls: Control[] = [
@@ -64,7 +64,7 @@ export function Enterprise() {
     <Section id="enterprise" className="border-b border-line">
       <SectionHeader
         title="The controls your security team will ask for"
-        body="SSO, role separation, data-subject deletion, and a PHI posture are built in and self-hosted — not a future enterprise add-on. Each one points at the open-source code that implements it."
+        body="SSO, role separation, data-subject deletion, and a PHI posture are built in and self-hosted, not reserved for a future enterprise add-on. Each one points at the open-source code that implements it."
       />
 
       {/* A bordered spec-sheet: a 2-col divided grid, distinct from the
