@@ -165,3 +165,86 @@ def test_canonical_traces_gain_no_unknown_type_warning():
         _step("api_error", metadata={"endpoint": "/api/x", "status": 500}),
     ])
     assert not any(w["code"] == "unknown_step_type" for w in r["warnings"])
+
+
+# --- templated routes are a per-TRACE configuration gap -------------------------------
+# Found on real data: a 50-step trace on /projects/:id/... was charged 49 times (-1.96)
+# for ONE missing fixture id and scored 0.00 — with 44 of its 50 selectors stable. The
+# charge made the grade a function of trace LENGTH rather than of how faithfully the trace
+# replays, which is the one thing the grade is supposed to mean.
+
+
+def _templated(n, route="/projects/:id/manuscript"):
+    return [_step("click", route=route, target='[data-testid="x"]') for _ in range(n)]
+
+
+def test_templated_route_is_charged_once_not_once_per_step():
+    short = score_trace(_templated(2))
+    long_ = score_trace(_templated(40))
+    assert short["score"] == long_["score"], (
+        "trace length must not change the templating charge — one fixture id resolves "
+        "every occurrence at once"
+    )
+    codes = [w["code"] for w in long_["warnings"]]
+    assert codes.count("templated_route_needs_fixture") == 1
+
+
+def test_a_long_clean_templated_trace_still_grades_well():
+    """The regression in one assertion: 40 clean steps must not be floored to F."""
+    result = score_trace(_templated(40))
+    assert result["score"] >= 0.85
+    assert result["grade"] == "A"
+
+
+def test_distinct_parameters_are_charged_separately():
+    # Two different fixture values are two things the operator must supply.
+    steps = [_step("click", route="/orgs/:org/projects/:id", target='[data-testid="x"]')]
+    result = score_trace(steps)
+    codes = [w["code"] for w in result["warnings"]]
+    assert codes.count("templated_route_needs_fixture") == 2
+    assert result["score"] == 0.92  # 1.00 - 2 x 0.04
+
+
+def test_supplying_route_params_removes_the_charge():
+    """The warning's own remedy, honoured: a supplied value is not a gap."""
+    from stepstitch_service.repro_config import ReproConfig
+
+    steps = _templated(10)
+    unconfigured = score_trace(steps)
+    configured = score_trace(steps, ReproConfig.from_dict({"route_params": {"id": "1001"}}))
+
+    assert unconfigured["score"] < configured["score"]
+    assert configured["score"] == 1.0
+    assert not [
+        w for w in configured["warnings"] if w["code"] == "templated_route_needs_fixture"
+    ]
+
+
+def test_a_partially_configured_trace_is_charged_only_for_what_is_missing():
+    from stepstitch_service.repro_config import ReproConfig
+
+    steps = [_step("click", route="/orgs/:org/projects/:id", target='[data-testid="x"]')]
+    result = score_trace(steps, ReproConfig.from_dict({"route_params": {"id": "1001"}}))
+    warnings = [w for w in result["warnings"] if w["code"] == "templated_route_needs_fixture"]
+    assert len(warnings) == 1
+    assert ":org" in warnings[0]["detail"]
+    assert result["score"] == 0.96
+
+
+def test_the_warning_names_the_parameter_and_its_reach():
+    result = score_trace(_templated(7))
+    warning = next(
+        w for w in result["warnings"] if w["code"] == "templated_route_needs_fixture"
+    )
+    assert ":id" in warning["detail"]
+    assert "7 steps" in warning["detail"], "say how many steps the one value unblocks"
+    assert "route_params" in warning["detail"], "name the exact setting to change"
+    assert warning["step_index"] == 0  # first occurrence, for consumers that locate it
+
+
+def test_an_untemplated_trace_is_never_charged():
+    result = score_trace([_step("click", route="/dashboard", target='[data-testid="x"]')])
+    assert result["score"] == 1.0
+    assert not [
+        w for w in result["warnings"] if w["code"] == "templated_route_needs_fixture"
+    ]

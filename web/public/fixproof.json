@@ -25,7 +25,7 @@
         "red_verdict": "reproduced"
       },
       "frozen_test": {
-        "sha256": "sha256:12c5523955ec68b7fe16fd6b2e07bb1b716b76d37097de51b1a29b77b075f2bd",
+        "sha256": "sha256:f2e45791721821d4207a15004b15e78caaadfe23e74c76fcaf99e6943a533326",
         "frozen_at": "2026-06-02T08:00:09.000Z",
         "frozen_by": "demo-operator"
       },
@@ -57,10 +57,10 @@
       "scope": "this reported failure, under this frozen test and envelope — not a claim of overall program correctness"
     }
   },
-  "statement_sha256": "sha256:55fc89f7c8f381a78fd85cb826f5b27f2e088ae5564cbbecd888938c5ab41e79",
+  "statement_sha256": "sha256:f52824fc4e9889c9a06b9711b85e45a3b2b2079ec9bf6771d263fe2852497141",
   "signature": {
     "algorithm": "ed25519",
     "key_id": "stepstitch-demo",
-    "signature": "68b648e2eaccf2c4df0849c2f67d8a518a3dcd36e408c49500c8e6307e9f2f100094e7684cb3ac34f896f60d9f41a56244f987547ee03cd2013b7f78a7a13609"
+    "signature": "5386f15603b25f40141cb053ffb4f5eb1615014ebaf72ecaa6fe3a4f86fc0974374f3b912816ab73563b807ae2bb1cdf29d6baf5d7f6e55fd1ad64277cd0470a"
   }
 }

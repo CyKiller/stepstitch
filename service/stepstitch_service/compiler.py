@@ -109,7 +109,7 @@ def generate_playwright_test(
     """
     cfg = config or ReproConfig()
     base = (cfg.base_url or base_url).rstrip("/")
-    replay = score_trace(footsteps)
+    replay = score_trace(footsteps, cfg)
     has_exception = any(
         str(s.get("type", "")).lower() == "exception" for s in footsteps
     )

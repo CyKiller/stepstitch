@@ -59,11 +59,19 @@ def _grade(score: float) -> str:
     return "F"
 
 
-def score_trace(footsteps: List[Dict[str, Any]]) -> Dict[str, Any]:
+def score_trace(
+    footsteps: List[Dict[str, Any]],
+    config: Optional[Any] = None,
+) -> Dict[str, Any]:
     """Return ``{score, grade, warnings, signals}`` for a trace.
 
     ``score`` is clamped to [0, 1]; ``warnings`` is a list of
     ``{code, detail, step_index?}``. Deterministic for a given input.
+
+    ``config`` is the project's :class:`~.repro_config.ReproConfig`, when the caller has
+    one. It is read for ``route_params`` only: a templated segment whose value the project
+    already supplies is not a gap, so it is not charged. Optional and duck-typed so every
+    existing caller keeps working unchanged.
     """
     warnings: List[Dict[str, Any]] = []
 
@@ -82,7 +90,6 @@ def score_trace(footsteps: List[Dict[str, Any]]) -> Dict[str, Any]:
     unknown_types = 0
     for i, step in enumerate(footsteps):
         step_type = str(step.get("type", "")).lower()
-        route = str(step.get("route", "/"))
 
         if step_type not in SUPPORTED_STEP_TYPES:
             # The scorer's whole job is to say how faithfully this trace replays, and a
@@ -126,13 +133,44 @@ def score_trace(footsteps: List[Dict[str, Any]]) -> Dict[str, Any]:
                     "step_index": i,
                 })
 
-        if ":" in route:
-            score -= 0.04
-            warnings.append({
-                "code": "templated_route_needs_fixture",
-                "detail": f"Route '{route}' is templated; supply a concrete fixture id.",
-                "step_index": i,
-            })
+    # Templated routes are a CONFIGURATION gap, not a fidelity defect, so they are charged
+    # once per distinct parameter the project has not supplied — not once per step.
+    #
+    # Per-step was wrong in a way that only shows at length: one fixture id resolves every
+    # occurrence of `:id` at once, so a 50-step trace was charged 49 times (-1.96) for a
+    # single missing value and scored 0.00 no matter how clean its selectors were. Measured
+    # on a real 50-step trace with 44 of 50 stable selectors: the templating charge alone
+    # floored it, making selector quality mathematically irrelevant. A per-step charge for a
+    # per-trace property makes the score a function of trace LENGTH rather than of how
+    # faithfully the trace replays, which is the one thing the grade is supposed to mean.
+    #
+    # And when `config.route_params` already supplies the value, there is no gap at all:
+    # the warning's own remedy ("supply a concrete fixture id") has been met, so charging
+    # for it would be telling the project to do something it has already done.
+    templated_params: Dict[str, int] = {}
+    for i, step in enumerate(footsteps):
+        for segment in str(step.get("route", "")).split("/"):
+            if segment.startswith(":") and len(segment) > 1:
+                templated_params.setdefault(segment[1:], i)
+
+    supplied: Dict[str, Any] = {}
+    if config is not None:
+        supplied = dict(getattr(config, "route_params", None) or {})
+
+    for name in sorted(p for p in templated_params if p not in supplied):
+        occurrences = sum(
+            1 for s in footsteps if f":{name}" in str(s.get("route", "")).split("/")
+        )
+        score -= 0.04
+        warnings.append({
+            "code": "templated_route_needs_fixture",
+            "detail": (
+                f"Route parameter ':{name}' is templated (used by {occurrences} "
+                f"step{'s' if occurrences != 1 else ''}); supply a concrete fixture id "
+                f'via route_params, e.g. {{"{name}": "1001"}}.'
+            ),
+            "step_index": templated_params[name],
+        })
 
     # Terminal-action signal: something to assert on. Without one there is no observable
     # failure to reproduce, so the trace cannot be "good" however clean its steps are —
