@@ -52,10 +52,15 @@ def failure_signature(transcript: str) -> str:
     """
     if not transcript:
         return ""
+    from .scrubber import redact_text
+
     for pattern in _SIGNATURE_PATTERNS:
         match = pattern.search(transcript)
         if match:
-            line = match.group(0).strip()
+            # Summaries-tier agents read this through FixProof, so it gets the full
+            # detector set — before volatile-detail stripping can cut a secret into
+            # pieces the detectors no longer recognise.
+            line = redact_text(match.group(0).strip())[0] or ""
             # Drop volatile detail so two runs of the same failure agree.
             line = re.sub(r"\b\d+(\.\d+)?(ms|s)\b", "", line)
             line = re.sub(r"\b[0-9a-f]{8,}\b", "", line)

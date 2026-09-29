@@ -1,5 +1,5 @@
 {
-  "$comment": "Tenant fixture pack for `stepstitch policy verify`. Every value is deliberately synthetic (000-00-0000, 4111..., *.example.test, FAKE-* sentinels) — never real NPI. The pack proves the strict profile refuses or neutralizes each hostile shape: free-text PII, names/addresses, account numbers, emails, semantic route slugs, semantic selectors, unmask attempts, forbidden and unknown fields.",
+  "$comment": "Tenant fixture pack for `stepstitch policy verify`. Every value is deliberately synthetic (000-00-0000, 4111..., *.example.test, FAKE-* sentinels) — never real NPI. The pack proves the strict profile refuses or neutralizes each hostile shape: free-text PII, names/addresses, account numbers, emails, semantic route slugs, semantic selectors, unmask attempts, forbidden and unknown fields, and credential / encoded-payload shapes (JWTs, API keys, short links, base64 blobs, IBANs, IPs) wherever the strict schema still admits text.",
   "version": 1,
   "profile": "financial-services-strict",
   "overrides": {
@@ -250,6 +250,111 @@
         "footsteps": [
           {"timestamp": "t", "type": "navigation", "route": "/cards/4111111111111111",
            "label": "[masked]"}
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "name": "jwt-in-user-agent",
+      "expect": "redacted",
+      "must_not_persist": ["eyJhbGciOiJIUzI1NiJ9.eyJGQUtFIjoiMSJ9.RkFLRXNpZzEyMzQ"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {"user_agent": "Mozilla/5.0 session eyJhbGciOiJIUzI1NiJ9.eyJGQUtFIjoiMSJ9.RkFLRXNpZzEyMzQ"}
+      }
+    },
+    {
+      "name": "api-key-in-endpoint",
+      "expect": "redacted",
+      "must_not_persist": ["sk-proj-FAKEkey12FAKEkey34FAKEkey56"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "api_error", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]",
+           "metadata": {"status": 500, "method": "POST", "endpoint": "/accounts/sk-proj-FAKEkey12FAKEkey34FAKEkey56"}}
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "name": "short-link-in-user-agent",
+      "expect": "redacted",
+      "must_not_persist": ["bit.ly/FAKE1234"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {"user_agent": "Mozilla/5.0 see bit.ly/FAKE1234"}
+      }
+    },
+    {
+      "name": "base64-blob-in-release",
+      "expect": "redacted",
+      "must_not_persist": ["RkFLRWJsb2JGQUtFYmxvYkZBS0VibG9iMTIzNDU2Nzg5MA"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {"release": "RkFLRWJsb2JGQUtFYmxvYkZBS0VibG9iMTIzNDU2Nzg5MA"}
+      }
+    },
+    {
+      "name": "iban-in-user-agent",
+      "expect": "redacted",
+      "must_not_persist": ["DE89370400440532013000"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {"user_agent": "Mozilla/5.0 DE89370400440532013000"}
+      }
+    },
+    {
+      "name": "ip-address-in-locale",
+      "expect": "redacted",
+      "must_not_persist": ["10.66.77.88"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {"locale": "10.66.77.88"}
+      }
+    },
+    {
+      "name": "email-as-app-id",
+      "expect": "rejected",
+      "must_not_persist": ["jane.fake@example.test"],
+      "payload": {
+        "app_id": "jane.fake@example.test",
+        "footsteps": [
+          {"timestamp": "t", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
+        ],
+        "metadata": {}
+      }
+    },
+    {
+      "name": "email-in-timestamp",
+      "expect": "redacted",
+      "must_not_persist": ["jane.fake@example.test"],
+      "payload": {
+        "app_id": "tenant-app",
+        "footsteps": [
+          {"timestamp": "jane.fake@example.test", "type": "click", "route": "/transfer",
+           "target": "[data-testid=\"transfer-submit\"]", "label": "[masked]"}
         ],
         "metadata": {}
       }

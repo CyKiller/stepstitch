@@ -13,8 +13,8 @@ nothing. The full CI gate is re-run as the release gate before any artifact is p
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **945** | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **241** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Service (compiler, router, privacy, connectors) | **1043** | `PYTHONPATH=service pytest service/tests/` |
+| Host (auth, dashboard, real Postgres) | **254** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **40** | `npx vitest run` |
 | Web (marketing site + copy claims) | **232** | `cd web && npx vitest run` |
 
@@ -130,6 +130,8 @@ repros-scoped token → verify.mjs with a verify-scoped token → freeze/verify-
 | Repair Loop / GitHub bridge | `github_bridge/` | `test_github_{bridge,client,content,endpoints}.py` |
 | Governed direct-write (opt-in, off by default) | `delivery/` | `test_delivery.py`, `test_delivery_clients.py` |
 | **Failure shapes** — cluster traces by structural fingerprint | `shapes.py`, migration `0005` | `test_shapes.py`, `test_shapes_endpoints.py` |
+| **Egress guard** — agent-token responses and MCP results pass an outbound detector set with an `_egress` report; signed artifacts cleaned before signing, scanned after; agents get no explanation text or end-user id | `egress.py`, host agent middleware, `mcp_server.py` | `test_egress_guard.py`, `test_agent_egress.py`, `test_egress_canaries.py` (canaries via every MCP tool + no-false-positive) |
+| Secret and encoded-payload detectors (JWTs, API keys, short links, base64/hex blobs, IBAN, IP, MAC) shared by ingest, diagnostics and transcripts | `scrubber.py` | `test_secret_detectors.py`, `test_scrub_channels.py`, `test_reproduction_egress.py` |
 
 ### Licensing, compliance, supply chain
 

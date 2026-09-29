@@ -13,8 +13,14 @@ from __future__ import annotations
 
 from typing import List
 
+from .egress import egress_detector_kinds
 from .profiles import PROFILES
-from .scrubber import FINANCIAL_SERVICES_ENTERPRISE, ScrubPolicy
+from .scrubber import (
+    FINANCIAL_SERVICES_ENTERPRISE,
+    ScrubPolicy,
+    built_in_detector_kinds,
+    detector_set_sha256,
+)
 
 __all__ = ["build_evidence", "NEVER_CAPTURED_CATEGORIES", "ALWAYS_STRUCTURAL"]
 
@@ -200,6 +206,29 @@ def build_evidence(policy: ScrubPolicy = FINANCIAL_SERVICES_ENTERPRISE) -> str:
         "### Forbidden keys (dropped as a leak signal)",
         "",
         *_bullets(f"`{k}`" for k in forbidden),
+        "",
+        "### Built-in free-text detectors (every profile)",
+        "",
+        "Credentials and encoded payloads first, then PII. Each redaction is counted by "
+        "kind in the per-trace scrub report; values are never recorded.",
+        "",
+        f"- Kinds: {', '.join(f'`{k}`' for k in built_in_detector_kinds())}",
+        f"- Detector set digest: `{detector_set_sha256()}` (stored on every trace as "
+        "`_scrub.detector_set_sha256`)",
+        "",
+        "## Egress guard (outbound to AI agents)",
+        "",
+        "Every response to an agent token and every MCP tool result passes a second, "
+        "outbound detector pass (`service/stepstitch_service/egress.py`) and carries an "
+        "`_egress` report of what it removed; record deliveries pass the same check. It "
+        "is a high-precision subset, so reproduction code, digests and commands are left "
+        "as they are (pinned by a no-false-positive test over every MCP tool). "
+        "Signed artifacts are cleaned before signing and scanned, never edited, on the way "
+        "out.",
+        "",
+        f"- Kinds: {', '.join(f'`{k}`' for k in egress_detector_kinds())}",
+        "- Limit: detection is evidence, not proof — names and postal addresses match no "
+        "pattern.",
         "",
         "## Operational controls",
         "",

@@ -48,7 +48,12 @@ def test_shipped_financial_pack_holds():
                   # Luhn, expiry+CVV context, track-data and PIN-block shapes. The
                   # strict schema refuses them; these fixtures prove that refusal.
                   "pan-luhn-valid", "pan-luhn-invalid", "expiry-and-cvv",
-                  "track-data", "pin-block"):
+                  "track-data", "pin-block",
+                  # Credential and encoded-payload shapes — how data leaves in pieces
+                  # (the OpenAI agent incident, 2026-09) — wherever strict still admits
+                  # text, plus the identifier and timestamp channels.
+                  "jwt", "api-key", "short-link", "base64-blob", "iban", "ip-address",
+                  "email-as-app-id", "email-in-timestamp"):
         assert shape in names, f"fixture pack lost its {shape} coverage"
     # Every hostile fixture (everything but the clean control) ends neutralized.
     for r in run.results:
@@ -183,7 +188,8 @@ def test_cli_exit_codes(tmp_path, capsys):
     # 0: the shipped pack passes.
     assert cli_main(["policy", "verify", str(FIXTURES_PATH)]) == 0
     out = capsys.readouterr().out
-    assert "19/19 fixtures passed" in out
+    n = len(_fixture_doc()["fixtures"])
+    assert f"{n}/{n} fixtures passed" in out
 
     # 1: a failing pack (the leak case above).
     failing = tmp_path / "failing.json"
@@ -215,7 +221,7 @@ def test_cli_json_output_is_machine_readable(capsys):
     body = json.loads(capsys.readouterr().out)
     assert body["ok"] is True
     assert body["profile"] == "financial-services-strict"
-    assert len(body["results"]) == 19
+    assert len(body["results"]) == len(_fixture_doc()["fixtures"])
 
 
 def test_profile_override_flag_wins(capsys):
@@ -225,3 +231,44 @@ def test_profile_override_flag_wins(capsys):
                      "--profile", "financial-services-enterprise"]) == 1
     out = capsys.readouterr().out
     assert "financial-services-enterprise" in out
+
+
+# --- identifiers, and what would reach an agent ---------------------------------------
+
+
+def test_the_classifier_refuses_free_text_in_identifier_fields_like_the_router():
+    policy = build_policy("financial-services-enterprise", {})
+    payload = {"app_id": "jane@example.test", "footsteps": [
+        {"timestamp": "t", "type": "navigation", "route": "/", "label": "[masked]"}]}
+    assert classify_payload(payload, policy).outcome == "rejected"
+    client, db = _client(policy)
+    assert client.post("/api/stepstitch/v1/session", json=payload).status_code == 422
+    assert db.inserted is None
+
+
+def _single(payload, must_not_persist):
+    return {"version": 1, "profile": "financial-services-enterprise", "fixtures": [
+        {"name": "probe", "expect": "redacted", "must_not_persist": must_not_persist,
+         "payload": payload}]}
+
+
+def test_each_result_also_says_whether_a_literal_would_reach_an_agent():
+    """Storage is one question; the agent packet is the other. A literal no pattern can
+    see — a name — is honestly reported as reaching both."""
+    doc = _single({"app_id": "tenant-app", "footsteps": [
+        {"timestamp": "t", "type": "click", "route": "/transfer", "target": "#send",
+         "label": "Pay Jane Synthetic now"}]}, ["Jane Synthetic"])
+    result = verify_fixtures(doc).results[0]
+    assert result.leaked == ["Jane Synthetic"]
+    assert result.agent_leaked == ["Jane Synthetic"]
+    assert result.as_dict()["agent_leaked"] == ["Jane Synthetic"]
+
+
+def test_a_secret_reaches_neither_storage_nor_the_agent():
+    jwt = "eyJhbGciOiJIUzI1NiJ9" + "." + "eyJGQUtFIjoiMSJ9" + "." + "RkFLRXNpZzEyMzQ"
+    doc = _single({"app_id": "tenant-app", "footsteps": [
+        {"timestamp": "t", "type": "click", "route": "/transfer", "target": "#send",
+         "label": f"session {jwt}"}]}, [jwt])
+    result = verify_fixtures(doc).results[0]
+    assert result.leaked == [] and result.agent_leaked == []
+    assert result.passed

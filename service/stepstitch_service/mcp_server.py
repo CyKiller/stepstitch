@@ -20,6 +20,7 @@ operation ever appears here.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, Optional, Tuple
 
@@ -106,7 +107,9 @@ COPILOT_SAFE_OPERATIONS: Tuple[CopilotSafeOperation, ...] = (
         tool_name="list_recent_traces",
         method="GET",
         path="/sessions",
-        description="List recent traces (admin, audited). Returns no trace bodies.",
+        description=("List recent traces (audited). An agent token receives trace ids, "
+                     "project and time only — never the reporter's explanation text or "
+                     "end-user id."),
         params=(
             ToolParam("project_id", "string", location="query",
                       description="Optional project filter."),
@@ -300,7 +303,32 @@ async def dispatch_tool(
         else:
             query[p.name] = value
 
-    return await call_route(op.method, path, query)
+    result = await call_route(op.method, path, query)
+    return _guard_tool_result(op.path, result)
+
+
+# Signed artifacts are scanned, never edited: a changed byte is a broken signature.
+_SIGNED_TOOL_PATH = re.compile(r"/(?:attestation|fixproof)(?:/download)?$")
+
+
+def _guard_tool_result(route: str, result: Any) -> Any:
+    """Every tool result passes the egress guard, whatever token this server holds — its
+    reader is a model either way. A report the host already attached (agent-token path) is
+    merged with this pass rather than overwritten, so the counts stay the real ones."""
+    from .egress import REDACT, SCAN, guard_outbound
+
+    mode = SCAN if _SIGNED_TOOL_PATH.search(route) else REDACT
+    prior = result.pop("_egress", None) if isinstance(result, dict) and mode == REDACT else None
+    guarded, report = guard_outbound(result, mode=mode)
+    if mode == SCAN or not isinstance(guarded, dict):
+        return guarded
+    if isinstance(prior, dict):
+        for kind, n in (prior.get("kinds") or {}).items():
+            report["kinds"][kind] = report["kinds"].get(kind, 0) + n
+        report["fields"] = list(dict.fromkeys(list(prior.get("fields") or [])
+                                              + report["fields"]))
+    guarded["_egress"] = report
+    return guarded
 
 
 def serve_stdio(call_route: CallRouteFn, *, server_name: str = "stepstitch") -> Any:

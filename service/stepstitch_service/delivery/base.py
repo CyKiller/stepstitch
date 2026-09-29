@@ -57,9 +57,13 @@ class RecordWriter(ABC):
         raise NotImplementedError
 
     async def deliver(self, draft: Dict[str, Any]) -> DeliveryResult:
-        # Belt-and-suspenders: never send anything but a flat, sanitized draft.
+        # Belt-and-suspenders: never send anything but a flat, sanitized draft — and never
+        # one carrying a secret or known PII shape, whatever text it was assembled from.
+        from ..egress import guard_outbound
+
         assert_flat(draft)
-        return await self._create(draft)
+        guarded, _ = guard_outbound(draft)
+        return await self._create(guarded)
 
 
 class DeliveryService:

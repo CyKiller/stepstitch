@@ -184,9 +184,15 @@ def script_digest(script: str) -> str:
 
 
 def scrub_transcript(text: str) -> str:
+    """Credentials only — transcripts are machine output, and the PII digit rules would
+    destroy the line numbers and timings that make one useful. The shared secret and
+    encoded-payload detectors run after the transcript-specific rules, so a JWT, an API
+    key or an encoded blob a test printed never survives either."""
+    from .scrubber import redact_secrets
+
     for pattern, replacement in _TRANSCRIPT_PATTERNS:
         text = pattern.sub(replacement, text)
-    return text
+    return redact_secrets(text)
 
 
 # A URL's PII is its query string; its path is the evidence. The full scrubber's `url`
@@ -217,15 +223,14 @@ def _diagnostics_redactor(text: str) -> str:
     ``transfer.js:9`` is precisely what an agent needs and is not PII — while the query
     string (``?session=…``, ``?email=…``) is where a URL actually leaks and is removed.
     """
-    from .scrubber import _PII_PATTERNS
+    from .scrubber import redact_text_counted
 
     text = scrub_transcript(text)
     text = _QUERY_STRING.sub(r"\1?[redacted:query]", text)
-    for label, pattern in _PII_PATTERNS:
-        if label == "url":
-            continue
-        text = pattern.sub(f"[redacted:{label}]", text)
-    return text
+    # The same engine as ingest — secrets, encoded payloads, PII and any host-registered
+    # advisory detector — minus only the whole-URL pass.
+    out, _ = redact_text_counted(text, skip=frozenset({"url"}))
+    return out or ""
 
 
 def child_env(base: Optional[Dict[str, str]] = None,

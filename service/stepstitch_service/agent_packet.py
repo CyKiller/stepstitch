@@ -95,6 +95,17 @@ def privacy_posture(policy_name: str, scrub: Optional[Dict[str, Any]],
             "detail": "taken from the person who reported the bug; scrubbed server-side "
                       "before storage",
         },
+        "egress_guard": {
+            "scope": ["agent-token responses", "MCP tool results", "record deliveries"],
+            "detail": (
+                "everything sent on these paths passes an outbound detector set "
+                "(credentials, encoded payloads, emails, SSNs, IBANs, IP/MAC addresses, "
+                "Luhn-valid cards) and carries an _egress report of what was removed; "
+                "signed artifacts are scanned and reported, never edited"
+            ),
+            "limits": ("detection is evidence, not proof: names and postal addresses "
+                       "match no pattern"),
+        },
         "from_reproduction": {
             # States what the architecture proves and no more. The reproduction is a
             # generated test replayed locally — provably not the reported session — but it
@@ -126,6 +137,9 @@ def privacy_posture(policy_name: str, scrub: Optional[Dict[str, Any]],
 # are noise as a fix suggestion: the test is the thing doing the asserting, not the thing
 # that is broken.
 _GENERATED = re.compile(r"(repro\.spec\.ts|/\.stepstitch/|node_modules)")
+# A developer's home directory names their OS account — often their real name. The part of
+# the path an agent needs starts below it.
+_HOME_DIR = re.compile(r"^(?:\w:\\Users\\[^\\]+(?=\\)|/(?:home|Users)/[^/]+(?=/))", re.I)
 
 
 def likely_files(diagnostics: Optional[Dict[str, Any]], limit: int = 5) -> List[Dict[str, str]]:
@@ -145,7 +159,7 @@ def likely_files(diagnostics: Optional[Dict[str, Any]], limit: int = 5) -> List[
         match = re.search(r"((?:/|\w:\\)[^\s:]+\.(?:ts|tsx|js|jsx|py|rb|go|java|cs))", frame)
         if not match:
             continue
-        path = match.group(1)
+        path = _HOME_DIR.sub("~", match.group(1))
         if _GENERATED.search(path) or path in seen:
             continue
         seen.add(path)

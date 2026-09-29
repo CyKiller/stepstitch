@@ -17,11 +17,14 @@ Contract: see ``contracts/stepstitch.md`` (Ingestion API → server-side scrubbe
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
+import math
 import re
 from dataclasses import dataclass, replace
 from dataclasses import fields as dataclass_fields
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
+from urllib.parse import unquote
 
 # --- Route templating (Python mirror of redaction.ts routeTemplate) ----------
 
@@ -34,6 +37,9 @@ _LONG_HEX_RE = re.compile(r"^[0-9a-f]{16,}$", re.I)
 def _is_id_like_segment(seg: str) -> bool:
     if seg == "":
         return False
+    if seg.startswith(":"):
+        # Already a template parameter — idempotence on a clean template.
+        return False
     if seg.isdigit():
         return True
     if _UUID_RE.match(seg):
@@ -42,7 +48,13 @@ def _is_id_like_segment(seg: str) -> bool:
         return True
     if len(seg) >= 6 and any(c.isdigit() for c in seg):
         return True
-    return False
+    if "@" in seg:
+        # An email (or any addressed identity) used as a slug.
+        return True
+    # A segment that reads as a secret, an encoded blob or PII is an identifier by
+    # construction, whatever its digit count.
+    _, kinds = redact_text(seg)
+    return bool(kinds)
 
 
 def route_template(value: str) -> str:
@@ -50,7 +62,9 @@ def route_template(value: str) -> str:
 
     Strips scheme/host/query/hash entirely (query strings are a common NPI carrier)
     and replaces ID-like segments with ``:id``. Idempotent on an already-clean
-    template, so a well-behaved SDK payload passes through unchanged.
+    template, so a well-behaved SDK payload passes through unchanged. Percent-encoding
+    is decoded first — the SDK's ``routeTemplate`` does the same — so an encoded slug is
+    judged by what it says, not by how it was spelled.
     """
     if not value:
         return "/"
@@ -59,9 +73,76 @@ def route_template(value: str) -> str:
     path = stripped.split("?", 1)[0].split("#", 1)[0]
     if not path:
         return "/"
-    segments = [":id" if _is_id_like_segment(seg) else seg for seg in path.split("/")]
+    segments = [":id" if _is_id_like_segment(unquote(seg)) else seg
+                for seg in path.split("/")]
     joined = "/".join(segments)
     return joined or "/"
+
+
+# --- Secrets and encoded payloads ---------------------------------------------
+#
+# Applied BEFORE the PII passes. A credential or an encoded blob is one unit: left to
+# the digit rules, a JWT or an API key either survives whole (``\b`` never fires inside
+# a word) or is chewed into fragments that still carry most of the secret. These are
+# also the shapes an exfiltrating agent uses — encoded fragments packed into short links
+# and blobs — so catching them is what keeps a scrubbed trace from being a carrier.
+
+# ``secret_assignment`` keeps the name and drops the value: "password=[redacted]" tells an
+# engineer what went wrong without telling anyone the password.
+_SECRET_NAME = r"[A-Za-z0-9_]*(?:token|secret|password|passwd|api[_-]?key|credential)[A-Za-z0-9_]*"
+
+_SECRET_PATTERNS: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (
+    ("private_key", re.compile(
+        r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)",
+        re.S)),
+    ("bearer", re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{8,}")),
+    ("jwt", re.compile(r"\bey[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*")),
+    ("api_key", re.compile(
+        r"\b(?:sk-(?:proj-|ant-|live-|test-)?[A-Za-z0-9_-]{16,}"
+        r"|gh[pousr]_[A-Za-z0-9]{16,}"
+        r"|github_pat_[A-Za-z0-9_]{20,}"
+        r"|A(?:KIA|SIA)[0-9A-Z]{16}"
+        r"|xox[abprs]-[A-Za-z0-9-]{10,}"
+        r"|AIza[0-9A-Za-z_-]{35}"
+        r"|ss[ai]_[A-Za-z0-9_-]{8,})")),
+    ("data_uri", re.compile(r"(?i)\bdata:[\w.+-]+/[\w.+-]+(?:;[\w=.+-]+)*,[^\s\"'<>)]+")),
+    ("short_link", re.compile(
+        r"(?i)\b(?:bit\.ly|t\.co|tinyurl\.com|goo\.gl|ow\.ly|is\.gd|buff\.ly|rebrand\.ly"
+        r"|cutt\.ly|shorturl\.at|tiny\.cc)/[A-Za-z0-9_-]+")),
+    ("percent_encoded", re.compile(r"(?:%[0-9A-Fa-f]{2}){4,}")),
+)
+# A secret-named word, then either an explicit separator and any value, or whitespace
+# and a value that is credential-shaped (has a digit, 6+ chars) — so "the token expired"
+# stays readable while "token FAKE-SECRET-123" does not.
+_SECRET_ASSIGNMENT = re.compile(
+    rf"(?i)\b({_SECRET_NAME})(\s*[=:]\s*[^\s,;]+|\s+(?=[^\s,;]*\d)[^\s,;]{{6,}})")
+
+# High-entropy tokens: a whole whitespace/punctuation-delimited run of base64/base64url
+# or hex characters. A token touching a '.' is never a candidate — that is how file
+# paths, versions and hostnames stay out.
+_ENTROPY_CANDIDATE = re.compile(
+    r"(?<![A-Za-z0-9+/=_.\-])[A-Za-z0-9+/_\-]{24,}={0,2}(?![A-Za-z0-9+/=_.\-])")
+_HEX_RUN = re.compile(r"^[0-9a-fA-F]{24,}$")
+
+
+def _shannon_bits(value: str) -> float:
+    counts: Dict[str, int] = {}
+    for ch in value:
+        counts[ch] = counts.get(ch, 0) + 1
+    n = len(value)
+    return -sum((c / n) * math.log2(c / n) for c in counts.values())
+
+
+def _is_high_entropy(token: str) -> bool:
+    has_digit = any(c.isdigit() for c in token)
+    has_alpha = any(c.isalpha() for c in token)
+    if not (has_digit and has_alpha):
+        return False
+    if _HEX_RUN.match(token):
+        return True
+    has_upper = any(c.isupper() for c in token)
+    has_lower = any(c.islower() for c in token)
+    return has_upper and has_lower and _shannon_bits(token) >= 4.0
 
 
 # --- Free-text PII redaction --------------------------------------------------
@@ -73,17 +154,96 @@ def route_template(value: str) -> str:
 _PII_PATTERNS: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (
     ("url", re.compile(r"\b[a-z][a-z0-9+.-]*://\S+", re.I)),
     ("email", re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")),
-    ("ssn", re.compile(r"\b\d{3}-\d{2}-\d{4}\b")),
+    # Country code, check digits, then 4-char groups (spaced or compact). Redacted only
+    # when the mod-97 checksum passes — an unchecked shape would eat every error code.
+    ("iban", re.compile(r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,3})?\b")),
+    ("mac", re.compile(r"\b[0-9A-Fa-f]{2}(?:([:-])[0-9A-Fa-f]{2})(?:\1[0-9A-Fa-f]{2}){4}\b")),
+    # IPv4, but never inside a version string ("Chrome/120.0.0.0", "v1.2.3.4").
+    ("ip", re.compile(
+        r"(?<![\w./:])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)"
+        r"(?![\w.])")),
+    # IPv6 candidates; confirmed by the stdlib parser before anything is redacted.
+    ("ipv6", re.compile(r"(?<![\w:.])[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?![\w:])")),
+    ("ssn", re.compile(r"\b\d{3}([- ])\d{2}\1\d{4}\b")),
     # 13–19 digits, optionally separated by spaces/hyphens (cards, account numbers).
     ("card", re.compile(r"\b(?:\d[ -]?){13,19}\b")),
+    ("phone_intl", re.compile(r"(?<![\w+])\+(?!1\b)\d{1,3}(?:[\s.-]?\(?\d{1,4}\)?){2,5}(?!\w)")),
     (
         "phone",
         re.compile(r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"),
     ),
-    ("date", re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b")),
+    ("date", re.compile(r"\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|(?:19|20)\d{2}-\d{2}-\d{2})\b")),
     # Any remaining long digit run is treated as an identifier (account no., etc.).
     ("number", re.compile(r"\b\d{6,}\b")),
 )
+
+
+def iban_valid(value: str) -> bool:
+    """ISO 13616 mod-97 check. Decides whether an IBAN-shaped run is redacted at all."""
+    compact = re.sub(r"\s", "", value).upper()
+    if not (15 <= len(compact) <= 34):
+        return False
+    rearranged = compact[4:] + compact[:4]
+    try:
+        digits = "".join(str(int(ch, 36)) for ch in rearranged)
+    except ValueError:
+        return False
+    return int(digits) % 97 == 1
+
+
+def _ipv6_valid(value: str) -> bool:
+    if value.count(":") < 2 or len([g for g in value.split(":") if g]) < 3:
+        return False
+    try:
+        return isinstance(ipaddress.ip_address(value), ipaddress.IPv6Address)
+    except ValueError:
+        return False
+
+
+# Labelers for the patterns whose match is a CANDIDATE, not a verdict. Each returns the
+# label to redact under, or None to leave the text alone.
+_LABELERS: Dict[str, Callable[[str], Optional[str]]] = {
+    "iban": lambda m: "iban" if iban_valid(m) else None,
+    "ipv6": lambda m: "ip" if _ipv6_valid(m) else None,
+    "phone_intl": lambda m: "phone" if len(re.sub(r"\D", "", m)) >= 8 else None,
+    # Luhn is labeling precision, not a coverage decision: a 13-19 digit run that fails
+    # the checksum is still redacted, as a generic number.
+    "card": lambda m: "card" if luhn_valid(re.sub(r"\D", "", m)) else "number",
+}
+
+
+# Candidate patterns whose confirmed matches are reported under another kind.
+_REPORTED_AS = {"ipv6": "ip", "phone_intl": "phone"}
+
+
+def built_in_detector_kinds() -> List[str]:
+    """Every kind the built-in detectors can report, in the order they run."""
+    kinds = [k for k, _ in _SECRET_PATTERNS] + ["secret_assignment", "high_entropy"]
+    for kind, _ in _PII_PATTERNS:
+        reported = _REPORTED_AS.get(kind, kind)
+        if reported not in kinds:
+            kinds.append(reported)
+    if "number" not in kinds:  # the card labeler's fallback label
+        kinds.append("number")
+    return kinds
+
+
+def detector_set_sha256() -> str:
+    """Digest of the BUILT-IN detector set — the part ``policy_sha256`` cannot see.
+
+    ``policy_sha256`` hashes the operator-visible policy; the patterns every policy shares
+    live here, in code. When they change, evidence scrubbed before and after the change
+    must be distinguishable, so the scrub report carries both digests.
+    """
+    material = {
+        "secret": [[k, p.pattern] for k, p in _SECRET_PATTERNS],
+        "secret_assignment": _SECRET_ASSIGNMENT.pattern,
+        "entropy": [_ENTROPY_CANDIDATE.pattern, _HEX_RUN.pattern, 4.0],
+        "pii": [[k, p.pattern] for k, p in _PII_PATTERNS],
+        "labelers": sorted(_LABELERS),
+    }
+    payload = json.dumps(material, sort_keys=True, separators=(",", ":"))
+    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def luhn_valid(digits: str) -> bool:
@@ -125,6 +285,43 @@ def clear_advisory_detectors() -> None:
     _ADVISORY_DETECTORS.clear()
 
 
+def redact_secrets(text: str, fired: Optional[Callable[[str], None]] = None) -> str:
+    """Redact credentials and encoded payloads only — the first pass of ``redact_text``.
+
+    Exposed on its own for machine output (run transcripts) where the PII digit rules
+    would destroy line numbers and timings but a leaked token must still never survive.
+    """
+    def _note(kind: str) -> None:
+        if fired is not None:
+            fired(kind)
+
+    out = text
+    for kind, pattern in _SECRET_PATTERNS:
+        out, n = pattern.subn(f"[redacted:{kind}]", out)
+        for _ in range(n):
+            _note(kind)
+
+    def _assignment(match: "re.Match[str]") -> str:
+        tail = match.group(2)
+        sep = tail[: len(tail) - len(tail.lstrip(" \t\r\n=:"))]
+        if match.group(2)[len(sep):].startswith("[redacted"):
+            # Already scrubbed upstream — a second pass must be a no-op, not a new finding.
+            return match.group(0)
+        _note("secret_assignment")
+        return f"{match.group(1)}{sep}[redacted:secret_assignment]"
+
+    out = _SECRET_ASSIGNMENT.sub(_assignment, out)
+
+    def _entropy(match: "re.Match[str]") -> str:
+        token = match.group(0)
+        if not _is_high_entropy(token):
+            return token
+        _note("high_entropy")
+        return "[redacted:high_entropy]"
+
+    return _ENTROPY_CANDIDATE.sub(_entropy, out)
+
+
 def redact_text(
     text: Optional[str],
     extra: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (),
@@ -137,35 +334,51 @@ def redact_text(
     ``extra`` is an optional tuple of ``(label, compiled-pattern)`` applied AFTER the
     built-in passes — operator-configured additions that can only ADD redaction.
     """
+    out, counts = redact_text_counted(text, extra)
+    return out, list(counts)
+
+
+def redact_text_counted(
+    text: Optional[str],
+    extra: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (),
+    skip: frozenset = frozenset(),
+) -> Tuple[Optional[str], Dict[str, int]]:
+    """``redact_text`` with occurrence counts: ``(scrubbed_text, {kind: count})``.
+
+    The dict preserves first-fired order, so ``list(counts)`` is exactly the ``kinds`` list
+    ``redact_text`` has always returned. ``skip`` names built-in PII passes to leave out —
+    used only by the reproduction redactor, which replaces the ``url`` pass with a
+    query-string strip so a stack frame keeps its file and line.
+    """
     if text is None:
-        return None, []
-    kinds: List[str] = []
+        return None, {}
+    counts: Dict[str, int] = {}
 
-    def _fired(kind: str) -> None:
-        if kind not in kinds:
-            kinds.append(kind)
+    def _fired(kind: str, n: int = 1) -> None:
+        counts[kind] = counts.get(kind, 0) + n
 
-    out = text
+    out = redact_secrets(text, _fired)
     for kind, pattern in _PII_PATTERNS:
-        if kind == "card":
-            # Luhn is labeling precision, not a coverage decision: a 13-19 digit
-            # run that fails the checksum is still redacted, as a generic number.
-            def _card(match: "re.Match[str]") -> str:
-                digits = re.sub(r"\D", "", match.group(0))
-                label = "card" if luhn_valid(digits) else "number"
+        if kind in skip:
+            continue
+        labeler = _LABELERS.get(kind)
+        if labeler is not None:
+            def _labeled(match: "re.Match[str]", labeler=labeler) -> str:
+                label = labeler(match.group(0))
+                if label is None:
+                    return match.group(0)
                 _fired(label)
                 return f"[redacted:{label}]"
 
-            replaced = pattern.sub(_card, out)
-            out = replaced
+            out = pattern.sub(_labeled, out)
             continue
-        if pattern.search(out):
-            out = pattern.sub(f"[redacted:{kind}]", out)
-            _fired(kind)
+        out, n = pattern.subn(f"[redacted:{kind}]", out)
+        if n:
+            _fired(kind, n)
     for kind, pattern in extra:
-        if pattern.search(out):
-            out = pattern.sub(f"[redacted:{kind}]", out)
-            _fired(kind)
+        out, n = pattern.subn(f"[redacted:{kind}]", out)
+        if n:
+            _fired(kind, n)
     for name, detector in _ADVISORY_DETECTORS:
         try:
             literals = [str(v) for v in (detector(out) or []) if str(v)]
@@ -173,10 +386,11 @@ def redact_text(
             # A broken detector must never break ingestion — advisory means advisory.
             continue
         for literal in literals:
-            if literal in out:
+            n = out.count(literal)
+            if n:
                 out = out.replace(literal, f"[redacted:advisory:{name}]")
-                _fired(f"advisory:{name}")
-    return out, kinds
+                _fired(f"advisory:{name}", n)
+    return out, counts
 
 
 def compile_extra_redactions(
@@ -397,6 +611,7 @@ def _scrub_metadata(
     scrubbed: List[str],
     rejected: List[str],
     extra: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (),
+    kinds: Optional[Dict[str, int]] = None,
 ) -> Dict[str, Any]:
     """Drop forbidden + non-allowlisted keys; PII-scrub remaining string values."""
     if not isinstance(meta, dict):
@@ -419,10 +634,11 @@ def _scrub_metadata(
                     scrubbed.append(field_path)
                 clean[key] = templated[: policy.max_text_len]
                 continue
-            redacted, kinds = redact_text(value, extra)
+            redacted, counts = redact_text_counted(value, extra)
+            _merge_counts(kinds, counts)
             if redacted is not None and len(redacted) > policy.max_text_len:
                 redacted = redacted[: policy.max_text_len]
-            if kinds or redacted != value:
+            if counts or redacted != value:
                 scrubbed.append(field_path)
             clean[key] = redacted
         elif isinstance(value, (int, float, bool)) or value is None:
@@ -431,6 +647,28 @@ def _scrub_metadata(
             # Nested structures are not part of the structural contract → drop.
             scrubbed.append(field_path)
     return clean
+
+
+def _merge_counts(into: Optional[Dict[str, int]], counts: Dict[str, int]) -> None:
+    if into is None:
+        return
+    for kind, n in counts.items():
+        into[kind] = into.get(kind, 0) + n
+
+
+# A footstep timestamp is stored verbatim, so it may only LOOK like a timestamp: ISO-8601,
+# epoch digits, or the short ordinal tokens hand-rolled clients use ("t", "t1"). Anything
+# else is a free-text channel and is replaced, never stored.
+_TIMESTAMP_SHAPE = re.compile(r"^(?:[0-9TZtz:.+\- ]{1,40}|t\d{0,6})$")
+REDACTED_TIMESTAMP = "[redacted:timestamp]"
+
+
+# Identifier fields (``app_id``, ``project_id``, ``consent_version``) are stored verbatim
+# because they key tenancy and consent, so they must BE identifiers: no spaces, no '@',
+# nothing long enough to carry a sentence or a blob. The router's schema and the offline
+# policy classifier both enforce this one pattern.
+IDENTIFIER_PATTERN = r"^[A-Za-z0-9._:-]{1,128}$"
+IDENTIFIER_FIELDS = ("app_id", "project_id", "consent_version")
 
 
 # --- Public entry point -------------------------------------------------------
@@ -452,6 +690,7 @@ def scrub_trace_payload(
     """
     scrubbed_fields: List[str] = []
     rejected_fields: List[str] = []
+    kind_counts: Dict[str, int] = {}
     result = dict(payload)
     extra = compile_extra_redactions(policy)  # operator additions; () for the base policy
 
@@ -463,12 +702,13 @@ def scrub_trace_payload(
             rejected_fields.append("explanation")
         result["explanation"] = None
     else:
-        redacted, kinds = redact_text(explanation, extra)
+        redacted, counts = redact_text_counted(explanation, extra)
+        _merge_counts(kind_counts, counts)
         if redacted is not None and len(redacted) > policy.max_text_len:
             redacted = redacted[: policy.max_text_len]
             if "explanation" not in scrubbed_fields:
                 scrubbed_fields.append("explanation")
-        if kinds:
+        if counts:
             scrubbed_fields.append("explanation")
         result["explanation"] = redacted
 
@@ -479,6 +719,11 @@ def scrub_trace_payload(
         if not isinstance(step, dict):
             continue
         step = dict(step)
+        stamp = step.get("timestamp")
+        if isinstance(stamp, str) and not _TIMESTAMP_SHAPE.match(stamp):
+            scrubbed_fields.append(f"footsteps[{i}].timestamp")
+            _merge_counts(kind_counts, {"timestamp": 1})
+            step["timestamp"] = REDACTED_TIMESTAMP
         route = step.get("route", "/")
         templated = route_template(route if isinstance(route, str) else "/")
         if templated != route:
@@ -525,12 +770,13 @@ def scrub_trace_payload(
                 continue
             val = step.get(text_key)
             if isinstance(val, str):
-                redacted, kinds = redact_text(val, extra)
+                redacted, counts = redact_text_counted(val, extra)
+                _merge_counts(kind_counts, counts)
                 if redacted is not None and len(redacted) > policy.max_text_len:
                     redacted = redacted[: policy.max_text_len]
-                if kinds or (redacted != val):
-                    if kinds:
-                        scrubbed_fields.append(f"footsteps[{i}].{text_key}")
+                if counts or redacted != val:
+                    # A truncation is a change to what is stored, so it is reported too.
+                    scrubbed_fields.append(f"footsteps[{i}].{text_key}")
                 step[text_key] = redacted
 
         if "metadata" in step and step["metadata"] is not None:
@@ -542,6 +788,7 @@ def scrub_trace_payload(
                 scrubbed_fields,
                 rejected_fields,
                 extra,
+                kind_counts,
             )
         clean_steps.append(step)
     result["footsteps"] = clean_steps
@@ -556,6 +803,7 @@ def scrub_trace_payload(
             scrubbed_fields,
             rejected_fields,
             extra,
+            kind_counts,
         )
 
     if policy.reject_on_forbidden and rejected_fields:
@@ -577,6 +825,10 @@ def scrub_trace_payload(
         # evidence was scrubbed under EXACTLY these rules" — not "under a rule set that
         # shared a label with these rules".
         "policy_sha256": policy_sha256(policy),
+        # The built-in detectors every policy shares — what policy_sha256 cannot see.
+        "detector_set_sha256": detector_set_sha256(),
+        # What fired, by kind and occurrence. Counts only — never the values.
+        "kinds": kind_counts,
     }
     if policy.strict_schema_active:
         # An explicit, honest status: the strict schema checks ran and the stored
@@ -654,6 +906,9 @@ __all__ = [
     "MASKED_LABEL",
     "scrub_trace_payload",
     "redact_text",
+    "redact_text_counted",
+    "redact_secrets",
+    "detector_set_sha256",
     "route_template",
     "derive_policy",
     "apply_scrub_overrides",

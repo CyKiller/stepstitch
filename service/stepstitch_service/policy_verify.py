@@ -7,10 +7,11 @@ semantic selectors. This module runs a fixture file against a named profile plus
 the operator's overrides and reports, per fixture, whether the payload was
 **rejected** (a 422 at the live router), had a field **dropped**, had a value
 **redacted**, or was **accepted** untouched — and whether any ``must_not_persist``
-literal survived into what would have been stored.
+literal survived into what would have been stored, and separately whether it would
+reach an AI agent through the egress-guarded Safe Agent Packet built from that storage.
 
-Stdlib-only (imports only :mod:`scrubber`, :mod:`profiles`, :mod:`replayability`)
-so the CLI keeps working in a minimal environment. Router parity is enforced by
+Stdlib-only (the package's own pure modules, nothing third-party) so the CLI keeps
+working in a minimal environment. Router parity is enforced by
 ``service/tests/test_policy_verify.py``: every shipped fixture is also POSTed at a
 real router and the classifications must agree, so this offline mirror can never
 quietly drift from the live 422 behavior.
@@ -25,6 +26,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from .profiles import available_profiles, get_profile, policy_from_profile
 from .replayability import SUPPORTED_STEP_TYPES
 from .scrubber import (
+    IDENTIFIER_FIELDS,
+    IDENTIFIER_PATTERN,
     ScrubPolicy,
     ScrubRejection,
     apply_scrub_overrides,
@@ -59,6 +62,11 @@ def _schema_violations(payload: Dict[str, Any]) -> List[str]:
     for key in payload:
         if key not in KNOWN_TOP_KEYS:
             problems.append(f"unknown top-level key {key!r}")
+    for key in IDENTIFIER_FIELDS:
+        value = payload.get(key)
+        if value is not None and not (isinstance(value, str)
+                                      and re.match(IDENTIFIER_PATTERN, value)):
+            problems.append(f"{key} is not an identifier")
     if "footsteps" not in payload or not isinstance(payload.get("footsteps"), list):
         problems.append("footsteps missing or not a list")
         return problems
@@ -146,6 +154,10 @@ class FixtureResult:
     outcome: str
     leaked: List[str]
     detail: List[str]
+    # Reported, not gated: anything here is also in ``leaked`` (the packet is built from
+    # storage), so the gate is already failed. It answers the second question an operator
+    # asks — "and would an agent have seen it?"
+    agent_leaked: List[str] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
@@ -158,6 +170,7 @@ class FixtureResult:
             "outcome": self.outcome,
             "passed": self.passed,
             "leaked": self.leaked,
+            "agent_leaked": self.agent_leaked,
             "detail": self.detail,
         }
 
@@ -186,6 +199,30 @@ def _scan_for_leaks(scrubbed: Optional[Dict[str, Any]], literals: List[str]) -> 
         return []
     blob = json.dumps(scrubbed)
     return [lit for lit in literals if lit in blob]
+
+
+def _agent_view(scrubbed: Optional[Dict[str, Any]], policy: ScrubPolicy) -> Any:
+    """The Safe Agent Packet an agent would receive for this stored payload, after the
+    egress guard — built offline from the same pure functions the host uses."""
+    if scrubbed is None:
+        return None
+    from .agent_packet import build_packet
+    from .compiler import generate_playwright_test
+    from .egress import guard_outbound
+    from .integrations.base import build_trace_summary
+    from .replayability import score_trace
+
+    footsteps = scrubbed.get("footsteps") or []
+    packet = build_packet(
+        trace_id="policy-verify",
+        summary=build_trace_summary("policy-verify", footsteps).as_dict(),
+        replayability=score_trace(footsteps),
+        policy_name=policy.name, scrub=None,
+        recommended_next_step="",
+        playwright_code=generate_playwright_test("policy-verify", footsteps),
+    )
+    guarded, _ = guard_outbound(packet)
+    return guarded
 
 
 def build_policy(profile_name: str, overrides: Dict[str, Any]) -> ScrubPolicy:
@@ -230,6 +267,7 @@ def verify_fixtures(
         literals_raw = fx.get("must_not_persist") or []
         literals = [str(item) for item in literals_raw]
         cls = classify_payload(payload, policy)
+        agent_view = _agent_view(cls.scrubbed, policy)
         results.append(
             FixtureResult(
                 name=name,
@@ -237,6 +275,8 @@ def verify_fixtures(
                 outcome=cls.outcome,
                 leaked=_scan_for_leaks(cls.scrubbed, literals),
                 detail=cls.detail,
+                agent_leaked=([] if agent_view is None
+                              else [lit for lit in literals if lit in json.dumps(agent_view)]),
             )
         )
     return FixtureRunResult(profile=profile_name, results=results)
@@ -249,6 +289,8 @@ def render_report(run: FixtureRunResult) -> str:
         line = f"  {status}  {r.name} — expected {r.expected}, got {r.outcome}"
         if r.leaked:
             line += f", LEAKED: {r.leaked}"
+        if r.agent_leaked:
+            line += f", REACHES AN AGENT: {r.agent_leaked}"
         lines.append(line)
         if not r.passed:
             for d in r.detail:

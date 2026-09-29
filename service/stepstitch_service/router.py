@@ -33,6 +33,7 @@ from .attestation import (
     verify_recipe,
 )
 from .delivery.base import DeliveryError, DeliveryService, RecordWriter
+from .egress import guard_outbound
 from .evidence import ASSERTED, GRADE_MEANING, MEASURED, SIGNED, TamperError, derive_grade
 from .evidence import verify_bundle as verify_evidence_bundle
 from .fix_memory import fingerprint as fix_fingerprint
@@ -45,6 +46,7 @@ from .replayability import score_trace
 from .retention import purge_expired_traces
 from .scrubber import (
     FINANCIAL_SERVICES_ENTERPRISE,
+    IDENTIFIER_PATTERN,
     ScrubPolicy,
     ScrubRejection,
     scrub_trace_payload,
@@ -96,11 +98,11 @@ class IngestTracePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # Neutral default for hand-rolled clients that omit it; the SDK always sets its own.
-    app_id: str = "unknown"
-    project_id: Optional[str] = None
+    app_id: str = Field(default="unknown", pattern=IDENTIFIER_PATTERN)
+    project_id: Optional[str] = Field(default=None, pattern=IDENTIFIER_PATTERN)
     explanation: Optional[str] = None
     footsteps: List[FootstepSchema]
-    consent_version: Optional[str] = None
+    consent_version: Optional[str] = Field(default=None, pattern=IDENTIFIER_PATTERN)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -172,6 +174,11 @@ def _actor_id(actor: Any) -> str:
     if isinstance(actor, dict):
         return str(actor.get("user_id") or actor.get("id") or actor.get("sub") or "unknown")
     return str(actor)
+
+
+def _is_agent(actor: Any) -> bool:
+    """True when the caller is a registered agent token (the host stamps ``agent_id``)."""
+    return isinstance(actor, dict) and bool(actor.get("agent_id"))
 
 
 def _loads(value: Any) -> Any:
@@ -368,6 +375,12 @@ def create_stepstitch_router(
         project_id: Optional[str] = Query(None),
         limit: int = Query(50, ge=1, le=200),
     ) -> Dict[str, Any]:
+        agent_caller = _is_agent(admin)
+        if agent_caller and user_id:
+            # Filtering by end user would let an agent test whether a given person filed
+            # a report — a membership oracle over the operator's customers.
+            raise HTTPException(status_code=403,
+                                detail="agents cannot filter sessions by end user")
         clauses: List[str] = []
         params: List[Any] = []
         if user_id:
@@ -385,17 +398,22 @@ def create_stepstitch_router(
         )
         await _audit("stepstitch.list", _actor_id(admin),
                      {"user_id": user_id, "project_id": project_id})
-        items = [
-            {
+        items = []
+        for r in rows:
+            item: Dict[str, Any] = {
                 "trace_id": r[0],
                 "app_id": r[1],
                 "project_id": r[2],
-                "user_id": r[3],
-                "explanation": r[4],
                 "created_at": r[5].isoformat() if hasattr(r[5], "isoformat") else r[5],
             }
-            for r in rows
-        ]
+            if agent_caller:
+                # An agent is a third party to the customer: it learns that words exist,
+                # never the words or whose they are.
+                item["has_explanation"] = bool(r[4])
+            else:
+                item["user_id"] = r[3]
+                item["explanation"] = r[4]
+            items.append(item)
         return {"status": "ok", "sessions": items}
 
     @router.get("/audit")
@@ -992,6 +1010,10 @@ def create_stepstitch_router(
             sdk_build=sdk_build,
             latest_verification=latest,
         )
+        # Guard BEFORE signing. A signed document cannot be cleaned on the way out without
+        # breaking its signature, so it must be clean when it is signed — including when
+        # the row it is built from predates today's detectors.
+        bundle, _ = guard_outbound(bundle)
         digest = bundle_sha256(bundle)
         signature = None
         if sign_blob is not None:
@@ -1148,6 +1170,8 @@ def create_stepstitch_router(
             issued_at=datetime.now(timezone.utc).isoformat(),
             sdk_build=sdk_build,
         )
+        # Clean before it is signed — see the attestation above.
+        statement, _ = guard_outbound(statement)
         signature = None
         if sign_blob is not None:
             try:

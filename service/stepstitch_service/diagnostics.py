@@ -287,7 +287,9 @@ def scrub_diagnostics(record: Dict[str, Any], redact: Any) -> Dict[str, Any]:
         if isinstance(value, list):
             return [walk(v) for v in value]
         if isinstance(value, dict):
-            return {k: walk(v) for k, v in value.items()}
+            # Keys too: an application's own objects can be keyed by an email or an id.
+            return {(redact(k) if isinstance(k, str) else k): walk(v)
+                    for k, v in value.items()}
         return value
 
     cleaned = walk(record)

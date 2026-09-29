@@ -66,6 +66,20 @@ Every ingestion is scrubbed server-side before storage, independent of the SDK (
 - `stacktrace`
 - `url`
 
+### Built-in free-text detectors (every profile)
+
+Credentials and encoded payloads first, then PII. Each redaction is counted by kind in the per-trace scrub report; values are never recorded.
+
+- Kinds: `private_key`, `bearer`, `jwt`, `api_key`, `data_uri`, `short_link`, `percent_encoded`, `secret_assignment`, `high_entropy`, `url`, `email`, `iban`, `mac`, `ip`, `ssn`, `card`, `phone`, `date`, `number`
+- Detector set digest: `sha256:6af22e092cac19d0ab091b39b9d7237cb287fdbd8f33cccfb95eed7498060e09` (stored on every trace as `_scrub.detector_set_sha256`)
+
+## Egress guard (outbound to AI agents)
+
+Every response to an agent token and every MCP tool result passes a second, outbound detector pass (`service/stepstitch_service/egress.py`) and carries an `_egress` report of what it removed; record deliveries pass the same check. It is a high-precision subset, so reproduction code, digests and commands are left as they are (pinned by a no-false-positive test over every MCP tool). Signed artifacts are cleaned before signing and scanned, never edited, on the way out.
+
+- Kinds: `private_key`, `bearer`, `jwt`, `api_key`, `data_uri`, `short_link`, `percent_encoded`, `secret_assignment`, `high_entropy`, `email`, `iban`, `mac`, `ip`, `ssn`, `card`
+- Limit: detection is evidence, not proof — names and postal addresses match no pattern.
+
 ## Operational controls
 
 - Consent required before capture; GPC and DNT respected (capture stays off).
