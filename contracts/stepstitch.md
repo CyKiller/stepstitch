@@ -78,12 +78,24 @@ defense-in-depth and is enforced independently of the SDK. Proven in
 
 The scrubber, under the default **`financial-services-enterprise`** policy:
 
-- **Free text (`explanation`, unmasked labels, allowed metadata strings):** redacts
-  SSNs, card/account numbers (13–19 digits), phone numbers, emails, DOB-like dates,
-  long numeric identifiers, and raw URLs — replaced with `[redacted:<kind>]`. Capped to
+- **Free text (`explanation`, unmasked labels, allowed metadata strings):** first
+  redacts credentials and encoded payloads — private keys, bearer tokens, JWTs, known
+  API-key prefixes, secret-named assignments, `data:` URIs, scheme-less short links,
+  percent-encoded runs and high-entropy base64/hex tokens — then SSNs, card/account
+  numbers (13–19 digits, Luhn-labelled), IBANs (mod-97 checked), IP and MAC addresses,
+  phone numbers (US and international), emails, dates (including ISO), long numeric
+  identifiers, and raw URLs — replaced with `[redacted:<kind>]`. Capped to
   `max_text_len`. A policy may set `free_text: "disabled"` to drop `explanation` whole.
-- **Routes:** re-templated server-side (scheme/host/query/hash stripped, ID-like
-  segments → `:id`) so a leaked raw URL cannot persist. Idempotent on a clean template.
+  Names and postal addresses match no pattern; the advisory-detector seam is where an
+  NER adapter would add them.
+- **Routes:** percent-decoded, then re-templated server-side (scheme/host/query/hash
+  stripped; ID-like segments — digits, UUIDs, long hex, anything containing `@`, and
+  any segment a free-text detector fires on — → `:id`) so a leaked raw URL cannot
+  persist. Idempotent on a clean template.
+- **Identifiers and timestamps:** `app_id`, `project_id` and `consent_version` must
+  match `^[A-Za-z0-9._:-]{1,128}$` (422 otherwise); a footstep `timestamp` that is not
+  timestamp-shaped (ISO-8601, epoch digits, or a `t`/`t<n>` ordinal) is stored as
+  `[redacted:timestamp]`.
 - **Metadata:** strict **allowlist** (top-level: `sdk_version`, `sdk_build`, `viewport`,
   `user_agent`, `consent_version`, `locale`, release/environment fields; footstep:
   `status`, `error_type`, `method`, `endpoint`, `source_path`, `line`, `column`,
@@ -115,7 +127,10 @@ checks — they can never disable them.
 The ingestion **response** and the stored `trace_metadata._scrub` both carry the report:
 
 ```jsonc
-{ "scrub_status": "clean" | "scrubbed", "scrubbed_fields": ["explanation", "metadata.cookies"], "policy": "financial-services-enterprise" }
+{ "scrub_status": "clean" | "scrubbed", "scrubbed_fields": ["explanation", "metadata.cookies"],
+  "policy": "financial-services-enterprise", "policy_sha256": "sha256:…",
+  "detector_set_sha256": "sha256:…",   // the built-in detectors every policy shares
+  "kinds": { "email": 1, "jwt": 1 } }   // occurrence counts by kind — never values
 ```
 
 This is the compliance proof: a reviewer can see exactly what the server stripped at
@@ -206,12 +221,21 @@ MCP/OpenAPI connector:
   structure-derived, exposed via the MCP server and `openapi-v2.json`.
 - **admin-only** — operator-only; never an agent/MCP tool (carries `explanation`, raw
   bodies, or governance/verification reads).
+
+**Egress guard.** Every JSON response to an agent token, and every MCP tool result
+whatever token the MCP server holds, passes `guard_outbound`
+(`service/stepstitch_service/egress.py`) — a high-precision subset of the free-text
+detectors — and carries `"_egress": {"mode", "kinds", "fields"}`. Redactions are audited as
+`stepstitch.egress_redaction` (kinds and field paths, never values). Signed artifacts
+(attestation, FixProof) are guarded **before** signing and only scanned on the way out,
+reported in an `X-StepStitch-Egress` header, so a signature is never broken. Proven in
+`service/tests/test_egress_guard.py` and `server/tests/test_egress_canaries.py`.
 - **admin-only · human-gated** — a governed write loop; off unless the host injects it,
   dry-run by default, requires a named approver, and never an agent tool.
 
 | Method + path | Purpose | Agent surface | Audit action |
 |---|---|---|---|
-| `GET /sessions` | list traces (no bodies) | ✅ agent-safe | `stepstitch.list` |
+| `GET /sessions` | list traces (no bodies; an agent token gets `has_explanation` instead of `explanation`/`user_id`, and may not filter by `user_id`) | ✅ agent-safe | `stepstitch.list` |
 | `GET /session/{id}/summary` | sanitized, structure-derived summary | ✅ agent-safe | `stepstitch.summary` |
 | `GET /session/{id}/replayability` | reproducibility score only | ✅ agent-safe | `stepstitch.replayability` |
 | `GET /session/{id}/privacy-posture` | per-trace scrub report + never-captured list | ✅ agent-safe | `stepstitch.privacy_posture` |

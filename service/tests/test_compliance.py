@@ -79,3 +79,23 @@ def test_healthcare_profile_crosswalk_cites_hipaa_not_reg_sp():
     assert "HIPAA" in doc
     # Healthcare column set is HIPAA + NIST, not the financial regimes.
     assert "SEC Reg S-P (2024)" not in doc
+
+
+def test_the_packet_lists_the_built_in_detectors_and_pins_their_digest():
+    from stepstitch_service.scrubber import built_in_detector_kinds, detector_set_sha256
+
+    md = build_evidence()
+    for kind in ("jwt", "api_key", "high_entropy", "short_link", "iban", "ip", "email"):
+        assert f"`{kind}`" in md, kind
+    assert set(built_in_detector_kinds()) >= {"jwt", "iban", "card", "number"}
+    assert detector_set_sha256() in md
+
+
+def test_the_packet_describes_the_egress_guard_and_its_limit():
+    from stepstitch_service.egress import egress_detector_kinds
+
+    md = build_evidence()
+    assert "## Egress guard (outbound to AI agents)" in md
+    assert "`number`" not in md.split("## Egress guard")[1].split("##")[0]
+    assert set(egress_detector_kinds()) >= {"jwt", "email", "card"}
+    assert "names and postal addresses" in md

@@ -20,12 +20,13 @@ from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, field_validator
 
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
 from stepstitch_service.compiler import DEFAULT_BASE_URL
 from stepstitch_service.diagnostics import SOURCE_LOCAL_REPRODUCTION, EnvelopeMismatch
+from stepstitch_service.egress import REDACT, SCAN, guard_outbound
 from stepstitch_service.execution import execution_summary
 from stepstitch_service.profiles import load_profile
 from stepstitch_service.replayability import score_trace
@@ -49,6 +50,9 @@ from .demo import dashboard_csp, render_dashboard
 from .metrics import Metrics
 
 _SERVICE_PREFIX = "/api/stepstitch/v1"
+# Signed artifacts: editing one breaks its signature, so the egress guard reports on them
+# and leaves the bytes alone.
+_SIGNED_PATH = re.compile(r"/session/[^/]+/(?:attestation|fixproof)(?:/download)?$")
 
 
 class AgentRegistration(BaseModel):
@@ -877,6 +881,8 @@ def build_app(
                             "agent_id": agent["id"], "scope": agent["scope"],
                             "method": request.method, "path": path,
                         })
+                        response = await call_next(request)
+                        return await _guard_agent_response(agent, path, response)
                     else:
                         await audit("stepstitch.agent_denied", agent["name"], {
                             "agent_id": agent["id"], "scope": agent["scope"],
@@ -890,6 +896,40 @@ def build_app(
                             )},
                         )
         return await call_next(request)
+
+    async def _guard_agent_response(agent: dict, path: str, response: Any) -> Any:
+        """The egress boundary for agent tokens: every JSON body an agent receives passes
+        ``guard_outbound`` on its way out. Ingest scrubbing decides what is stored; this
+        decides what is sent — and it covers rows stored before today's detectors, text
+        assembled after ingest, and anything a future endpoint forgets."""
+        if not (response.headers.get("content-type") or "").startswith("application/json"):
+            return response
+        body = b"".join([chunk async for chunk in response.body_iterator])
+        headers = {k: v for k, v in response.headers.items()
+                   if k.lower() not in ("content-length", "content-type")}
+        try:
+            doc = json.loads(body)
+        except ValueError:
+            return Response(body, status_code=response.status_code, headers=headers,
+                            media_type="application/json")
+        mode = SCAN if _SIGNED_PATH.search(path) else REDACT
+        guarded, report = guard_outbound(doc, mode=mode)
+        if report["kinds"]:
+            await audit("stepstitch.egress_redaction", agent["name"], {
+                "agent_id": agent["id"], "path": path, "mode": mode,
+                "kinds": report["kinds"], "fields": report["fields"],
+            })
+        if mode == SCAN:
+            headers["X-StepStitch-Egress"] = (
+                "scan; " + ",".join(f"{k}:{n}" for k, n in sorted(report["kinds"].items()))
+                if report["kinds"] else "scan; clean")
+            # The original bytes, not a re-serialization: a signed document goes out
+            # exactly as it was signed.
+            return Response(body, status_code=response.status_code, headers=headers,
+                            media_type="application/json")
+        if isinstance(guarded, dict):
+            guarded["_egress"] = report
+        return JSONResponse(guarded, status_code=response.status_code, headers=headers)
 
     @app.post("/admin/agents")
     async def create_agent(req: AgentRegistration,
