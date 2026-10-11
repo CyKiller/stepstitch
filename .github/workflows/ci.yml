@@ -32,7 +32,7 @@ jobs:
           # it is the peeled tag commit, so the CI evidence describes the exact source
           # being published. Guarded by test_release_workflow_identity.py.
           ref: ${{ inputs.source_sha || github.sha }}
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # vitest 4 (rolldown) needs node:util styleText, added in Node 20.12. The published
           # SDK still targets node >=18.18 (its engines claim); this only affects the dev/test run.
@@ -63,7 +63,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "20"
           cache: "npm"
@@ -86,7 +86,7 @@ jobs:
           # it is the peeled tag commit, so the CI evidence describes the exact source
           # being published. Guarded by test_release_workflow_identity.py.
           ref: ${{ inputs.source_sha || github.sha }}
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "20"
           cache: "npm"
@@ -167,7 +167,7 @@ jobs:
           # it is the peeled tag commit, so the CI evidence describes the exact source
           # being published. Guarded by test_release_workflow_identity.py.
           ref: ${{ inputs.source_sha || github.sha }}
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "20"
           cache: "npm"
@@ -267,7 +267,7 @@ jobs:
           # it is the peeled tag commit, so the CI evidence describes the exact source
           # being published. Guarded by test_release_workflow_identity.py.
           ref: ${{ inputs.source_sha || github.sha }}
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # Node 20 for consistency with the sdk/web jobs (vitest 4 needs >=20.12).
           node-version: "20"
@@ -326,7 +326,7 @@ jobs:
           # it is the peeled tag commit, so the CI evidence describes the exact source
           # being published. Guarded by test_release_workflow_identity.py.
           ref: ${{ inputs.source_sha || github.sha }}
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "20"
           cache: "npm"
@@ -374,7 +374,7 @@ jobs:
           # it is the peeled tag commit, so the CI evidence describes the exact source
           # being published. Guarded by test_release_workflow_identity.py.
           ref: ${{ inputs.source_sha || github.sha }}
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "20"
           cache: "npm"
@@ -409,7 +409,7 @@ jobs:
           # it is the peeled tag commit, so the CI evidence describes the exact source
           # being published. Guarded by test_release_workflow_identity.py.
           ref: ${{ inputs.source_sha || github.sha }}
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "20"
           cache: "npm"
@@ -443,7 +443,7 @@ jobs:
         run: python3 scripts/live_financial_loop.py
       - name: Upload the FixProof this run measured
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fixproof
           path: ${{ runner.temp }}/fixproof.json
