@@ -4,10 +4,15 @@ fastapi>=0.104
 uvicorn[standard]>=0.30
 asyncpg>=0.29
 # Operator SSO: RS256 JWT verification against the OIDC issuer's JWKS.
-PyJWT[crypto]>=2.8
+PyJWT[crypto]>=2.15.0
 # Schema migrations. Alembic runs over a sync SQLAlchemy/psycopg2 engine at
 # deploy/startup only; the runtime trace path stays on asyncpg.
 alembic>=1.13
 # psycopg2 is the sync driver Alembic/SQLAlchemy use for migrations ONLY
 # (runtime DB access uses asyncpg, not this).
 psycopg2-binary>=2.9
+# Security floors for transitive deps (pulled in by fastapi/uvicorn/httpx). Floors here so
+# an old resolver cache or constraints file can never install a version with a known CVE.
+anyio>=4.14.2
+h11>=0.16.0
+idna>=3.15
