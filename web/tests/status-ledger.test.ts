@@ -32,26 +32,33 @@ function statedCount(label: string): number {
  * the same reason the Python guard can shell out to `pytest --collect-only` from inside
  * a test body (`service/tests/test_status_ledger.py`).
  */
-function collectedCount(): { count: number; failure?: string } {
+function collectedCount(): { count: number; unexpanded: string[]; failure?: string } {
   const bin = join(process.cwd(), "node_modules", ".bin", process.platform === "win32" ? "vitest.cmd" : "vitest");
-  const proc = spawnSync(bin, ["list"], { cwd: process.cwd(), encoding: "utf8", timeout: 150_000 });
+  // vitest 5 made `list` parse files statically by default, which never evaluates an
+  // `it.each` table and reports it as one "%s" entry. Runtime collection imports the
+  // file (still without running test bodies) and expands every case.
+  const proc = spawnSync(bin, ["list", "--no-static-parse"], { cwd: process.cwd(), encoding: "utf8", timeout: 150_000 });
   // Gate on the exit code, never on a substring of stdout — every collected test id is
   // printed, and plenty of them contain words like "error" or "fail", so a substring
   // check matches always and silently passes.
   if (proc.status !== 0) {
     const tail = `${proc.stdout ?? ""}${proc.stderr ?? ""}`.slice(-300);
-    return { count: 0, failure: `cannot collect here (status=${proc.status}): ${tail}` };
+    return { count: 0, unexpanded: [], failure: `cannot collect here (status=${proc.status}): ${tail}` };
   }
-  return { count: proc.stdout.split("\n").filter((line) => line.trim() !== "").length };
+  const ids = proc.stdout.split("\n").filter((line) => line.trim() !== "");
+  return { count: ids.length, unexpanded: ids.filter((id) => /%[sdifjoO#]/.test(id)) };
 }
 
 describe("docs/STATUS.md states the real Web test count", () => {
   it("matches what vitest collects in web/", (ctx) => {
-    const { count, failure } = collectedCount();
+    const { count, unexpanded, failure } = collectedCount();
     if (failure) {
       ctx.skip(failure);
       return;
     }
+    // A template name that comes back unexpanded means the count is wrong in a way that
+    // looks right. Fail rather than trust it.
+    expect(unexpanded, `vitest listed parameterized tests without expanding them: ${unexpanded.join(", ")}`).toEqual([]);
     expect(
       statedCount("Web"),
       `docs/STATUS.md says the Web suite has ${statedCount("Web")} tests; vitest collects ${count}. Update the Gates table.`,

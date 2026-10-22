@@ -106,6 +106,10 @@ describe("doc-example inventory", () => {
   })
 })
 
+// Each case builds a full TypeScript program over the SDK source. The first one in a
+// worker pays the cold start, which overran vitest's 5s default on a CI runner.
+const TYPECHECK_TIMEOUT_MS = 30_000
+
 describe("published TypeScript examples type-check against the real SDK", () => {
   const cases: Array<[string, DocExample]> = [
     ["README usage-ts", README.get("usage-ts")!],
@@ -117,7 +121,7 @@ describe("published TypeScript examples type-check against the real SDK", () => 
     expect(example.lang).toBe("ts")
     const diagnostics = typeCheck(example.code)
     expect(diagnostics, diagnostics.join("\n")).toEqual([])
-  })
+  }, TYPECHECK_TIMEOUT_MS)
 
   it("the checker itself catches a broken snippet (self-test)", () => {
     const diagnostics = typeCheck(
@@ -125,7 +129,7 @@ describe("published TypeScript examples type-check against the real SDK", () => 
         'new StepStitchTracker({ appId: 42 })\n',
     )
     expect(diagnostics.length).toBeGreaterThan(0)
-  })
+  }, TYPECHECK_TIMEOUT_MS)
 })
 
 describe("published JavaScript examples parse as the modules they claim to be", () => {
