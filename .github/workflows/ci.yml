@@ -429,6 +429,10 @@ jobs:
       - name: Install the service (local host + MCP client)
         run: pip install "./service[local,mcp]"
       - name: Install Chromium
+        # The browser is launched by examples/tiny-transfer's own pinned Playwright, so
+        # install ITS Chromium build. From the repo root this fetched the root Playwright's
+        # build, which only matched while both pins happened to share a revision.
+        working-directory: examples/tiny-transfer
         run: npx playwright install --with-deps chromium
       # The hermetic tiny-transfer job proves the OUTBOUND payload against a stub.
       # This job proves everything that stub could never see: the strict scrubber,
