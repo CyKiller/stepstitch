@@ -2,10 +2,8 @@
 
 Railway bills allocated memory per minute for as long as a service is awake, whether or
 not a request ever arrives. Between 2026-06-12 and 2026-08-24 both services in the
-`stepstitch` project ran with `sleepApplication` disabled and never scaled to zero: the
-project burned 1,740 GB-hours of memory against 23.5 vCPU-hours of actual compute —
-roughly 74x more memory rented than work done, and ~95% of a ~$25/month bill for a
-synthetic demo nobody was querying.
+`stepstitch` project ran with `sleepApplication` disabled and never scaled to zero, so
+nearly the whole bill was idle reserved memory for a synthetic demo nobody was querying.
 
 The setting was originally flipped in the Railway dashboard, which is exactly why it
 could regress: dashboard state is invisible to review and silently overridden by whatever
