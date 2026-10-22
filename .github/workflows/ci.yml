@@ -428,12 +428,14 @@ jobs:
       # real MCP stdio to it via mcp_cli (httpx + mcp).
       - name: Install the service (local host + MCP client)
         run: pip install "./service[local,mcp]"
-      - name: Install Chromium
-        # The browser is launched by examples/tiny-transfer's own pinned Playwright, so
-        # install ITS Chromium build. From the repo root this fetched the root Playwright's
-        # build, which only matched while both pins happened to share a revision.
-        working-directory: examples/tiny-transfer
-        run: npx playwright install --with-deps chromium
+      - name: Install Chromium (both Playwright pins)
+        # Two Playwrights drive browsers here: examples/tiny-transfer's own pin launches
+        # the user's browser (live-report.mjs, verify.mjs), and the root pin is what the
+        # host's runner uses to freeze/verify the repro. Each needs its own Chromium build.
+        # Installing only one worked while both pins happened to share a revision.
+        run: |
+          npx playwright install --with-deps chromium
+          (cd examples/tiny-transfer && npx playwright install chromium)
       # The hermetic tiny-transfer job proves the OUTBOUND payload against a stub.
       # This job proves everything that stub could never see: the strict scrubber,
       # the stored SQLite row, the deny-by-default 422, MCP retrieval with a
