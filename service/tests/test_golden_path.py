@@ -82,7 +82,7 @@ def test_golden_path_end_to_end():
     ingest = client.post(f"{_PFX}/session", json={
         "app_id": "demo-app",
         "project_id": "proj-1",
-        "explanation": "checkout broke; my SSN 123-45-6789, email me@bank.com",
+        "explanation": "checkout broke; my SSN 123-45-6789, email me@bank.example",
         "footsteps": [
             {"timestamp": "t", "type": "navigation",
              "route": "/accounts/8675309/checkout", "label": "[masked]"},
@@ -93,7 +93,7 @@ def test_golden_path_end_to_end():
                  "status": 500,
                  "endpoint": "https://app.example.test/api/accounts/8675309?ssn=1",
                  "response_body": "SECRET",
-                 "message": "raw message with email me@bank.com",
+                 "message": "raw message with email me@bank.example",
              }},
         ],
         "consent_version": "v1",
@@ -105,7 +105,7 @@ def test_golden_path_end_to_end():
 
     # The stored row carries no raw NPI and no forbidden values.
     stored = json.dumps(db.rows[tid])
-    for raw in ("123-45-6789", "me@bank.com", "8675309", "SECRET", "session="):
+    for raw in ("123-45-6789", "me@bank.example", "8675309", "SECRET", "session="):
         assert raw not in stored, f"leaked {raw!r}"
 
     # 2. LIST shows it.
@@ -128,7 +128,7 @@ def test_golden_path_end_to_end():
     diagnostic = client.get(f"{_PFX}/session/{tid}/diagnostic-summary").json()["diagnostic"]
     assert diagnostic["summary"]["diagnostic_type"] == "api_error"
     assert "raw error messages" in diagnostic["never_included"]
-    assert "me@bank.com" not in json.dumps(diagnostic)
+    assert "me@bank.example" not in json.dumps(diagnostic)
 
     # 5. PRIVACY POSTURE reports the scrub + never-captured list.
     posture = client.get(f"{_PFX}/session/{tid}/privacy-posture").json()

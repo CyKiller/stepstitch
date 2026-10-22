@@ -38,7 +38,7 @@ from stepstitch_service.scrubber import (
         ("email jane.doe@example.com please", "email", "[redacted:email]"),
         ("born 04/12/1980 fyi", "date", "[redacted:date]"),
         ("ref number 987654 here", "number", "[redacted:number]"),
-        ("see https://portal.bank.com/accounts/55?ssn=1", "url", "[redacted:url]"),
+        ("see https://portal.bank.example/accounts/55?ssn=1", "url", "[redacted:url]"),
     ],
 )
 def test_redact_text_each_category(text, kind, marker):
@@ -67,7 +67,7 @@ def test_redact_text_none():
 @pytest.mark.parametrize(
     "raw,expected",
     [
-        ("https://portal.bank.com/accounts/8675309/distributions?ssn=1",
+        ("https://portal.bank.example/accounts/8675309/distributions?ssn=1",
          "/accounts/:id/distributions"),
         ("/accounts/123?token=abc#frag", "/accounts/:id"),
         ("/dashboard", "/dashboard"),
@@ -85,21 +85,21 @@ def test_route_template(raw, expected):
 def _hostile_payload():
     return {
         "explanation": "I'm John, SSN 123-45-6789, acct 1234567890123, "
-                       "email john@bank.com, call 555-123-4567",
+                       "email john@bank.example, call 555-123-4567",
         "footsteps": [
             {
                 "timestamp": "t",
                 "type": "navigation",
                 # raw URL with query string smuggling NPI
-                "route": "https://portal.bank.com/accounts/8675309?ssn=123456789",
+                "route": "https://portal.bank.example/accounts/8675309?ssn=123456789",
                 "target": "#submit",
                 "label": "Balance: 9876543210",
                 "metadata": {
                     "status": 500,
                     "method": "POST",
-                    "endpoint": "https://portal.bank.com/api/accounts/8675309?ssn=1",
+                    "endpoint": "https://portal.bank.example/api/accounts/8675309?ssn=1",
                     "error_type": "TypeError",
-                    "source_path": "https://portal.bank.com/static/app-123456.js?token=abc",
+                    "source_path": "https://portal.bank.example/static/app-123456.js?token=abc",
                     "line": 42,
                     "column": 9,
                     "message": "raw user message SSN 123-45-6789",
@@ -110,7 +110,7 @@ def _hostile_payload():
         ],
         "metadata": {
             "sdk_version": "0.2.0",
-            "user_agent": "Mozilla contact ops@bank.com",
+            "user_agent": "Mozilla contact ops@bank.example",
             "request_body": "ssn=123-45-6789",
             "cookies": "session=SECRETCOOKIE",
         },
@@ -122,7 +122,7 @@ def test_scrub_blocks_all_npi_in_explanation():
     exp = scrubbed["explanation"]
     assert "123-45-6789" not in exp
     assert "1234567890123" not in exp
-    assert "john@bank.com" not in exp
+    assert "john@bank.example" not in exp
     assert "555-123-4567" not in exp
     assert report["scrub_status"] == "scrubbed"
     assert "explanation" in report["scrubbed_fields"]
@@ -156,7 +156,7 @@ def test_scrub_drops_forbidden_top_level_metadata():
     assert "cookies" not in meta
     assert meta["sdk_version"] == "0.2.0"
     # allowlisted user_agent kept, but its embedded email is redacted.
-    assert "ops@bank.com" not in meta["user_agent"]
+    assert "ops@bank.example" not in meta["user_agent"]
     assert "metadata.request_body" in report["scrubbed_fields"]
 
 
@@ -254,8 +254,8 @@ def test_router_never_stores_npi_from_hostile_post():
     for raw in (
         "123-45-6789",
         "1234567890123",
-        "john@bank.com",
-        "ops@bank.com",
+        "john@bank.example",
+        "ops@bank.example",
         "8675309",
         "9876543210",
         "SECRETBODY9999",
