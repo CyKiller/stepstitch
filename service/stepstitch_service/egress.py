@@ -35,7 +35,7 @@ from typing import Any, Dict, List, Tuple
 from .scrubber import luhn_valid, redact_text_counted
 
 # Built-in PII passes egress leaves out: each would fire on ordinary code and evidence.
-_EGRESS_SKIP = frozenset({"url", "phone", "phone_intl", "date", "number", "card"})
+_EGRESS_SKIP = frozenset({"url", "path", "phone", "phone_intl", "date", "number", "card"})
 
 # Values under these keys are cryptographic material StepStitch produced itself. They are
 # high-entropy by design and are never customer text.

@@ -84,7 +84,9 @@ The scrubber, under the default **`financial-services-enterprise`** policy:
   percent-encoded runs and high-entropy base64/hex tokens — then SSNs, card/account
   numbers (13–19 digits, Luhn-labelled), IBANs (mod-97 checked), IP and MAC addresses,
   phone numbers (US and international), emails, dates (including ISO), long numeric
-  identifiers, and raw URLs — replaced with `[redacted:<kind>]`. Capped to
+  identifiers, raw URLs, and filesystem paths (Windows drive, UNC, extended-length and
+  `%VAR%` roots, POSIX home and system roots, `~`, relative Windows paths — the whole
+  path, leaf included, as `[redacted:path]`) — replaced with `[redacted:<kind>]`. Capped to
   `max_text_len`. A policy may set `free_text: "disabled"` to drop `explanation` whole.
   Names and postal addresses match no pattern; the advisory-detector seam is where an
   NER adapter would add them.
