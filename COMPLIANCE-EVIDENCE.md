@@ -71,7 +71,7 @@ Every ingestion is scrubbed server-side before storage, independent of the SDK (
 Credentials and encoded payloads first, then PII. Each redaction is counted by kind in the per-trace scrub report; values are never recorded.
 
 - Kinds: `private_key`, `bearer`, `jwt`, `api_key`, `data_uri`, `short_link`, `percent_encoded`, `secret_assignment`, `high_entropy`, `url`, `path`, `email`, `iban`, `mac`, `ip`, `ssn`, `card`, `phone`, `date`, `number`
-- Detector set digest: `sha256:728752ff3c88ad58742cac209ac83be5edf16b72481316356145a3f311889db2` (stored on every trace as `_scrub.detector_set_sha256`)
+- Detector set digest: `sha256:d1ad815d47ab7b6fe2b992591c551dcb0407d42ead4600267e01fe8a2fbc8274` (stored on every trace as `_scrub.detector_set_sha256`)
 
 ## Egress guard (outbound to AI agents)
 

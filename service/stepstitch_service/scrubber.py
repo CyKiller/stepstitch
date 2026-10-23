@@ -157,16 +157,22 @@ def _is_high_entropy(token: str) -> bool:
 # web route ``/home`` on its own stays a route).
 _PATH_ROOT = (
     r"(?:\\\\\?\\)?(?<![\w])[A-Za-z]:[\\/]"
+    r"|\\\\\?\\UNC\\[^\s\\/]+\\[^\s\\/]+"
     r"|\\\\[^\s\\/?]+\\[^\s\\/]+"
     r"|%[A-Za-z_][A-Za-z0-9_]*%[\\/]"
-    r"|(?<![\w.:/~])(?:~|/(?:Users|home|Volumes|private|tmp|var/folders))(?=/)"
+    r"|(?<![\w./~])(?:~|/(?:Users|home|Volumes|private|tmp|var/folders))(?=/)"
 )
 # An unquoted path stops at whitespace and never ends on trailing punctuation.
 _PATH_BODY = r"[^\s\"'<>|]*[^\s\"'<>|.,;:!?)]"
+# A relative segment, or what an earlier pass left of one (a high-entropy or encoded
+# segment is already a ``[redacted:<kind>]`` token by the time this pass runs).
+_PATH_SEGMENT = r"(?:[\w.-]{2,}|\[redacted:[a-z_:]+\])"
 _PATH = re.compile(
     rf"([\"'])(?:{_PATH_ROOT})[^\"'\r\n]*\1"           # quoted: spaces allowed
     rf"|(?:{_PATH_ROOT}){_PATH_BODY}"                  # unquoted
-    r"|(?<![\w\\:%])[\w.-]{2,}(?:\\[\w.-]{2,})+"       # relative Windows path, 2+ char segments
+    # Relative Windows path. A match only starts at the head of a run, never inside a
+    # '.'/'-' run, so a long punctuation run costs linear time, not quadratic.
+    rf"|(?<![\w.\-\\:%\]]){_PATH_SEGMENT}(?:\\{_PATH_SEGMENT})+"
 )
 
 _PII_PATTERNS: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (
@@ -790,7 +796,10 @@ def scrub_trace_payload(
                 continue
             val = step.get(text_key)
             if isinstance(val, str):
-                redacted, counts = redact_text_counted(val, extra)
+                # A selector is CSS, where a backslash is an escape ("checkout\.submit"),
+                # never a path separator.
+                skip = frozenset({"path"}) if text_key == "target" else frozenset()
+                redacted, counts = redact_text_counted(val, extra, skip=skip)
                 _merge_counts(kind_counts, counts)
                 if redacted is not None and len(redacted) > policy.max_text_len:
                     redacted = redacted[: policy.max_text_len]
