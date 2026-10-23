@@ -16,7 +16,7 @@ nothing. The full CI gate is re-run as the release gate before any artifact is p
 | Service (compiler, router, privacy, connectors) | **1043** | `PYTHONPATH=service pytest service/tests/` |
 | Host (auth, dashboard, real Postgres) | **254** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **40** | `npx vitest run` |
-| Web (marketing site + copy claims) | **232** | `cd web && npx vitest run` |
+| Web (marketing site + copy claims) | **249** | `cd web && npx vitest run` |
 
 Counts are the number pytest/vitest **collect**, and every row is enforced: each suite
 verifies its own row — `test_status_ledger.py` (Service), `test_status_ledger_host.py`
