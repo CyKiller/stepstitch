@@ -149,10 +149,30 @@ def _is_high_entropy(token: str) -> bool:
 #
 # Applied in priority order: most specific first so a card number is not chewed
 # up by the generic long-digit pass, and structured tokens (url/email) are removed
-# before the numeric passes touch their internals.
+# before the numeric passes touch their internals. Filesystem paths run straight after
+# URLs, so the email, IP and number passes never see a path's insides.
+
+# Where a pasted filesystem path starts: a drive (``C:\``, ``c:/``, ``\\?\C:\``), a UNC
+# share, an environment variable, or a POSIX home/system root (case-sensitive, so the
+# web route ``/home`` on its own stays a route).
+_PATH_ROOT = (
+    r"(?:\\\\\?\\)?(?<![\w])[A-Za-z]:[\\/]"
+    r"|\\\\[^\s\\/?]+\\[^\s\\/]+"
+    r"|%[A-Za-z_][A-Za-z0-9_]*%[\\/]"
+    r"|(?<![\w.:/~])(?:~|/(?:Users|home|Volumes|private|tmp|var/folders))(?=/)"
+)
+# An unquoted path stops at whitespace and never ends on trailing punctuation.
+_PATH_BODY = r"[^\s\"'<>|]*[^\s\"'<>|.,;:!?)]"
+_PATH = re.compile(
+    rf"([\"'])(?:{_PATH_ROOT})[^\"'\r\n]*\1"           # quoted: spaces allowed
+    rf"|(?:{_PATH_ROOT}){_PATH_BODY}"                  # unquoted
+    r"|(?<![\w\\:%])[\w.-]{2,}(?:\\[\w.-]{2,})+"       # relative Windows path, 2+ char segments
+)
 
 _PII_PATTERNS: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (
     ("url", re.compile(r"\b[a-z][a-z0-9+.-]*://\S+", re.I)),
+    # The whole path, leaf included: a home folder carries the user's name.
+    ("path", _PATH),
     ("email", re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")),
     # Country code, check digits, then 4-char groups (spaced or compact). Redacted only
     # when the mod-97 checksum passes — an unchecked shape would eat every error code.

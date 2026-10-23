@@ -229,7 +229,7 @@ def _diagnostics_redactor(text: str) -> str:
     text = _QUERY_STRING.sub(r"\1?[redacted:query]", text)
     # The same engine as ingest — secrets, encoded payloads, PII and any host-registered
     # advisory detector — minus only the whole-URL pass.
-    out, _ = redact_text_counted(text, skip=frozenset({"url"}))
+    out, _ = redact_text_counted(text, skip=frozenset({"url", "path"}))
     return out or ""
 
 

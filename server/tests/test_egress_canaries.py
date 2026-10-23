@@ -47,6 +47,11 @@ CANARIES = {
     "ssn": "123-45-6789",
 }
 
+# A filesystem path is stopped at ingest only. Egress deliberately keeps paths, because a
+# stack frame's file and line is exactly what an agent needs, so this canary is planted
+# only where a pasted path really arrives: the customer's words and a label.
+PATH_CANARY = "C:\\Users\\canary.person\\Documents\\canary-plan.txt"
+
 
 def _client(tmp_path):
     conn = connect_local(tmp_path / "local.db")
@@ -122,9 +127,12 @@ def _call_every_tool(client, token, trace_id):
     return results
 
 
-def _assert_no_canary(results):
+def _assert_no_canary(results, canaries=CANARIES):
     blob = json.dumps(results)
-    leaked = {name: value for name, value in CANARIES.items() if value in blob}
+    # Search for each value as the blob spells it: JSON doubles a backslash, so a raw
+    # Windows path would never match and its check would pass vacuously.
+    leaked = {name: value for name, value in canaries.items()
+              if json.dumps(value)[1:-1] in blob}
     assert not leaked, f"canaries reached an agent: {sorted(leaked)}"
 
 
@@ -167,6 +175,23 @@ def test_canaries_already_in_storage_are_stopped_on_the_way_out(tmp_path):
     audited = conn.execute("SELECT count(*) FROM stepstitch_audit "
                            "WHERE action = 'stepstitch.egress_redaction'").fetchone()[0]
     assert audited > 0, "every egress redaction is audited"
+
+
+def test_a_pasted_path_planted_through_ingest_never_reaches_an_agent(tmp_path):
+    client, _ = _client(tmp_path)
+    r = client.post(f"{_PFX}/session", headers=_bearer(INGEST), json={
+        "app_id": "tiny-transfer",
+        "explanation": f"The export saved to {PATH_CANARY} and then the page froze.",
+        "footsteps": [
+            {"timestamp": "2026-07-30T12:00:00Z", "type": "click", "route": "/transfer",
+             "target": '[data-testid="transfer-submit"]', "label": f"Open {PATH_CANARY}"},
+        ],
+    })
+    assert r.status_code == 200, r.text
+
+    results = _call_every_tool(client, _agent(client), r.json()["trace_id"])
+    assert all("_status" not in v or v["_status"] < 500 for v in results.values()), results
+    _assert_no_canary(results, {"path": PATH_CANARY})
 
 
 def test_a_clean_trace_needs_no_egress_redaction_on_any_tool(tmp_path):
