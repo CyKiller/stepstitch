@@ -92,3 +92,49 @@ def test_every_profile_redacts_a_pasted_path(name):
     scrubbed, report = scrub_trace_payload(payload, policy)
     assert "dana" not in scrubbed["explanation"] and P in scrubbed["explanation"]
     assert report["kinds"].get("path") == 1
+
+
+@pytest.mark.parametrize("text", [
+    "-" * 20000, "." * 20000, "a." * 20000 + "\\", "C:\\a" + "." * 20000,
+], ids=["hyphens", "dots", "dotted-words", "drive-then-dots"])
+def test_the_path_pass_stays_linear_on_punctuation_runs(text):
+    import time
+    from stepstitch_service.scrubber import _PATH
+    start = time.perf_counter()
+    _PATH.sub("", text)
+    assert time.perf_counter() - start < 1.0
+
+
+@pytest.mark.parametrize("text", [
+    "AppData\\Temp\\3f9a8c7d6e5b4a39281706f5e4d3c2b1\\x.dmp",
+    "dana\\3f9a8c7d6e5b4a39281706f5e4d3c2b1\\tax-return.pdf",
+    "dana\\%E2%9C%93%E2%9C%93\\tax-return.pdf",
+])
+def test_a_rootless_path_is_redacted_whole_across_an_earlier_redaction(text):
+    out, kinds = redact_text(text)
+    assert out == P and "path" in kinds
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("file:/Users/dana/x.txt", f"file:{P}"),
+    ("path:/Users/dana/notes.txt", f"path:{P}"),
+    ("\\\\?\\UNC\\fileserver\\share\\dana.txt", P),
+])
+def test_less_common_spellings_of_a_path_are_redacted(text, expected):
+    out, kinds = redact_text(text)
+    assert out == expected and "path" in kinds
+
+
+@pytest.mark.parametrize("name", available_profiles())
+@pytest.mark.parametrize("target", ['[data-testid="checkout\\.submit"]', "#form\\.email"])
+def test_a_css_escaped_selector_is_not_a_path(name, target):
+    # The SDK CSS-escapes selectors, so a backslash there is an escape, not a separator.
+    policy = load_profile(name)
+    if policy.selector_policy == "approved_testids":
+        pytest.skip("targets are checked against the selector allowlist instead")
+    payload = {"metadata": {},
+               "footsteps": [{"timestamp": "2026-07-30T12:00:00Z", "type": "click",
+                              "route": "/transfer", "target": target, "label": "[masked]"}]}
+    scrubbed, report = scrub_trace_payload(payload, policy)
+    assert scrubbed["footsteps"][0]["target"] == target
+    assert "path" not in report["kinds"]
