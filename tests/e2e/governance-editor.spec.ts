@@ -87,6 +87,21 @@ async function openGovernance(page: import("@playwright/test").Page) {
   await expect(page.getByText("Scrub policy").first()).toBeVisible({ timeout: 15_000 })
 }
 
+test("opening Governance renders it once, so a late second render cannot wipe pending edits", async ({ page }) => {
+  // go() rendered the view AND set location.hash; the hashchange that followed routed
+  // and rendered it a second time. Each render refetches the policy and remounts the
+  // editor with a fresh copy, so when the second one landed after an edit (a slow CI
+  // runner), it silently dropped the unsaved pattern: the save then PUT a policy
+  // without it, returned 200, and the reload above found nothing. Counting the reads is
+  // deterministic: the second request goes out before the first response returns.
+  const reads: string[] = []
+  page.on("request", (r) => {
+    if (r.url().includes("/admin/config/scrub") && r.method() === "GET") reads.push(r.url())
+  })
+  await openGovernance(page)
+  expect(reads).toHaveLength(1)
+})
+
 test("a saved pattern survives a full reload — the save actually persists", async ({ page }) => {
   await openGovernance(page)
 
