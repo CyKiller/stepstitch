@@ -57,6 +57,25 @@ test.describe("public demo console", () => {
     await expect(page.locator("h1")).toContainText(FIXED_SHAPE_HEADING)
   })
 
+  test("back and forward still route: only the console's own hash writes are skipped", async ({ page }) => {
+    // The console ignores the hashchange its own navigation fires (routing it rendered
+    // every view twice, and a late render could wipe pending edits). Back and forward
+    // are URL changes the console did not make, so they must still move the view.
+    await page.getByRole("button", { name: "Failures", exact: true }).first().click()
+    await expect(page).toHaveURL(/#\/board$/)
+    await page.getByRole("button", { name: FIXED_SHAPE_HEADING }).first().click()
+    await expect(page).toHaveURL(/#\/shape\/shp_/)
+    await expect(page.locator("h1")).toContainText(FIXED_SHAPE_HEADING)
+
+    await page.goBack()
+    await expect(page).toHaveURL(/#\/board$/)
+    await expect(page.locator("#crumbs")).toHaveText("Failures")
+
+    await page.goForward()
+    await expect(page).toHaveURL(/#\/shape\/shp_/)
+    await expect(page.locator("h1")).toContainText(FIXED_SHAPE_HEADING)
+  })
+
   test("the workflow stripe is the dominant status: state plus one next action", async ({ page }) => {
     await page.getByRole("button", { name: FIXED_SHAPE_HEADING }).first().click()
     const stripe = page.locator(".workflow-stripe")

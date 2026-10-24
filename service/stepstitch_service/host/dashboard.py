@@ -2911,12 +2911,21 @@ DASHBOARD_HTML = r"""<!doctype html>
   // The console had no addressable state at all: a failure could not be linked to, and a
   // refresh dropped you back on Overview. Hash routing keeps that inside the page (no server
   // routes, nothing for the CSP to object to).
-  var applyingHash = false;
+  // A view that writes its own hash has already rendered, but the hashchange that write
+  // fires arrives later, after any synchronous guard has reset. Routing it would render
+  // the view a second time, and an async render (Governance) remounts over whatever the
+  // operator did in between: a pattern added but not yet saved was silently dropped.
+  // So the console remembers the hashes it wrote and lets their events pass by.
+  var ownHashes = [];
   function setHash(next) {
-    if (applyingHash || location.hash === next) return;
-    applyingHash = true;
+    if (location.hash === next) return;
+    ownHashes.push(next);
     location.hash = next;
-    applyingHash = false;
+  }
+  function onHashChange(e) {
+    var own = ownHashes.indexOf(new URL(e.newURL).hash);
+    if (own !== -1) { ownHashes.splice(own, 1); return; }
+    routeFromHash();   // back/forward, or a link: someone else changed the URL
   }
   function routeFromHash() {
     var raw = (location.hash || "").replace(/^#\/?/, "");
@@ -2955,7 +2964,7 @@ DASHBOARD_HTML = r"""<!doctype html>
   if (token) {
     loadStatus();
     // Deep links: a failure has a URL, so it can be shared, bookmarked and reloaded.
-    window.addEventListener("hashchange", routeFromHash);
+    window.addEventListener("hashchange", onHashChange);
     routeFromHash();
   } else { renderGate(); }
 })();
