@@ -18,7 +18,8 @@ Automation prepares everything; publication requires two deliberate human acts:
    or release anything (`skip-github-release`).
 3. **Cut the release (human act #1).** Dispatch **`release-cut.yml`** with the version.
    It refuses a version that doesn't match `main`, creates the `vX.Y.Z` tag + GitHub
-   Release from the CHANGELOG, and records who cut it in the run summary.
+   Release from the CHANGELOG, records who cut it in the run summary, and labels the
+   release PR `autorelease: tagged` so release-please can open the next one.
 4. **Approve publication (human act #2).** Dispatch **`.github/workflows/release.yml`**
    (`gh workflow run release.yml --ref main -f version=X.Y.Z`). Its publish jobs sit
    behind the protected **`release` environment** and park until CyKiller approves the

@@ -20,6 +20,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write # relabel the release PR once its tag exists
 
 jobs:
   cut:
@@ -68,5 +69,26 @@ jobs:
             echo "- **Next step:** dispatch \`release (publish on tag)\` with version ${VERSION};"
             echo "  publication waits for approval on the \`release\` environment."
           } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      # With skip-github-release, release-please never creates the release, so it
+      # never moves its own PR from `pending` to `tagged`. While a merged PR stays
+      # `pending`, every later release-please run aborts and still reports success,
+      # and no new release PR opens. This step does the move release-please would have.
+      - name: Mark the release PR tagged so release-please keeps running
+        run: |
+          TITLE="chore(main): release ${VERSION}"
+          # Listed on its own line: a failed lookup must stop the job, not read as "none".
+          PENDING="$(gh pr list --state merged --base main --label 'autorelease: pending' \
+            --limit 50 --json number,title --jq '.[] | "\(.number)\t\(.title)"')"
+          PR="$(printf '%s\n' "$PENDING" | awk -F '\t' -v title="$TITLE" '$2 == title { print $1 }')"
+          if [ -z "$PR" ]; then
+            echo "::warning::No merged PR titled '${TITLE}' is labelled autorelease: pending, so nothing was relabelled."
+            exit 0
+          fi
+          gh api --silent -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR}/labels" \
+            -f 'labels[]=autorelease: tagged'
+          gh api --silent -X DELETE "repos/${GITHUB_REPOSITORY}/issues/${PR}/labels/autorelease%3A%20pending"
+          echo "- **Release PR:** #${PR} marked \`autorelease: tagged\`" >> "$GITHUB_STEP_SUMMARY"
         env:
           GH_TOKEN: ${{ github.token }}
