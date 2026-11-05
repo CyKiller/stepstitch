@@ -21,7 +21,10 @@ process is not careful, which is exactly the opposite of what this project claim
    bot). This writes the version into every tracked file. It does **not** create the tag
    (`skip-github-release`).
 3. **Cut the tag:** `gh workflow run release-cut.yml -f version=X.Y.Z`. It verifies the
-   version matches `main`, creates the tag + GitHub Release, and records the actor.
+   version matches `main`, creates the tag + GitHub Release, and records the actor. It also
+   moves the release PR from `autorelease: pending` to `autorelease: tagged`. release-please
+   won't open another release PR while a merged one is still `pending`, and its run stays
+   green while it refuses, so check that label if a release PR doesn't appear.
 4. **Dispatch `release.yml`.** On the tag: `gh workflow run release.yml --ref vX.Y.Z`. If
    the release workflow itself was just fixed, dispatch on `main` and name the version
    instead: `gh workflow run release.yml --ref main -f version=X.Y.Z` — a tag dispatch
