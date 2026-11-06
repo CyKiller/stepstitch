@@ -133,7 +133,7 @@ jobs:
           # it is the peeled tag commit, so the CI evidence describes the exact source
           # being published. Guarded by test_release_workflow_identity.py.
           ref: ${{ inputs.source_sha || github.sha }}
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
           cache: "pip"
@@ -182,7 +182,7 @@ jobs:
       # node_modules (probe can't answer, runs proceed) and the e2e job installs Chromium.
       # A machine's browser inventory must never change a unit-test verdict.
       - run: npm ci
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
           cache: "pip"
@@ -219,7 +219,7 @@ jobs:
           # it is the peeled tag commit, so the CI evidence describes the exact source
           # being published. Guarded by test_release_workflow_identity.py.
           ref: ${{ inputs.source_sha || github.sha }}
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
           cache: "pip"
@@ -275,7 +275,7 @@ jobs:
           # Node 20: this job runs no vitest, so it stays on the SDK's oldest still-tested line.
           node-version: "20"
           cache: "npm"
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
       - name: Install
@@ -333,7 +333,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
       # The demo app needs no database and no tokens, which is exactly why it can be
@@ -416,7 +416,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
       - name: Install the SDK (builds dist/)
@@ -470,7 +470,7 @@ jobs:
           # it is the peeled tag commit, so the CI evidence describes the exact source
           # being published. Guarded by test_release_workflow_identity.py.
           ref: ${{ inputs.source_sha || github.sha }}
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
           cache: "pip"
