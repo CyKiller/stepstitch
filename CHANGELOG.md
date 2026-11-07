@@ -4,6 +4,29 @@ All notable changes to StepStitch are recorded here. Versions are repo-wide tags
 SDK (`@stepstitch/tracker`) and the backend (`stepstitch_service`) are versioned in
 lockstep per `RELEASE.md`.
 
+## [0.13.0](https://github.com/CyKiller/stepstitch/compare/v0.12.0...v0.13.0) (2026-11-07)
+
+
+### Features
+
+* **privacy:** egress guard and secret detectors — agents get structure, not secrets ([b0732b4](https://github.com/CyKiller/stepstitch/commit/b0732b40dc77a2866dd501a76c988fe8e74a70fd))
+* **privacy:** filesystem paths never survive ingest ([e1167ea](https://github.com/CyKiller/stepstitch/commit/e1167ea7c487d98ce51b106535c1a8d7ad6efd26))
+
+
+### Bug Fixes
+
+* **ci:** give the live loop Chromium for both Playwright pins ([38e4db7](https://github.com/CyKiller/stepstitch/commit/38e4db72c71761a7cfb91aef8f046226743292a9))
+* **ci:** install the live loop's Chromium from the example that launches it ([bb029e1](https://github.com/CyKiller/stepstitch/commit/bb029e1efd54b62a86588ea5fa068d6aa20f9b96))
+* **ci:** keep release-please running after a release is cut ([4071849](https://github.com/CyKiller/stepstitch/commit/4071849ba0e6ba610d116c2a39a04f4126216247))
+* **cli-shim:** tell uv which Python to use, or npx start fails on a stock Mac ([dd567d9](https://github.com/CyKiller/stepstitch/commit/dd567d96101db4a34a7902ed2abfcc683694c0fb))
+* **dashboard:** render a view once per navigation, not twice ([d09e6d4](https://github.com/CyKiller/stepstitch/commit/d09e6d4c92b00aec352e4080ab61165f8186f25d))
+* **deps:** patch known-vulnerable Python and web dependencies ([cfcd6dc](https://github.com/CyKiller/stepstitch/commit/cfcd6dc1359e6ab384c952dc2fc49fe09fb64486))
+* **infra:** declare sleepApplication in railway.json so idle services stop billing ([b1d9c17](https://github.com/CyKiller/stepstitch/commit/b1d9c17107fe57d982f4a4b67cc26b367603b04b))
+* **privacy:** keep the path pass linear and selectors intact ([fa1385f](https://github.com/CyKiller/stepstitch/commit/fa1385f9f48fe3d17864f0a640c4e194661b53ec))
+* **product:** sharpen proof, accessibility, and repo hygiene ([eb0c5af](https://github.com/CyKiller/stepstitch/commit/eb0c5af6d8d901b0cb8d051ac3e270f552deea93))
+* **replayability:** charge templated routes once per trace ([da8dd1c](https://github.com/CyKiller/stepstitch/commit/da8dd1c0d165d57c4bbed847f9b6993f22089371))
+* **web:** patch Next.js RCE in next/og and clear production audit ([9afde81](https://github.com/CyKiller/stepstitch/commit/9afde815f2e2ca67ebbf92cb7324dfe02b43edb7))
+
 ## [0.12.0](https://github.com/CyKiller/stepstitch/compare/v0.11.0...v0.12.0) (2026-08-09)
 
 
