@@ -164,6 +164,31 @@ def test_the_child_environment_is_an_allowlist_not_an_inheritance():
     assert not any("secret" in v for v in env.values())
 
 
+def test_the_windows_allowlist_matches_names_the_way_windows_does(monkeypatch):
+    # Python upper-cases every os.environ key on Windows, so an allowlist naming
+    # `SystemRoot` dropped SYSTEMROOT and Node aborted in InitializeOncePerProcess before
+    # a single test ran. Windows names are case-insensitive; the allowlist must be too.
+    monkeypatch.setattr("stepstitch_service.runner._WINDOWS", True)
+    env = child_env(base={
+        "PATH": r"C:\Program Files\nodejs",
+        "SYSTEMROOT": r"C:\WINDOWS",
+        "NPM_CONFIG_CACHE": r"C:\cache",
+        "GITHUB_TOKEN": "gh-secret",
+        "STEPSTITCH_ADMIN_TOKEN": "admin-secret",
+    })
+    assert env["SYSTEMROOT"] == r"C:\WINDOWS"
+    assert env["NPM_CONFIG_CACHE"] == r"C:\cache"
+    assert "GITHUB_TOKEN" not in env and "STEPSTITCH_ADMIN_TOKEN" not in env
+
+
+def test_posix_environment_names_stay_case_sensitive(monkeypatch):
+    # On POSIX `systemroot` and `SystemRoot` are different variables; folding case there
+    # would widen the allowlist for no reason.
+    monkeypatch.setattr("stepstitch_service.runner._WINDOWS", False)
+    env = child_env(base={"PATH": "/usr/bin", "SYSTEMROOT": "x", "path": "y"})
+    assert env == {"PATH": "/usr/bin"}
+
+
 def test_the_runner_never_builds_a_shell_command():
     calls = []
     _run(runner=fake_runner([1], calls))

@@ -24,10 +24,15 @@
  */
 import { execFileSync } from "node:child_process"
 import { mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
+// Playwright's own CLI, run by this same Node. Not `npx`: on Windows that is npx.cmd, which
+// execFileSync cannot start without a shell. Resolved up front so a missing install stops
+// the script here, instead of surfacing as a FAILED run and a false not_fixed verdict.
+const PLAYWRIGHT_CLI = createRequire(join(HERE, "package.json")).resolve("@playwright/test/cli")
 const HOST = process.env.STEPSTITCH_HOST || "http://localhost:8000"
 const TOKEN = process.env.STEPSTITCH_VERIFY_TOKEN || process.env.STEPSTITCH_ADMIN_TOKEN
 const TRACE_ID = process.env.TRACE_ID
@@ -82,7 +87,8 @@ async function fetchReproduction() {
 /** Run the reproduction and return whether it PASSED. A failure here is data, not an error. */
 function runReproduction(label) {
   try {
-    execFileSync("npx", ["playwright", "test", "--config", join(work, "config.ts"), "--reporter=line"],
+    execFileSync(process.execPath,
+      [PLAYWRIGHT_CLI, "test", "--config", join(work, "config.ts"), "--reporter=line"],
       { cwd: HERE, stdio: "inherit" })
     console.log(`  ${label}: PASSED`)
     return true

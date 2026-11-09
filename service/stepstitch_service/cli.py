@@ -24,6 +24,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from .node_tools import npx_argv
+
 __all__ = ["main", "run_doctor", "Check", "mask"]
 
 PASS = "pass"
@@ -451,7 +453,7 @@ def run_doctor(
                         "Capture and evidence work without it.",
     ))
     if node:
-        playwright = _tool_version(["npx", "--no-install", "playwright", "--version"])
+        playwright = _tool_version(npx_argv("--no-install", "playwright", "--version"))
         checks.append(Check(
             "playwright",
             PASS if playwright else WARN,

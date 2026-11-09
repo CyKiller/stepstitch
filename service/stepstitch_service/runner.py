@@ -41,6 +41,7 @@ from .diagnostics import (
     parse_trace,
     scrub_diagnostics,
 )
+from .node_tools import npx_argv
 
 logger = logging.getLogger("stepstitch.runner")
 
@@ -70,6 +71,16 @@ _ENV_ALLOWLIST = frozenset({
     "PLAYWRIGHT_BROWSERS_PATH", "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
     "CI",
 })
+# Windows environment names are case-insensitive, and Python upper-cases every os.environ
+# key there: an exact match drops SYSTEMROOT, and Node aborts before running anything.
+_WINDOWS = os.name == "nt"
+_ENV_ALLOWLIST_FOLDED = frozenset(name.upper() for name in _ENV_ALLOWLIST)
+
+
+def _env_allowed(name: str) -> bool:
+    if _WINDOWS:
+        return name.upper() in _ENV_ALLOWLIST_FOLDED
+    return name in _ENV_ALLOWLIST
 
 # Redaction applied to transcripts before they are stored or shown. The scrubber owns the
 # ingest boundary; a run transcript is machine output, so this is a narrower, targeted
@@ -129,7 +140,7 @@ def _browser_identity(headless: bool = True) -> BrowserIdentity:
     """
     try:
         proc = subprocess.run(
-            ["npx", "--no-install", "playwright", "install", "chromium", "--dry-run"],
+            npx_argv("--no-install", "playwright", "install", "chromium", "--dry-run"),
             capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError):
         return BrowserIdentity()
@@ -241,7 +252,7 @@ def child_env(base: Optional[Dict[str, str]] = None,
     browser path). Caller-supplied secrets have no route into this dictionary.
     """
     source = os.environ if base is None else base
-    env = {k: v for k, v in source.items() if k in _ENV_ALLOWLIST}
+    env = {k: v for k, v in source.items() if _env_allowed(k)}
     env.update(extra or {})
     return env
 
@@ -625,8 +636,8 @@ def run_reproduction(
 
     env = child_env(extra={"STEPSTITCH_APP_BASE_URL": base_url})
     # Fixed argv — never a shell string, and no capsule text is interpolated into it.
-    argv = ["npx", "--no-install", "playwright", "test",
-            "--config", str(config_path), "--reporter=line"]
+    argv = npx_argv("--no-install", "playwright", "test",
+                    "--config", str(config_path), "--reporter=line")
     # Playwright resolves @playwright/test by walking up from cwd; the project dir is the
     # runner's choice, never the capsule's.
     cwd = str(project)

@@ -15,12 +15,16 @@
  */
 import { execFileSync } from "node:child_process"
 import { mkdirSync, writeFileSync, rmSync } from "node:fs"
+import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repo = join(here, "..")
 const servicePath = join(repo, "service")
+// Playwright's CLI run by this Node, not `npx` — npx is npx.cmd on Windows, which
+// execFileSync cannot launch without a shell.
+const playwrightCli = createRequire(join(repo, "package.json")).resolve("@playwright/test/cli")
 const python = process.env.PYTHON || "python3"
 const PORT = Number(process.env.STEPSTITCH_PROOF_PORT || 41737)
 const baseUrl = `http://127.0.0.1:${PORT}`
@@ -101,8 +105,8 @@ export default defineConfig({
 // 4. Execute. Throws (non-zero exit) if the generated repro fails.
 try {
   execFileSync(
-    "npx",
-    ["playwright", "test", "--config", cfgPath, "--reporter=line"],
+    process.execPath,
+    [playwrightCli, "test", "--config", cfgPath, "--reporter=line"],
     { cwd: repo, stdio: "inherit" },
   )
   console.log("\n✅ The generated Playwright reproduction executed green against the fixture.")
