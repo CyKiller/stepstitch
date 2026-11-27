@@ -315,10 +315,13 @@ def _guard_tool_result(route: str, result: Any) -> Any:
     """Every tool result passes the egress guard, whatever token this server holds — its
     reader is a model either way. A report the host already attached (agent-token path) is
     merged with this pass rather than overwritten, so the counts stay the real ones."""
-    from .egress import REDACT, SCAN, guard_outbound
+    from .egress import REDACT, SCAN, UNTRUSTED_CONTENT_NOTICE, guard_outbound
 
     mode = SCAN if _SIGNED_TOOL_PATH.search(route) else REDACT
     prior = result.pop("_egress", None) if isinstance(result, dict) and mode == REDACT else None
+    if isinstance(result, dict) and mode == REDACT:
+        # The host's own notice, if it attached one; this pass attaches the same one.
+        result.pop("_provenance", None)
     guarded, report = guard_outbound(result, mode=mode)
     if mode == SCAN or not isinstance(guarded, dict):
         return guarded
@@ -327,7 +330,12 @@ def _guard_tool_result(route: str, result: Any) -> Any:
             report["kinds"][kind] = report["kinds"].get(kind, 0) + n
         report["fields"] = list(dict.fromkeys(list(prior.get("fields") or [])
                                               + report["fields"]))
+        report["instruction_like_fields"] = list(dict.fromkeys(
+            list(prior.get("instruction_like_fields") or [])
+            + report["instruction_like_fields"]))
     guarded["_egress"] = report
+    # Whoever posted the report wrote part of this — and anyone can post one.
+    guarded["_provenance"] = UNTRUSTED_CONTENT_NOTICE
     return guarded
 
 
