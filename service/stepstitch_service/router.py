@@ -71,6 +71,19 @@ AuditFn = Callable[[str, str, Dict[str, Any]], Awaitable[None]]
 CaptureEnabledFn = Callable[[], Any]
 
 
+# Field caps on a report. The ingest token is public, so the schema — not the SDK — bounds
+# how much one report can make the server store and scrub. Each is generous next to a real
+# report (the SDK buffers 50 footsteps; the scrubber keeps 280 characters of free text) and
+# small next to a flood. The byte cap and rate limits live in ``ingest_limits.py``.
+MAX_FOOTSTEPS = 500
+MAX_ROUTE_LEN = 2048
+MAX_SELECTOR_LEN = 1024
+MAX_LABEL_LEN = 1024
+MAX_TIMESTAMP_LEN = 64
+MAX_EXPLANATION_LEN = 10_000
+MAX_METADATA_KEYS = 64
+
+
 class FootstepSchema(BaseModel):
     # extra="forbid": an unknown key on a footstep (screenshot, value, html, ...) is
     # refused with 422 at the door. Without this, pydantic silently discards unknown
@@ -78,7 +91,7 @@ class FootstepSchema(BaseModel):
     # counted, and a hostile client's probe would look like a clean ingest.
     model_config = ConfigDict(extra="forbid")
 
-    timestamp: str
+    timestamp: str = Field(max_length=MAX_TIMESTAMP_LEN)
     # Spelled out rather than built from replayability.SUPPORTED_STEP_TYPES because mypy
     # needs Literal args at type-check time; the parity test in test_compiler.py is what
     # keeps this, the tuple, and the SDK's TypeScript union from drifting apart. A type
@@ -86,10 +99,17 @@ class FootstepSchema(BaseModel):
     # it, the scorer would once have graded the wreckage A, and a hand-typed `navigate`
     # did exactly that live.
     type: Literal["navigation", "click", "input", "api_error", "exception"]
-    route: str
-    target: Optional[str] = None
-    label: str = "[masked]"
+    route: str = Field(max_length=MAX_ROUTE_LEN)
+    target: Optional[str] = Field(default=None, max_length=MAX_SELECTOR_LEN)
+    label: str = Field(default="[masked]", max_length=MAX_LABEL_LEN)
     metadata: Optional[Dict[str, Any]] = None
+
+    @field_validator("metadata")
+    @classmethod
+    def _bounded_step_metadata(cls, value: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if value is not None and len(value) > MAX_METADATA_KEYS:
+            raise ValueError(f"footstep metadata may carry at most {MAX_METADATA_KEYS} keys")
+        return value
 
 
 class IngestTracePayload(BaseModel):
@@ -100,10 +120,17 @@ class IngestTracePayload(BaseModel):
     # Neutral default for hand-rolled clients that omit it; the SDK always sets its own.
     app_id: str = Field(default="unknown", pattern=IDENTIFIER_PATTERN)
     project_id: Optional[str] = Field(default=None, pattern=IDENTIFIER_PATTERN)
-    explanation: Optional[str] = None
-    footsteps: List[FootstepSchema]
+    explanation: Optional[str] = Field(default=None, max_length=MAX_EXPLANATION_LEN)
+    footsteps: List[FootstepSchema] = Field(max_length=MAX_FOOTSTEPS)
     consent_version: Optional[str] = Field(default=None, pattern=IDENTIFIER_PATTERN)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("metadata")
+    @classmethod
+    def _bounded_metadata(cls, value: Dict[str, Any]) -> Dict[str, Any]:
+        if len(value) > MAX_METADATA_KEYS:
+            raise ValueError(f"metadata may carry at most {MAX_METADATA_KEYS} keys")
+        return value
 
 
 class DeliverPayload(BaseModel):
