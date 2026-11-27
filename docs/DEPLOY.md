@@ -163,6 +163,32 @@ backfill) is not — two instances racing `upgrade head` could both attempt it. 
 migrations, run them as a one-shot job / init step (not in every instance's `lifespan`),
 or guard `command.upgrade` with a Postgres advisory lock.
 
+### Ingest limits — what a report may cost
+
+The ingest token is in every customer's page, so anyone can read it and send reports. The
+host bounds what that costs, on by default (`service/stepstitch_service/ingest_limits.py`):
+
+| Setting | Default | Over the limit |
+|---|---|---|
+| `STEPSTITCH_INGEST_MAX_BYTES` | 262144 (256 KiB) | 413, before the body is parsed |
+| `STEPSTITCH_INGEST_RATE_PER_MINUTE` | 60 per client address | 429 with `Retry-After` |
+| `STEPSTITCH_INGEST_GLOBAL_RATE_PER_MINUTE` | 600 from everyone | 429 with `Retry-After` |
+
+`0` disables a limit; anything that is not a whole number stops the host at startup rather
+than running unlimited. The report schema also caps fields: 500 footsteps (the SDK sends
+50 by default), 2048-character routes, 1024-character selectors and labels, a
+10,000-character note, and 64 metadata keys — over any of them is a 422.
+
+**Behind a proxy** (Railway, a load balancer, an ingress), the host sees the proxy's address
+unless uvicorn is told to trust it: set `FORWARDED_ALLOW_IPS` to the proxy's address (or
+`*` only when nothing else can reach the container). Without it every client shares one
+per-client budget — coarser, never unlimited — and the global ceiling still holds.
+`X-Forwarded-For` is never read directly, because a sender can set it to anything.
+
+Limits are per process: with several replicas, each enforces its own. A refused report is
+logged as a once-a-minute summary rather than per request, so a flood of refusals cannot
+become a flood of log lines.
+
 ## 2. Deployment posture — the `STEPSTITCH_PROFILE` knob
 
 A profile is a named scrub posture; it may only *tighten* the privacy boundary, never

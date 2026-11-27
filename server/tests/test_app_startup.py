@@ -79,3 +79,15 @@ def test_the_error_does_not_echo_secret_values():
     with pytest.raises(SystemExit) as exc:
         require_env({"DATABASE_URL": "mysql://user:hunter2@db/x"})
     assert "hunter2" not in str(exc.value)
+
+
+@pytest.mark.parametrize("mode_env", [dict(GOOD), {"STEPSTITCH_MODE": "local"}])
+def test_a_typo_in_an_ingest_limit_stops_the_host_in_either_mode(mode_env):
+    """`STEPSTITCH_INGEST_RATE_PER_MINUTE=sixty` must not quietly mean unlimited."""
+    with pytest.raises(SystemExit) as exc:
+        require_env(dict(mode_env, STEPSTITCH_INGEST_RATE_PER_MINUTE="sixty"))
+    assert "STEPSTITCH_INGEST_RATE_PER_MINUTE" in str(exc.value)
+
+
+def test_zero_is_the_explicit_way_to_disable_a_limit():
+    require_env(dict(GOOD, STEPSTITCH_INGEST_RATE_PER_MINUTE="0"))   # does not raise

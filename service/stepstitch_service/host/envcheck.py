@@ -27,6 +27,14 @@ def require_env(env: Dict[str, str]) -> None:
     problems = []
     mode = (env.get("STEPSTITCH_MODE") or "production").strip().lower()
 
+    # Both modes: a typo in an ingest limit must stop the host, not quietly run unlimited.
+    from stepstitch_service.ingest_limits import IngestLimits
+
+    try:
+        IngestLimits.from_env(env)
+    except ValueError as exc:
+        problems.append(str(exc))
+
     if mode == "local":
         dsn = env.get("DATABASE_URL")
         if dsn and not dsn.startswith("sqlite:///"):
@@ -37,6 +45,9 @@ def require_env(env: Dict[str, str]) -> None:
                 f"'{scheme}://'). Unset DATABASE_URL for the default local file, or unset "
                 "STEPSTITCH_MODE to run the production Postgres path.\n"
             )
+        if problems:
+            raise SystemExit("StepStitch host cannot start:\n"
+                             + "".join(f"  - {p}\n" for p in problems))
         return
 
     dsn = env.get("DATABASE_URL")

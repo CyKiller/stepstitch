@@ -13,8 +13,8 @@ nothing. The full CI gate is re-run as the release gate before any artifact is p
 
 | Suite | Tests | Command |
 |---|---|---|
-| Service (compiler, router, privacy, connectors) | **1154** (4 skipped) | `PYTHONPATH=service pytest service/tests/` |
-| Host (auth, dashboard, real Postgres) | **256** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
+| Service (compiler, router, privacy, connectors) | **1171** (4 skipped) | `PYTHONPATH=service pytest service/tests/` |
+| Host (auth, dashboard, real Postgres) | **266** (1 skipped) | `PYTHONPATH=service pytest server/tests/` |
 | SDK (type-check + redaction proof) | **40** | `npx vitest run` |
 | Web (marketing site + copy claims) | **232** | `cd web && npx vitest run` |
 
@@ -50,6 +50,7 @@ repros-scoped token → verify.mjs with a verify-scoped token → freeze/verify-
 | Deterministic Playwright compiler | `service/.../compiler.py` | `test_compiler.py`, `scripts/prove-repro-executes.mjs` |
 | Decoupled router (host injects auth/DB) | `service/.../router.py` | `test_router_smoke.py` |
 | Server-side scrubber (NPI trust boundary); Luhn-labeled card detection (coverage never narrows) + host-injected advisory-detector seam (Presidio-ready, advisory never proof) | `scrubber.py` | `test_scrubber.py`, `test_scrub_overrides.py`, `test_pci_vectors.py` |
+| Ingest limits — the public ingest token cannot run up the host: byte cap (413, measured as the body streams), field caps on the report schema (422), per-client and global rate limits (429 + true Retry-After), bounded memory under an address spray, and a typo in a limit stops startup instead of running unlimited | `ingest_limits.py`, `router.py`, `host/envcheck.py` | `test_ingest_limits.py`, `test_ingest_limits_host.py`, `test_app_startup.py` |
 | Replayability score | `replayability.py` | `test_replayability.py` |
 | Deployment profiles (incl. deny-by-default `financial-services-strict`) | `profiles.py` + `profiles/*.json` | `test_profiles.py` (incl. drift guard), `test_strict_policy.py` |
 | Tenant fixture validator — `stepstitch policy verify` runs hostile fixtures through the live scrub boundary, offline classifier router-parity-guarded; pack covers PCI account-data shapes (PAN valid+invalid Luhn, expiry/CVV context, track-data, PIN-block) each refused with nothing stored | `policy_verify.py`, `cli.py`, `examples/policy/financial-fixtures.json` | `test_policy_verify.py` (incl. router parity + leak scan) |

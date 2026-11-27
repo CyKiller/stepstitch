@@ -28,6 +28,7 @@ from stepstitch_service.compiler import DEFAULT_BASE_URL
 from stepstitch_service.diagnostics import SOURCE_LOCAL_REPRODUCTION, EnvelopeMismatch
 from stepstitch_service.egress import REDACT, SCAN, UNTRUSTED_CONTENT_NOTICE, guard_outbound
 from stepstitch_service.execution import execution_summary
+from stepstitch_service.ingest_limits import IngestGuard, IngestLimits
 from stepstitch_service.profiles import load_profile
 from stepstitch_service.replayability import score_trace
 from stepstitch_service.repro_config import ReproConfig, ReproConfigError, readiness
@@ -203,6 +204,7 @@ def build_app(
     sign_blob: Optional[Callable[..., Any]] = None,
     base_url: Optional[str] = None,
     local_mode: bool = False,
+    ingest_limits: Optional[IngestLimits] = None,
 ) -> FastAPI:
     """Build the ingest API. ``draft_adapters`` are the injected (Apache-2.0) adapters;
     ``record_writers`` enable the optional governed direct-write; ``audit`` is the audit
@@ -312,6 +314,13 @@ def build_app(
 
     app = FastAPI(title="StepStitch ingest API", lifespan=lifespan)
     app.include_router(router, prefix="/api")
+    # The ingest token ships in every customer's page, so anyone can post a report. Bound
+    # what that costs — size and rate — before the body is parsed. Never unlimited by
+    # omission: no argument means the STEPSTITCH_INGEST_* env settings or their defaults.
+    app.add_middleware(
+        IngestGuard, path="/api/stepstitch/v1/session",
+        limits=ingest_limits if ingest_limits is not None else IngestLimits.from_env(),
+    )
 
     metrics = Metrics()
 
