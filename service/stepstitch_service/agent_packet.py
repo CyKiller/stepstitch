@@ -28,6 +28,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
+from .egress import UNTRUSTED_CONTENT_NOTICE
+
 # What is never taken from the reported session. This is the promise to the person who hit
 # the bug, and it is unchanged by anything on the reproduction side.
 NEVER_FROM_PRODUCTION: List[str] = [
@@ -245,6 +247,10 @@ def build_packet(
         },
         # --- provenance ----------------------------------------------------------------
         "privacy_posture": privacy_posture(policy_name, scrub, bool(diagnostics)),
+        # Who wrote which part. Carried inside the packet as well as on every guarded
+        # response, because the packet is also saved to disk and shown to operators —
+        # places no egress guard sits in front of.
+        "untrusted_content": dict(UNTRUSTED_CONTENT_NOTICE),
     }
     if repository:
         packet["repository"] = repository

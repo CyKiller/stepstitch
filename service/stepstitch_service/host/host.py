@@ -26,7 +26,7 @@ from pydantic import BaseModel, field_validator
 from stepstitch_service import create_stepstitch_router, generate_playwright_test
 from stepstitch_service.compiler import DEFAULT_BASE_URL
 from stepstitch_service.diagnostics import SOURCE_LOCAL_REPRODUCTION, EnvelopeMismatch
-from stepstitch_service.egress import REDACT, SCAN, guard_outbound
+from stepstitch_service.egress import REDACT, SCAN, UNTRUSTED_CONTENT_NOTICE, guard_outbound
 from stepstitch_service.execution import execution_summary
 from stepstitch_service.profiles import load_profile
 from stepstitch_service.replayability import score_trace
@@ -927,8 +927,16 @@ def build_app(
             # exactly as it was signed.
             return Response(body, status_code=response.status_code, headers=headers,
                             media_type="application/json")
+        if report["instruction_like_fields"]:
+            # A forged report aimed at the agent reading it. Counted for the operator, who
+            # is the one who has to see it; the text itself goes out unedited as evidence.
+            await audit("stepstitch.egress_instruction_like", agent["name"], {
+                "agent_id": agent["id"], "path": path,
+                "fields": report["instruction_like_fields"],
+            })
         if isinstance(guarded, dict):
             guarded["_egress"] = report
+            guarded["_provenance"] = UNTRUSTED_CONTENT_NOTICE
         return JSONResponse(guarded, status_code=response.status_code, headers=headers)
 
     @app.post("/admin/agents")
