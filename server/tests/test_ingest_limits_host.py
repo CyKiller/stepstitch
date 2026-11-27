@@ -5,12 +5,12 @@ cost: how big one may be, how many fields it may carry, and how often anyone may
 A real SDK report must still pass untouched.
 """
 from fastapi.testclient import TestClient
+from stepstitch_service.ingest_limits import IngestLimits
 
 from server.audit import make_db_audit
 from server.auth import build_auth
 from server.host import build_app
 from server.localdb import build_local_db_callables, connect_local
-from stepstitch_service.ingest_limits import IngestLimits
 
 ADMIN = "admin-secret"
 INGEST = "ingest-secret"
