@@ -13,6 +13,7 @@ present and PASSES once it is fixed (red -> green).
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional
 
 from .replayability import SUPPORTED_STEP_TYPES, score_trace
@@ -31,14 +32,33 @@ _PROTECTED_ENV_FALLBACK = "STEPSTITCH_TEST_INPUT_VALUE"
 DEFAULT_BASE_URL = "http://localhost:3000"
 
 
+# Every reported string — route, selector, label, endpoint, method, exception name — is
+# attacker-controlled: the browser ingest token is public by design. It may only ever land
+# inside a string literal or a single-line comment, and must not be able to close either.
+# JavaScript ends a line (and so a ``//`` comment) at LF, CR, U+2028 and U+2029 — stripping
+# only "\n" left three ways out of every comment. Other C0/C1 controls are replaced too: they
+# are never meaningful in a selector or a name, and an invisible byte in a script someone is
+# about to run is its own kind of trap. (test_untrusted_content.py tokenizes the output.)
+_LINE_BREAKS = re.compile(r"[\r\n\u2028\u2029]")
+_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
+
+
 def _ts_str(value: str) -> str:
-    """Escape a string for a single-quoted TS literal."""
-    return value.replace("\\", "\\\\").replace("'", "\\'")
+    """Escape a string for a single-quoted TS literal it cannot close."""
+    out = value.replace("\\", "\\\\").replace("'", "\\'")
+    out = (out.replace("\r", "\\r").replace("\n", "\\n")
+           .replace("\u2028", "\\u2028").replace("\u2029", "\\u2029"))
+    return _CONTROL.sub(lambda m: f"\\x{ord(m.group(0)):02x}", out)
 
 
 def _comment(text: str) -> str:
-    """Sanitize text for a single-line TS comment (no newlines/CR)."""
-    return text.replace("\r", " ").replace("\n", " ")
+    """Sanitize text for a single-line TS comment it cannot leave."""
+    return _CONTROL.sub(" ", _LINE_BREAKS.sub(" ", text))
+
+
+def _ts_quoted(text: str) -> str:
+    """Reported text placed inside a quoted literal: one line, then escaped."""
+    return _ts_str(_comment(text))
 
 
 def _coerce_status(value: Any) -> Optional[int]:
@@ -61,7 +81,7 @@ def _predicate(pattern_var: Optional[str], method: str) -> str:
 
 
 def _status_assertion(var: str, status: Optional[int], endpoint: str) -> str:
-    ep = _comment(endpoint or "the endpoint")
+    ep = _ts_quoted(endpoint or "the endpoint")
     if status is not None and status >= 500:
         return f"  expect({var}.status(), 'no server error from {ep}').toBeLessThan(500);"
     if status is not None:
@@ -205,8 +225,9 @@ def generate_playwright_test(
             resolved = resolve_route(route)
             if ":" in resolved:
                 unset = [s[1:] for s in resolved.split("/") if s.startswith(":")]
+                names = _comment(", ".join(repr(u) for u in unset))
                 lines.append(
-                    f"  // NEEDS-CONFIG: no value for {', '.join(repr(u) for u in unset)} "
+                    f"  // NEEDS-CONFIG: no value for {names} "
                     f"in '{_comment(route)}' — set route_params."
                 )
             lines.append(f"  await page.goto('{_ts_str(base + resolved)}');")
@@ -249,7 +270,7 @@ def generate_playwright_test(
         nxt = footsteps[i + 1] if i + 1 < n else None
         nxt_is_api = nxt is not None and str(nxt.get("type", "")).lower() == "api_error"
 
-        lines.append(f"  // [{step_type.upper()}] {_comment(route)}")
+        lines.append(f"  // [{_comment(step_type.upper())}] {_comment(route)}")
 
         # An interaction immediately followed by an API error: arm the response
         # wait BEFORE the action, then assert on the response after it.
@@ -265,7 +286,7 @@ def generate_playwright_test(
             emit_action(step_type, route, target, label)
             lines.append(
                 f"  // expected API failure: {_comment(endpoint)} "
-                f"(HTTP {api_meta.get('status', '?')})"
+                f"(HTTP {_comment(str(api_meta.get('status', '?')))})"
             )
             lines.append(f"  const res{resp_n} = await {var};")
             lines.append(_status_assertion(f"res{resp_n}", status, endpoint))
@@ -288,7 +309,7 @@ def generate_playwright_test(
             lines += matcher
             lines.append(
                 f"  // expected API failure: {_comment(endpoint)} "
-                f"(HTTP {metadata.get('status', '?')})"
+                f"(HTTP {_comment(str(metadata.get('status', '?')))})"
             )
             lines.append(
                 f"  const res{resp_n} = await page.waitForResponse("
@@ -304,8 +325,8 @@ def generate_playwright_test(
         elif step_type == "exception":
             name = str(metadata.get("error_type") or metadata.get("name") or "Error")
             lines.append(
-                f"  expect(pageErrors.some((m) => m.includes('{_ts_str(_comment(name))}')), "
-                f"'the reported {_comment(name)} must not reproduce').toBe(false);"
+                f"  expect(pageErrors.some((m) => m.includes('{_ts_quoted(name)}')), "
+                f"'the reported {_ts_quoted(name)} must not reproduce').toBe(false);"
             )
             asserted = True
 
